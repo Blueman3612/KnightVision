@@ -27,9 +27,10 @@ const TutorPage: React.FC<TutorPageProps> = () => {
 
   const handleMove = (from: string, to: string) => {
     try {
-      console.log(`Move handled: ${from} to ${to}`);
+      console.log(`Move handled in tutor page: ${from} to ${to}`);
       
-      // Update FEN state to reflect the new position
+      // The actual move has already been made in the Chessboard component
+      // We just need to sync our state with it
       const chess = chessRef.current;
       setFen(chess.fen());
       
@@ -57,7 +58,7 @@ const TutorPage: React.FC<TutorPageProps> = () => {
   };
 
   const resetGame = () => {
-    console.log('Game reset');
+    console.log('Resetting game');
     const chess = chessRef.current;
     chess.reset();
     setFen(chess.fen());
