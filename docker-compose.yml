@@ -4,12 +4,12 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "80:8000"
     volumes:
       - ./backend:/app
     environment:
-      - STOCKFISH_PATH=/usr/games/stockfish
-      - ENVIRONMENT=development
+      - STOCKFISH_PATH=/usr/bin/stockfish
+      - ENVIRONMENT=production
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
     restart: unless-stopped
