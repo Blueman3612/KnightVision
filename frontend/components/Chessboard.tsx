@@ -26,7 +26,7 @@ function Chessboard({
   onMove,
   highlightSquares = [],
 }: ChessboardProps) {
-  const boardRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const [chessground, setChessground] = useState<Api | null>(null);
   const [chess] = useState(() => new Chess(fen));
 
