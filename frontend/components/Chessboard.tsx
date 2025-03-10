@@ -18,13 +18,14 @@ interface ChessboardProps {
   highlightSquares?: string[];
 }
 
-const Chessboard: React.FC<ChessboardProps> = ({
+// Using proper function component definition without React.FC
+function Chessboard({
   fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', // Default starting position
   orientation = 'white',
   viewOnly = false,
   onMove,
   highlightSquares = [],
-}) => {
+}: ChessboardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [chessground, setChessground] = useState<Api | null>(null);
   const [chess] = useState(() => new Chess(fen));
@@ -135,7 +136,7 @@ const Chessboard: React.FC<ChessboardProps> = ({
           }
         };
         
-        // Using the non-null assertion operator here since we've already checked
+        // Type assertion since we checked boardRef.current above
         const cg = Chessground(boardRef.current!, config);
         setChessground(cg);
         console.log("Chessground initialized successfully");
@@ -195,6 +196,6 @@ const Chessboard: React.FC<ChessboardProps> = ({
       <div ref={boardRef} className="w-full h-full" />
     </div>
   );
-};
+}
 
 export default Chessboard; 
