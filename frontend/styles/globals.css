@@ -2,7 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chessground base styles */
+/* Chessboard base styles */
+cg-board {
+  background-image: url(/assets/chessboard/board-brown.svg);
+  background-size: cover;
+  background-position: center;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Chess piece styles */
 .cg-wrap {
   width: 100%;
   height: 100%;
@@ -10,8 +19,74 @@
   display: block;
 }
 
-/* Board squares */
-.cg-board {
+.cg-wrap piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12.5%;
+  height: 12.5%;
+  background-size: 85%;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 2;
+  will-change: transform;
+  pointer-events: none;
+  filter: drop-shadow(0px 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.cg-wrap piece.dragging {
+  cursor: move;
+  z-index: 9;
+  filter: drop-shadow(0px 3px 3px rgba(0, 0, 0, 0.4));
+}
+
+/* Chess piece images */
+.cg-wrap piece.pawn.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wP.svg);
+}
+.cg-wrap piece.bishop.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wB.svg);
+}
+.cg-wrap piece.knight.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wN.svg);
+}
+.cg-wrap piece.rook.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wR.svg);
+}
+.cg-wrap piece.queen.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wQ.svg);
+}
+.cg-wrap piece.king.white {
+  background-image: url(/assets/chessboard/pieces/cburnett/wK.svg);
+}
+.cg-wrap piece.pawn.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bP.svg);
+}
+.cg-wrap piece.bishop.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bB.svg);
+}
+.cg-wrap piece.knight.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bN.svg);
+}
+.cg-wrap piece.rook.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bR.svg);
+}
+.cg-wrap piece.queen.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bQ.svg);
+}
+.cg-wrap piece.king.black {
+  background-image: url(/assets/chessboard/pieces/cburnett/bK.svg);
+}
+
+/* Chessground theme */
+cg-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+cg-board {
   position: absolute;
   top: 0;
   left: 0;
@@ -22,91 +97,99 @@
   -ms-user-select: none;
   user-select: none;
   line-height: 0;
-  background-size: cover;
   cursor: pointer;
-  background-image: url('/assets/chessboard/board-brown.svg');
 }
 
-/* Pieces */
-piece {
+cg-board square {
   position: absolute;
   top: 0;
   left: 0;
   width: 12.5%;
   height: 12.5%;
-  background-size: cover;
-  z-index: 2;
   pointer-events: none;
 }
 
-piece.dragging {
-  cursor: move;
-  z-index: 9;
+cg-board square.last-move {
+  background-color: rgba(155, 199, 0, 0.41);
 }
 
-/* Piece sprites */
-.cg-wrap piece.pawn.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wP.svg');
-}
-.cg-wrap piece.bishop.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wB.svg');
-}
-.cg-wrap piece.knight.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wN.svg');
-}
-.cg-wrap piece.rook.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wR.svg');
-}
-.cg-wrap piece.queen.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wQ.svg');
-}
-.cg-wrap piece.king.white {
-  background-image: url('/assets/chessboard/pieces/cburnett/wK.svg');
-}
-.cg-wrap piece.pawn.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bP.svg');
-}
-.cg-wrap piece.bishop.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bB.svg');
-}
-.cg-wrap piece.knight.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bN.svg');
-}
-.cg-wrap piece.rook.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bR.svg');
-}
-.cg-wrap piece.queen.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bQ.svg');
-}
-.cg-wrap piece.king.black {
-  background-image: url('/assets/chessboard/pieces/cburnett/bK.svg');
+cg-board square.selected {
+  background-color: rgba(20, 85, 30, 0.5);
 }
 
-/* Move destinations */
-.cg-wrap square.move-dest {
+cg-board square.check {
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%);
+}
+
+cg-board square.move-dest {
   background: radial-gradient(rgba(20, 85, 30, 0.5) 22%, #208530 0, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0) 0);
   pointer-events: auto;
 }
 
-.cg-wrap square.premove-dest {
+cg-board square.premove-dest {
   background: radial-gradient(rgba(20, 30, 85, 0.5) 22%, #203085 0, rgba(0, 0, 0, 0.3) 0, rgba(0, 0, 0, 0) 0);
 }
 
-/* Highlighted squares */
-.cg-wrap square.last-move {
-  background-color: rgba(155, 199, 0, 0.41);
+cg-board square.oc.move-dest {
+  background: radial-gradient(transparent 0%, transparent 80%, rgba(20, 85, 0, 0.3) 80%);
 }
 
-.cg-wrap square.selected {
-  background-color: rgba(20, 85, 30, 0.5);
+cg-board square.oc.premove-dest {
+  background: radial-gradient(transparent 0%, transparent 80%, rgba(20, 30, 85, 0.2) 80%);
 }
 
-.cg-wrap square.check {
-  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 1) 0%, rgba(231, 0, 0, 1) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%);
+/* Coordinates */
+cg-board coords {
+  position: absolute;
+  display: flex;
+  pointer-events: none;
+  opacity: 0.8;
+  font-family: sans-serif;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 2px #000;
 }
 
-.cg-wrap square.current-premove {
-  background-color: rgba(20, 30, 85, 0.5);
+cg-board coords.ranks {
+  right: 0;
+  top: 0;
+  flex-flow: column-reverse;
+  width: 12px;
+  height: 100%;
+  text-align: center;
+}
+
+cg-board coords.ranks.black {
+  flex-flow: column;
+}
+
+cg-board coords.files {
+  bottom: 0;
+  left: 0;
+  flex-flow: row;
+  width: 100%;
+  height: 16px;
+  text-align: center;
+}
+
+cg-board coords.files.black {
+  flex-flow: row-reverse;
+}
+
+cg-board coord {
+  flex: 1 1 auto;
+}
+
+/* Custom chessboard container styles */
+.chessboard-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 1/1;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 @layer components {

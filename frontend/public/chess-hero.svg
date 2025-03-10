@@ -1,0 +1,53 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Chess board background (subtle) -->
+  <rect width="400" height="300" fill="#F3F4F6" />
+  
+  <!-- Chess pieces silhouettes -->
+  <!-- King -->
+  <path d="M200 50C203.314 50 206 52.6863 206 56V62H212C215.314 62 218 64.6863 218 68C218 71.3137 215.314 74 212 74H206V80C206 83.3137 203.314 86 200 86C196.686 86 194 83.3137 194 80V74H188C184.686 74 182 71.3137 182 68C182 64.6863 184.686 62 188 62H194V56C194 52.6863 196.686 50 200 50Z" fill="#4F46E5" />
+  <rect x="185" y="86" width="30" height="10" rx="2" fill="#4F46E5" />
+  <path d="M190 96L185 120H215L210 96H190Z" fill="#4F46E5" />
+  <rect x="180" y="120" width="40" height="10" rx="2" fill="#4F46E5" />
+  <rect x="175" y="130" width="50" height="10" rx="2" fill="#4F46E5" />
+  
+  <!-- Queen -->
+  <circle cx="140" cy="60" r="10" fill="#6366F1" />
+  <path d="M125 120V95C125 90 135 85 140 85C145 85 155 90 155 95V120H125Z" fill="#6366F1" />
+  <rect x="120" y="120" width="40" height="10" rx="2" fill="#6366F1" />
+  <rect x="115" y="130" width="50" height="10" rx="2" fill="#6366F1" />
+  
+  <!-- Rook -->
+  <path d="M270 60H290V70H270V60Z" fill="#818CF8" />
+  <path d="M275 70V85H285V70H275Z" fill="#818CF8" />
+  <rect x="270" y="85" width="20" height="35" rx="2" fill="#818CF8" />
+  <rect x="265" y="120" width="30" height="10" rx="2" fill="#818CF8" />
+  <rect x="260" y="130" width="40" height="10" rx="2" fill="#818CF8" />
+  
+  <!-- Knight -->
+  <path d="M70 120V80C70 70 80 60 85 60C95 60 100 65 105 70C110 75 115 85 115 90C115 95 110 100 105 105C100 110 90 120 90 120H70Z" fill="#A5B4FC" />
+  <rect x="65" y="120" width="30" height="10" rx="2" fill="#A5B4FC" />
+  <rect x="60" y="130" width="40" height="10" rx="2" fill="#A5B4FC" />
+  
+  <!-- Bishop -->
+  <circle cx="330" cy="60" r="10" fill="#C7D2FE" />
+  <path d="M320 120V80C320 75 325 70 330 70C335 70 340 75 340 80V120H320Z" fill="#C7D2FE" />
+  <rect x="315" y="120" width="30" height="10" rx="2" fill="#C7D2FE" />
+  <rect x="310" y="130" width="40" height="10" rx="2" fill="#C7D2FE" />
+  
+  <!-- Pawn -->
+  <circle cx="200" cy="180" r="15" fill="#E0E7FF" />
+  <path d="M185 220V195C185 190 190 185 200 185C210 185 215 190 215 195V220H185Z" fill="#E0E7FF" />
+  <rect x="180" y="220" width="40" height="10" rx="2" fill="#E0E7FF" />
+  <rect x="175" y="230" width="50" height="10" rx="2" fill="#E0E7FF" />
+  
+  <!-- Smaller pawns in different positions -->
+  <circle cx="100" cy="200" r="10" fill="#EEF2FF" />
+  <path d="M90 230V215C90 210 95 205 100 205C105 205 110 210 110 215V230H90Z" fill="#EEF2FF" />
+  <rect x="85" y="230" width="30" height="8" rx="2" fill="#EEF2FF" />
+  <rect x="80" y="238" width="40" height="8" rx="2" fill="#EEF2FF" />
+  
+  <circle cx="300" cy="200" r="10" fill="#EEF2FF" />
+  <path d="M290 230V215C290 210 295 205 300 205C305 205 310 210 310 215V230H290Z" fill="#EEF2FF" />
+  <rect x="285" y="230" width="30" height="8" rx="2" fill="#EEF2FF" />
+  <rect x="280" y="238" width="40" height="8" rx="2" fill="#EEF2FF" />
+</svg> 

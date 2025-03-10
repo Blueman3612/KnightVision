@@ -5,6 +5,11 @@ import { Config } from 'chessground/config';
 import { Chess, Square } from 'chess.js';
 import { Color, Key } from 'chessground/types';
 
+// Custom type definition for Chessground to accept null
+declare module 'chessground' {
+  export function Chessground(element: HTMLElement, config?: any): Api;
+}
+
 interface ChessboardProps {
   fen?: string;
   orientation?: Color;
@@ -22,129 +27,113 @@ const Chessboard: React.FC<ChessboardProps> = ({
 }) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [chessground, setChessground] = useState<Api | null>(null);
-  const [chess] = useState<Chess>(new Chess(fen));
+  const [chess] = useState(() => new Chess(fen));
 
-  // Initialize chessground
+  // Initialize chessground when the component mounts
   useEffect(() => {
-    if (boardRef.current) {
+    if (!boardRef.current) {
+      console.log("Board ref is null, cannot initialize chessground");
+      return;
+    }
+
+    console.log("Initializing chessground with FEN:", fen);
+    
+    try {
+      // For debugging
+      console.log("Board container:", boardRef.current);
+      
       const config: Config = {
         fen,
         orientation,
         viewOnly,
+        coordinates: true,
         movable: {
           free: false,
-          color: viewOnly ? undefined : 'both',
-          dests: viewOnly ? undefined : getDests(chess),
+          color: 'both',
           events: {
-            after: (from, to) => {
-              if (onMove) {
-                onMove(from, to);
+            after: (orig: Key, dest: Key) => {
+              console.log("Move made:", orig, dest);
+              try {
+                // Make the move in our chess instance
+                chess.move({
+                  from: orig as string,
+                  to: dest as string,
+                  promotion: 'q'
+                });
+                
+                if (onMove) {
+                  onMove(orig as string, dest as string);
+                }
+                
+                // Update the board with the new position
+                if (chessground) {
+                  chessground.set({ 
+                    fen: chess.fen(),
+                    turnColor: (chess as any).turn() === 'w' ? 'white' : 'black'
+                  });
+                }
+              } catch (error) {
+                console.error("Error making move:", error);
               }
-            },
-          },
-        },
-        highlight: {
-          lastMove: true,
-          check: true,
+            }
+          }
         },
         animation: {
           enabled: true,
-          duration: 200,
+          duration: 200
         },
-        premovable: {
+        draggable: {
           enabled: !viewOnly,
-        },
-        drawable: {
-          enabled: true,
-          visible: true,
-        },
-        coordinates: true,
+          showGhost: true
+        }
       };
-
+      
       const cg = Chessground(boardRef.current, config);
       setChessground(cg);
-
-      return () => {
-        // Cleanup
-        cg.destroy();
-      };
+      console.log("Chessground initialized successfully");
+    } catch (error) {
+      console.error("Error initializing chessground:", error);
     }
+    
+    return () => {
+      if (chessground) {
+        console.log("Cleaning up chessground");
+        chessground.destroy();
+      }
+    };
   }, []);
 
-  // Update FEN when it changes
+  // Update when FEN changes
   useEffect(() => {
-    if (chessground) {
-      chessground.set({ fen });
+    if (!chessground) return;
+    
+    console.log("Updating FEN to:", fen);
+    try {
+      // Update the chess.js instance
       chess.load(fen);
       
-      if (!viewOnly) {
-        chessground.set({ movable: { dests: getDests(chess) } });
-      }
+      // Update the board
+      chessground.set({ 
+        fen,
+        turnColor: (chess as any).turn() === 'w' ? 'white' : 'black'
+      });
+    } catch (error) {
+      console.error("Error updating position:", error);
     }
-  }, [fen, chessground, viewOnly]);
+  }, [fen, chessground]);
 
   // Update orientation when it changes
   useEffect(() => {
     if (chessground) {
+      console.log("Updating orientation to:", orientation);
       chessground.set({ orientation });
     }
   }, [orientation, chessground]);
 
-  // Update highlighted squares
-  useEffect(() => {
-    if (chessground && highlightSquares.length > 0) {
-      const highlights: { [key: string]: { className: string } } = {};
-      highlightSquares.forEach((square) => {
-        highlights[square] = { className: 'highlight' };
-      });
-      
-      chessground.set({
-        drawable: {
-          shapes: [],
-          autoShapes: [],
-        }
-      });
-      
-      chessground.setShapes(
-        highlightSquares.map(square => ({
-          orig: square as Key,
-          brush: 'green',
-        }))
-      );
-    }
-  }, [highlightSquares, chessground]);
-
-  // Helper function to get possible destinations for each piece
-  function getDests(chess: Chess): Map<Key, Key[]> {
-    const dests = new Map();
-    
-    // Get all squares from 'a1' to 'h8'
-    const squares: Square[] = [];
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
-    
-    for (const file of files) {
-      for (const rank of ranks) {
-        // Cast the square to Square type
-        squares.push(`${file}${rank}` as Square);
-      }
-    }
-    
-    // For each square, get possible moves
-    squares.forEach(s => {
-      try {
-        const ms = chess.moves({ square: s, verbose: true });
-        if (ms.length) dests.set(s, ms.map(m => m.to));
-      } catch (e) {
-        // Skip invalid squares
-      }
-    });
-    
-    return dests;
-  }
-
+  console.log("Rendering chessboard component");
+  
   return (
-    <div className="w-full aspect-square max-w-lg mx-auto">
+    <div className="w-full h-full relative border-8 border-solid border-[#3a2a1d] rounded-lg overflow-hidden">
       <div ref={boardRef} className="w-full h-full" />
     </div>
   );
