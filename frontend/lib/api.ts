@@ -38,13 +38,11 @@ const api = axios.create({
 // Add request logging and error handling
 api.interceptors.request.use((config: AxiosConfig) => {
   const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
-  console.log(`API Request: ${config.method?.toUpperCase()} ${fullUrl}`, config.data);
   return config;
 });
 
 api.interceptors.response.use(
   (response: AxiosResp) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
     return response;
   }, 
   (error: AxiosErr) => {
@@ -93,17 +91,9 @@ export const gameApi = {
 
   // Get best move from Stockfish
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
-    console.log('========= CHESS MOVE API REQUEST =========');
-    console.log(`Environment: ${isDevelopment ? 'Development' : 'Production'}`);
-    console.log(`Docker: ${isDocker ? 'Yes' : 'No'}`);
-    console.log(`API URL: ${api.defaults.baseURL}/games/best-move`);
-    console.log(`FEN: ${fen}`);
-    console.log(`Skill Level: ${skillLevel}`);
-    console.log('=========================================');
     
     try {
       const response = await api.post('/games/best-move', { fen, skill_level: skillLevel, move_time: moveTime });
-      console.log('API Response:', response.data);
       return response.data;
     } catch (error: any) {
       console.error('❌ Error getting best move:', error);
