@@ -2,17 +2,19 @@ FROM amazonlinux:2023
 
 # Install Python and dependencies
 RUN yum update -y && \
-    yum install -y python3.9 python3-pip wget && \
+    yum install -y python3.9 python3-pip wget unzip git make gcc-c++ && \
     yum clean all
 
-# Download pre-compiled Stockfish binary
-RUN wget https://stockfishchess.org/files/stockfish-16-linux.zip -O stockfish.zip || true && \
-    if [ ! -s stockfish.zip ]; then \
-        wget https://github.com/official-stockfish/Stockfish/raw/master/src/stockfish -O stockfish && \
-        mkdir -p /usr/bin && \
-        mv stockfish /usr/bin/ && \
-        chmod +x /usr/bin/stockfish; \
-    fi
+# Clone Stockfish repository and build it
+RUN cd /tmp && \
+    git clone --depth 1 https://github.com/official-stockfish/Stockfish.git && \
+    cd Stockfish/src && \
+    make -j build && \
+    mkdir -p /usr/bin && \
+    cp stockfish /usr/bin/ && \
+    chmod +x /usr/bin/stockfish && \
+    cd / && \
+    rm -rf /tmp/Stockfish
 
 # Set work directory
 WORKDIR /app
@@ -34,4 +36,4 @@ ENV STOCKFISH_PATH=/usr/bin/stockfish
 EXPOSE 8000
 
 # Command to run the application
-CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["python3", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"] 

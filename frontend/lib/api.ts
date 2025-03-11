@@ -9,12 +9,27 @@ type AxiosErr = any;
 declare const process: {
   env: {
     NEXT_PUBLIC_API_URL?: string;
+    NEXT_PUBLIC_DOCKER?: string;
+    NODE_ENV?: string;
   };
 };
 
+// Determine if we're running in Docker/local development
+const isDocker = process.env.NEXT_PUBLIC_DOCKER === 'true';
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Set API URL based on environment
+let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
+// Force local URL if we're in development/Docker
+if (isDevelopment || isDocker) {
+  apiUrl = 'http://localhost:80';
+  console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
+}
+
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:80',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,7 +37,8 @@ const api = axios.create({
 
 // Add request logging and error handling
 api.interceptors.request.use((config: AxiosConfig) => {
-  console.log(`API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.data);
+  const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
+  console.log(`API Request: ${config.method?.toUpperCase()} ${fullUrl}`, config.data);
   return config;
 });
 
@@ -77,8 +93,27 @@ export const gameApi = {
 
   // Get best move from Stockfish
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
-    const response = await api.post('/games/best-move', { fen, skill_level: skillLevel, move_time: moveTime });
-    return response.data;
+    console.log('========= CHESS MOVE API REQUEST =========');
+    console.log(`Environment: ${isDevelopment ? 'Development' : 'Production'}`);
+    console.log(`Docker: ${isDocker ? 'Yes' : 'No'}`);
+    console.log(`API URL: ${api.defaults.baseURL}/games/best-move`);
+    console.log(`FEN: ${fen}`);
+    console.log(`Skill Level: ${skillLevel}`);
+    console.log('=========================================');
+    
+    try {
+      const response = await api.post('/games/best-move', { fen, skill_level: skillLevel, move_time: moveTime });
+      console.log('API Response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error getting best move:', error);
+      // Log additional detail if it's an axios error
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+      }
+      throw error;
+    }
   },
 
   // Evaluate a position

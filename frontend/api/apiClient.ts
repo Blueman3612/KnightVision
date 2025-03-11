@@ -1,8 +1,21 @@
 import axios from 'axios';
 
+// Determine if we're running in Docker/local development
+const isDocker = process.env.NEXT_PUBLIC_DOCKER === 'true';
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Set API URL based on environment
+let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+
+// Force local URL if we're in development/Docker
+if (isDevelopment || isDocker) {
+  apiUrl = 'http://localhost:80';
+  console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
+}
+
 // Create an instance of axios with a custom config
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
