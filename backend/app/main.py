@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 from app.api.routes import game, user, auth, health
 from app.core.config import settings
-from app.core.middleware import OptionsMiddleware
 
 # Load environment variables
 load_dotenv()
@@ -16,9 +15,6 @@ app = FastAPI(
     description="Backend API for the Chess Tutor application",
     version="0.1.0",
 )
-
-# Add OPTIONS middleware before CORS
-app.add_middleware(OptionsMiddleware)
 
 # Configure CORS
 app.add_middleware(
