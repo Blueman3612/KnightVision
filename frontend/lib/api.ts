@@ -27,6 +27,13 @@ if (isDevelopment || isDocker) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
 } 
+// In production, use our Next.js API proxy to avoid mixed content issues
+else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && 
+         (apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
+  // If we're in production with HTTPS, use our proxy endpoint
+  console.log('🔄 Production with HTTPS detected: Using API proxy');
+  apiUrl = '/api/proxy';
+}
 // Ensure we don't try to use HTTPS for our backend URLs
 else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
   console.log('🌐 Using HTTP for API URL:', apiUrl);
@@ -104,37 +111,12 @@ export const gameApi = {
 
   // Get best move from Stockfish
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
-    
     try {
-      // Force HTTP endpoint for requests to EC2
-      let endpoint = '/games/best-move';
-      let config = {};
-      
-      // If we're in a secure context (HTTPS), but using EC2 URL, we need to handle mixed content
-      if (typeof window !== 'undefined' && 
-          window.location.protocol === 'https:' && 
-          apiUrl.includes('ec2-')) {
-        console.log('⚠️ Handling mixed content by using full HTTP URL');
-        // Replace the relative endpoint with the full URL to ensure HTTP is used
-        endpoint = `${apiUrl}/games/best-move`;
-        // Use fetch API directly to bypass browser mixed content blocking
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ fen, skill_level: skillLevel, move_time: moveTime }),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        return await response.json();
-      }
-      
-      // Standard axios approach for non-mixed content
-      const response = await api.post(endpoint, { fen, skill_level: skillLevel, move_time: moveTime }, config);
+      const response = await api.post('/games/best-move', { 
+        fen, 
+        skill_level: skillLevel, 
+        move_time: moveTime 
+      });
       return response.data;
     } catch (error: any) {
       console.error('❌ Error getting best move:', error);
