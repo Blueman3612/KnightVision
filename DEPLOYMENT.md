@@ -66,7 +66,7 @@ The frontend is deployed using AWS Amplify, which integrates with your Git repos
 2. **Configure build settings:**
    - Ensure the amplify.yml file is in your repository root
    - Alternatively, use the following build settings in the Amplify console:
-     - Build command: `cd frontend && npm ci && npm run build`
+     - Build command: `npm --prefix frontend install && npm --prefix frontend run build`
      - Output directory: `frontend/.next`
 
 3. **Environment variables (if needed):**
@@ -106,6 +106,25 @@ If you encounter TypeScript errors during deployment, follow these steps:
      // Safe to use myRef.current here
    }
    ```
+
+## Troubleshooting npm Errors
+
+If you encounter npm-related errors during deployment, try these steps:
+
+1. **Package-lock.json issues:**
+   - If you see errors about missing package-lock.json, modify your build settings to use `npm install` instead of `npm ci`
+   - Alternatively, commit a package-lock.json file to your repository
+
+2. **Directory navigation errors:**
+   - Use the `--prefix` flag with npm commands instead of changing directories:
+     ```
+     npm --prefix frontend install
+     npm --prefix frontend run build
+     ```
+
+3. **Node.js version issues:**
+   - If you encounter compatibility issues, specify the Node.js version in the Amplify console
+   - You can also add a .nvmrc file to your repository
 
 ## Maintenance
 
