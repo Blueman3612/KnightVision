@@ -65,9 +65,13 @@ The frontend is deployed using AWS Amplify, which integrates with your Git repos
 
 2. **Configure build settings:**
    - Ensure the amplify.yml file is in your repository root
+   - Your repository should have a structure with the Next.js application in a `frontend` directory
    - Alternatively, use the following build settings in the Amplify console:
-     - Build command: `npm --prefix frontend install && npm --prefix frontend run build`
-     - Output directory: `frontend/.next`
+     - Build command: 
+       ```
+       cd frontend && npm install && npm run build
+       ```
+     - Output directory: `.next`
 
 3. **Environment variables (if needed):**
    - Add the backend API URL to environment variables in the Amplify Console:
@@ -129,6 +133,35 @@ If you encounter npm-related errors during deployment, try these steps:
 3. **Node.js version issues:**
    - If you encounter compatibility issues, specify the Node.js version in the Amplify console
    - You can also add a .nvmrc file to your repository
+
+## Troubleshooting Directory Structure Issues
+
+If you encounter errors related to file paths or directory structure:
+
+1. **Double-check your repository structure:**
+   - Ensure your Next.js application is in the `frontend` directory at the root of your repository
+   - Your repository structure should look like:
+     ```
+     /
+     ├── frontend/
+     │   ├── package.json
+     │   ├── next.config.js
+     │   └── ...other Next.js files
+     ├── backend/
+     │   └── ...backend files
+     ├── amplify.yml
+     └── README.md
+     ```
+
+2. **Check directory navigation in build commands:**
+   - Make sure the commands in amplify.yml use the correct paths
+   - Commands should navigate to the frontend directory before running npm commands
+   - Artifacts paths should be relative to where commands are executed
+
+3. **ENOENT errors:**
+   - These typically indicate that a file or directory doesn't exist at the expected path
+   - Verify that you're using the correct directory structure in your build commands
+   - Try simplifying the build process by using `cd` commands and relative paths
 
 ## Maintenance
 

@@ -3,17 +3,18 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm --prefix frontend install
+        - cd frontend
+        - npm install
         - echo "Checking for TypeScript errors"
-        - cd frontend && npx tsc --noEmit
+        - npx tsc --noEmit
     build:
       commands:
-        - npm --prefix frontend run build
+        - npm run build
   artifacts:
-    baseDirectory: frontend/.next
+    baseDirectory: .next
     files:
       - '**/*'
   cache:
     paths:
-      - frontend/node_modules/**/*
-      - frontend/.next/cache/**/* 
+      - node_modules/**/*
+      - .next/cache/**/* 
