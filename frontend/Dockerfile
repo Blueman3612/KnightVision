@@ -34,8 +34,14 @@ ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Process Tailwind CSS
+RUN npx tailwindcss -i ./styles/globals.css -o ./styles/tailwind.css
+
 EXPOSE 3000
-CMD ["./setup.sh"]
+# Ensure the setup.sh has execute permissions
+RUN chmod +x ./setup.sh
+
+CMD ["sh", "./setup.sh"]
 
 # Rebuild the source code only when needed
 FROM base AS builder
