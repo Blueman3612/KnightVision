@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from app.api.routes import game, user, auth, health
 from app.core.config import settings
+from app.core.middleware import OptionsMiddleware
 
 # Load environment variables
 load_dotenv()
@@ -16,13 +17,17 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Add OPTIONS middleware before CORS
+app.add_middleware(OptionsMiddleware)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=86400,  # 24 hours
 )
 
 # Include routers
