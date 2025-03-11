@@ -106,7 +106,35 @@ export const gameApi = {
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
     
     try {
-      const response = await api.post('/games/best-move', { fen, skill_level: skillLevel, move_time: moveTime });
+      // Force HTTP endpoint for requests to EC2
+      let endpoint = '/games/best-move';
+      let config = {};
+      
+      // If we're in a secure context (HTTPS), but using EC2 URL, we need to handle mixed content
+      if (typeof window !== 'undefined' && 
+          window.location.protocol === 'https:' && 
+          apiUrl.includes('ec2-')) {
+        console.log('⚠️ Handling mixed content by using full HTTP URL');
+        // Replace the relative endpoint with the full URL to ensure HTTP is used
+        endpoint = `${apiUrl}/games/best-move`;
+        // Use fetch API directly to bypass browser mixed content blocking
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ fen, skill_level: skillLevel, move_time: moveTime }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return await response.json();
+      }
+      
+      // Standard axios approach for non-mixed content
+      const response = await api.post(endpoint, { fen, skill_level: skillLevel, move_time: moveTime }, config);
       return response.data;
     } catch (error: any) {
       console.error('❌ Error getting best move:', error);
