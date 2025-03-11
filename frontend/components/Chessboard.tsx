@@ -4,6 +4,12 @@ import { Api } from 'chessground/api';
 import { Config } from 'chessground/config';
 import { Chess, Square } from 'chess.js';
 import { Color, Key } from 'chessground/types';
+import { gameApi } from '../lib/api';
+
+// Update the custom type definition to handle null ref
+declare module 'chessground' {
+  export function Chessground(element: HTMLElement, config?: any): Api;
+}
 
 interface ChessboardProps {
   fen?: string;
@@ -11,143 +17,327 @@ interface ChessboardProps {
   viewOnly?: boolean;
   onMove?: (from: string, to: string) => void;
   highlightSquares?: string[];
+  skillLevel?: number;
 }
 
-const Chessboard: React.FC<ChessboardProps> = ({
+function Chessboard({
   fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', // Default starting position
   orientation = 'white',
   viewOnly = false,
   onMove,
   highlightSquares = [],
-}) => {
-  const boardRef = useRef<HTMLDivElement>(null);
-  const [chessground, setChessground] = useState<Api | null>(null);
-  const [chess] = useState<Chess>(new Chess(fen));
-
-  // Initialize chessground
-  useEffect(() => {
-    if (boardRef.current) {
-      const config: Config = {
-        fen,
-        orientation,
-        viewOnly,
-        movable: {
-          free: false,
-          color: viewOnly ? undefined : 'both',
-          dests: viewOnly ? undefined : getDests(chess),
-          events: {
-            after: (from, to) => {
-              if (onMove) {
-                onMove(from, to);
-              }
-            },
-          },
-        },
-        highlight: {
-          lastMove: true,
-          check: true,
-        },
-        animation: {
-          enabled: true,
-          duration: 200,
-        },
-        premovable: {
-          enabled: !viewOnly,
-        },
-        drawable: {
-          enabled: true,
-          visible: true,
-        },
-        coordinates: true,
-      };
-
-      const cg = Chessground(boardRef.current, config);
-      setChessground(cg);
-
-      return () => {
-        // Cleanup
-        cg.destroy();
-      };
-    }
-  }, []);
-
-  // Update FEN when it changes
-  useEffect(() => {
-    if (chessground) {
-      chessground.set({ fen });
-      chess.load(fen);
-      
-      if (!viewOnly) {
-        chessground.set({ movable: { dests: getDests(chess) } });
-      }
-    }
-  }, [fen, chessground, viewOnly]);
-
-  // Update orientation when it changes
-  useEffect(() => {
-    if (chessground) {
-      chessground.set({ orientation });
-    }
-  }, [orientation, chessground]);
-
-  // Update highlighted squares
-  useEffect(() => {
-    if (chessground && highlightSquares.length > 0) {
-      const highlights: { [key: string]: { className: string } } = {};
-      highlightSquares.forEach((square) => {
-        highlights[square] = { className: 'highlight' };
-      });
-      
-      chessground.set({
-        drawable: {
-          shapes: [],
-          autoShapes: [],
-        }
-      });
-      
-      chessground.setShapes(
-        highlightSquares.map(square => ({
-          orig: square as Key,
-          brush: 'green',
-        }))
-      );
-    }
-  }, [highlightSquares, chessground]);
-
-  // Helper function to get possible destinations for each piece
-  function getDests(chess: Chess): Map<Key, Key[]> {
+  skillLevel = 10,
+}: ChessboardProps) {
+  // DOM reference for chessground
+  const boardRef = useRef<HTMLElement | null>(null);
+  
+  // Store chessground instance in a ref to avoid rerendering
+  const chessgroundRef = useRef<Api | null>(null);
+  
+  // Store chess.js instance in a ref - using version 1.1.0
+  const chessRef = useRef<any>(new Chess(fen));
+  
+  // Track loading state for the thinking indicator
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Flag to track if the board has been initialized
+  const hasInitializedRef = useRef(false);
+  
+  // Store current FEN and orientation in refs to track changes
+  const currentFenRef = useRef(fen);
+  const currentOrientationRef = useRef(orientation);
+  
+  // Function to calculate legal moves for the current position
+  function calculateDests() {
     const dests = new Map();
-    
-    // Get all squares from 'a1' to 'h8'
-    const squares: Square[] = [];
-    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const ranks = ['1', '2', '3', '4', '5', '6', '7', '8'];
-    
-    for (const file of files) {
-      for (const rank of ranks) {
-        // Cast the square to Square type
-        squares.push(`${file}${rank}` as Square);
+    try {
+      const chess = chessRef.current;
+      
+      // Get all possible moves
+      const moves = chess.moves({ verbose: true });
+      
+      // Group moves by source square
+      for (const move of moves) {
+        if (!dests.has(move.from)) {
+          dests.set(move.from, []);
+        }
+        dests.get(move.from).push(move.to);
       }
+    } catch (error: any) {
+      console.error("Error calculating legal moves:", error);
     }
-    
-    // For each square, get possible moves
-    squares.forEach(s => {
-      try {
-        const ms = chess.moves({ square: s, verbose: true });
-        if (ms.length) dests.set(s, ms.map(m => m.to));
-      } catch (e) {
-        // Skip invalid squares
-      }
-    });
-    
     return dests;
   }
-
+  
+  // Function to make a Stockfish move
+  async function makeStockfishMove() {
+    // Skip if no chessground or processing another move
+    if (!chessgroundRef.current || isProcessing) return;
+    
+    try {
+      setIsProcessing(true);
+      const chess = chessRef.current;
+      const currentFen = chess.fen();
+      
+      try {
+        // Call API for best move
+        const response = await gameApi.getBestMove(currentFen, skillLevel);
+        
+        if (response && response.move) {
+          const from = response.move.substring(0, 2) as Key;
+          const to = response.move.substring(2, 4) as Key;
+          
+          // Make the move in chess.js
+          chess.move({
+            from: from as string,
+            to: to as string,
+            promotion: response.move.length > 4 ? response.move[4] : 'q'
+          });
+          
+          // Update chessground
+          const newDests = calculateDests();
+          chessgroundRef.current.set({
+            fen: chess.fen(),
+            turnColor: chess.turn() === 'w' ? 'white' : 'black',
+            movable: { dests: newDests },
+            lastMove: [from, to],
+          });
+          
+          // Animate the move
+          setTimeout(() => {
+            if (chessgroundRef.current) {
+              chessgroundRef.current.move(from, to);
+            }
+          }, 50);
+        }
+      } catch (apiError) {
+        console.error("Stockfish API error, using fallback:", apiError);
+        
+        // Fallback: random legal move
+        const legalMoves = chess.moves({ verbose: true });
+        if (legalMoves.length > 0 && chessgroundRef.current) {
+          const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+          
+          // Make move in chess.js
+          chess.move({
+            from: randomMove.from,
+            to: randomMove.to,
+            promotion: 'q'
+          });
+          
+          // Update chessground
+          const newDests = calculateDests();
+          chessgroundRef.current.set({
+            fen: chess.fen(),
+            turnColor: chess.turn() === 'w' ? 'white' : 'black',
+            movable: { dests: newDests },
+            lastMove: [randomMove.from as Key, randomMove.to as Key]
+          });
+          
+          // Animate the move
+          setTimeout(() => {
+            if (chessgroundRef.current) {
+              chessgroundRef.current.move(randomMove.from as Key, randomMove.to as Key);
+            }
+          }, 50);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error making Stockfish move:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+  
+  // Function to handle a user move
+  function handleMove(from: Key, to: Key) {
+    try {
+      const chess = chessRef.current;
+      
+      // Try to make the move in chess.js
+      const moveResult = chess.move({
+        from: from as string,
+        to: to as string,
+        promotion: 'q' // Always promote to queen for simplicity
+      });
+      
+      if (!moveResult) {
+        console.error('Invalid move:', from, to);
+        return false;
+      }
+      
+      // Call onMove callback if provided
+      if (onMove) {
+        onMove(from as string, to as string);
+      }
+      
+      // Update board position
+      if (chessgroundRef.current) {
+        const newDests = calculateDests();
+        chessgroundRef.current.set({
+          fen: chess.fen(),
+          turnColor: chess.turn() === 'w' ? 'white' : 'black',
+          movable: { dests: newDests },
+          lastMove: [from, to]
+        });
+      }
+      
+      // Check if game is over
+      const isGameOver = chess.isGameOver?.() || false;
+      
+      // Make computer move if game not over
+      if (!isGameOver) {
+        setTimeout(() => {
+          makeStockfishMove();
+        }, 300);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error("Error making move:", error);
+      return false;
+    }
+  }
+  
+  // Create or update chessground
+  function updateChessground() {
+    if (!boardRef.current) return;
+    
+    const chess = chessRef.current;
+    
+    // Calculate legal moves for the current position
+    const dests = calculateDests();
+    
+    // Configuration for chessground
+    const config: Config = {
+      fen: chess.fen(),
+      orientation: currentOrientationRef.current,
+      viewOnly: false,
+      coordinates: true,
+      movable: {
+        free: false,
+        color: 'white',
+        dests,
+        events: {
+          after: handleMove
+        }
+      },
+      animation: {
+        enabled: true,
+        duration: 200
+      },
+      draggable: {
+        enabled: !viewOnly,
+        showGhost: true
+      },
+      selectable: {
+        enabled: true
+      },
+      highlight: {
+        lastMove: true,
+        check: true
+      },
+      premovable: {
+        enabled: false
+      }
+    };
+    
+    try {
+      if (!hasInitializedRef.current) {
+        // First-time initialization
+        const cg = Chessground(boardRef.current, config);
+        chessgroundRef.current = cg;
+        hasInitializedRef.current = true;
+      } else if (chessgroundRef.current) {
+        // Update existing instance
+        chessgroundRef.current.set(config);
+      }
+    } catch (err: any) {
+      console.error("Error initializing/updating chessground:", err);
+      
+      // Try to recover by reinitializing
+      if (boardRef.current) {
+        try {
+          if (chessgroundRef.current) {
+            chessgroundRef.current.destroy();
+          }
+          chessgroundRef.current = Chessground(boardRef.current, config);
+          hasInitializedRef.current = true;
+        } catch (e) {
+          console.error("Failed to recover chessboard:", e);
+        }
+      }
+    }
+  }
+  
+  // Initialize chessground once on mount
+  useEffect(() => {
+    // Wait briefly for the DOM to be ready
+    const timer = setTimeout(() => {
+      updateChessground();
+    }, 10);
+    
+    // Cleanup on unmount
+    return () => {
+      clearTimeout(timer);
+      if (chessgroundRef.current) {
+        chessgroundRef.current.destroy();
+        chessgroundRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Handle FEN changes
+  useEffect(() => {
+    if (fen === currentFenRef.current) return;
+    
+    try {
+      // Update refs
+      currentFenRef.current = fen;
+      
+      // Update chess instance
+      chessRef.current.load(fen);
+      
+      // Update board if initialized
+      if (hasInitializedRef.current && chessgroundRef.current) {
+        const dests = calculateDests();
+        chessgroundRef.current.set({
+          fen,
+          turnColor: chessRef.current.turn() === 'w' ? 'white' : 'black',
+          movable: { dests }
+        });
+      } else if (boardRef.current) {
+        // If chessground not initialized but board ref exists, initialize it
+        updateChessground();
+      }
+    } catch (error) {
+      console.error("Error updating position:", error);
+    }
+  }, [fen]);
+  
+  // Handle orientation changes
+  useEffect(() => {
+    if (orientation === currentOrientationRef.current) return;
+    
+    // Update ref
+    currentOrientationRef.current = orientation;
+    
+    // Update board if initialized
+    if (hasInitializedRef.current && chessgroundRef.current) {
+      chessgroundRef.current.set({ orientation });
+    }
+  }, [orientation]);
+  
   return (
-    <div className="w-full aspect-square max-w-lg mx-auto">
-      <div ref={boardRef} className="w-full h-full" />
+    <div className="w-full h-full relative border-8 border-solid border-[#3a2a1d] rounded-lg overflow-hidden">
+      <div ref={boardRef as any} className="w-full h-full" />
+      {isProcessing && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
+          <div className="text-white text-lg font-bold">Stockfish is thinking...</div>
+        </div>
+      )}
     </div>
   );
-};
+}
 
 export default Chessboard; 

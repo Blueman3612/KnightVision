@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ]
     
     # Stockfish
-    STOCKFISH_PATH: str = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
+    STOCKFISH_PATH: str = os.getenv("STOCKFISH_PATH", "/usr/bin/stockfish")
     STOCKFISH_DEPTH: int = 20
     STOCKFISH_THREADS: int = 4
     
