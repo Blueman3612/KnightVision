@@ -70,8 +70,12 @@ The frontend is deployed using AWS Amplify, which integrates with your Git repos
      - Output directory: `frontend/.next`
 
 3. **Environment variables (if needed):**
-   - Add the backend API URL to environment variables:
-     - NEXT_PUBLIC_API_URL: `http://your-ec2-ip:8000`
+   - Add the backend API URL to environment variables in the Amplify Console:
+     - NEXT_PUBLIC_API_URL: `http://your-ec2-ip:8000` (use your actual EC2 public IP)
+   - For more security, consider:
+     - Setting up a domain name for your backend API
+     - Configuring HTTPS for your API endpoint
+     - Using AWS Secrets Manager for sensitive environment variables
 
 4. **Save and deploy:**
    - Click "Save and deploy"

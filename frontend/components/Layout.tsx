@@ -7,7 +7,7 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
@@ -50,6 +50,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
     </>
   );
-};
+}
 
 export default Layout; 

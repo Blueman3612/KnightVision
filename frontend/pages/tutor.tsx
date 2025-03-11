@@ -9,7 +9,7 @@ interface TutorPageProps {
   children?: ReactNode;
 }
 
-const TutorPage: React.FC<TutorPageProps> = () => {
+function TutorPage() {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
@@ -119,6 +119,6 @@ const TutorPage: React.FC<TutorPageProps> = () => {
       </div>
     </>
   );
-};
+}
 
 export default TutorPage; 

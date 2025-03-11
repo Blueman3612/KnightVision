@@ -4,6 +4,8 @@ frontend:
     preBuild:
       commands:
         - npm --prefix frontend install
+        - echo "Checking for TypeScript errors"
+        - cd frontend && npx tsc --noEmit
     build:
       commands:
         - npm --prefix frontend run build
