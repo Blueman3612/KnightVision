@@ -71,7 +71,8 @@ The frontend is deployed using AWS Amplify, which integrates with your Git repos
        ```
        cd frontend && npm install && npm run build
        ```
-     - Output directory: `.next`
+     - Output directory: `frontend/.next`
+   - **Important:** Make sure the output directory is relative to the repository root, not to where the build commands run
 
 3. **Environment variables (if needed):**
    - Add the backend API URL to environment variables in the Amplify Console:
@@ -170,6 +171,12 @@ If you encounter errors related to file paths or directory structure:
    - These typically indicate that a file or directory doesn't exist at the expected path
    - Verify that you're using the correct directory structure in your build commands
    - Try simplifying the build process by using `cd` commands and relative paths
+
+4. **Artifact directory errors:**
+   - Error message `Artifact directory doesn't exist` indicates that Amplify can't find your build output
+   - Make sure the `baseDirectory` in amplify.yml points to the correct location relative to the repository root
+   - For Next.js projects within a frontend directory, the correct path is typically `frontend/.next`
+   - Remember that directory paths in the `artifacts` section are relative to the repository root, not to where the build commands run
 
 ## Troubleshooting Environment Variable Issues
 
