@@ -17,6 +17,7 @@ declare const process: {
 // Determine if we're running in Docker/local development
 const isDocker = process.env.NEXT_PUBLIC_DOCKER === 'true';
 const isDevelopment = process.env.NODE_ENV === 'development';
+const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
 
 // Set API URL based on environment
 let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
@@ -25,7 +26,15 @@ let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 if (isDevelopment || isDocker) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
+} 
+// Ensure HTTPS for production environments, especially on Vercel
+else if (apiUrl.startsWith('http://') && !apiUrl.includes('localhost')) {
+  apiUrl = apiUrl.replace('http://', 'https://');
+  console.log('🔒 Converting API URL to HTTPS for security:', apiUrl);
 }
+
+// Log the final API URL being used
+console.log('🌐 API URL:', apiUrl);
 
 // Create axios instance with base URL
 const api = axios.create({

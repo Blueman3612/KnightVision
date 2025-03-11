@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",  # Frontend dev server
-        "https://chesstutor.example.com",  # Production frontend
+        "https://knightvision.app",  # Production frontend
+        "https://api.knightvision.app",
+        "https://knight-vision-olive.vercel.app",  # Vercel frontend
     ]
     
     # Stockfish
