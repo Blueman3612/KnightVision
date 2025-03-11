@@ -35,16 +35,26 @@ function TutorPage() {
       setFen(chess.fen());
       
       // Check game status
-      if (chess.game_over()) {
-        if (chess.in_checkmate()) {
+      const chessAny = chess as any;
+      
+      // Check if the game is over using methods available in the chess.js version
+      const isCheckmate = typeof chessAny.isCheckmate === 'function' ? chessAny.isCheckmate() : false;
+      const isDraw = typeof chessAny.isDraw === 'function' ? chessAny.isDraw() : false;
+      const isStalemate = typeof chessAny.isStalemate === 'function' ? chessAny.isStalemate() : false;
+      const isThreefoldRepetition = typeof chessAny.isThreefoldRepetition === 'function' ? chessAny.isThreefoldRepetition() : false;
+      
+      const isGameOver = isCheckmate || isDraw || isStalemate || isThreefoldRepetition;
+      
+      if (isGameOver) {
+        if (isCheckmate) {
           setGameStatus('Checkmate!');
-        } else if (chess.in_draw()) {
+        } else if (isDraw) {
           setGameStatus('Draw!');
-        } else if (chess.in_stalemate()) {
+        } else if (isStalemate) {
           setGameStatus('Stalemate!');
-        } else if (chess.in_threefold_repetition()) {
+        } else if (isThreefoldRepetition) {
           setGameStatus('Draw by repetition!');
-        } else if (chess.insufficient_material()) {
+        } else if (typeof chessAny.insufficient_material === 'function' ? chessAny.insufficient_material() : false) {
           setGameStatus('Draw by insufficient material!');
         }
       } else if (typeof chess.in_check === 'function' && chess.in_check()) {
