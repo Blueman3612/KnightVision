@@ -27,8 +27,8 @@ if (isDevelopment || isDocker) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
 } 
-// Ensure we don't try to use HTTPS for the api.knightvision.app domain
-else if (apiUrl.startsWith('http://') && apiUrl.includes('api.knightvision.app')) {
+// Ensure we don't try to use HTTPS for our backend URLs
+else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
   console.log('🌐 Using HTTP for API URL:', apiUrl);
 }
 // Ensure HTTPS for other production environments, especially on Vercel
