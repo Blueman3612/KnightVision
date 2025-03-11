@@ -33,6 +33,29 @@ if (-not $packageJsonContent.scripts.build) {
     exit 1
 }
 
+# Check for Supabase environment variables in .env.local
+Write-Host "Checking for Supabase environment variables..." -ForegroundColor Cyan
+$envFileExists = Test-Path -Path "frontend/.env.local"
+if ($envFileExists) {
+    $envFileContent = Get-Content -Path "frontend/.env.local" -Raw
+    $hasSupabaseUrl = $envFileContent -match "NEXT_PUBLIC_SUPABASE_URL"
+    $hasSupabaseKey = $envFileContent -match "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    
+    if (-not $hasSupabaseUrl -or -not $hasSupabaseKey) {
+        Write-Host "WARNING: Supabase environment variables missing in .env.local file!" -ForegroundColor Yellow
+        Write-Host "Make sure to add these variables in the AWS Amplify Console:" -ForegroundColor Yellow
+        Write-Host "  - NEXT_PUBLIC_SUPABASE_URL" -ForegroundColor Yellow
+        Write-Host "  - NEXT_PUBLIC_SUPABASE_ANON_KEY" -ForegroundColor Yellow
+    } else {
+        Write-Host "  ✓ Supabase environment variables found in .env.local" -ForegroundColor Green
+    }
+} else {
+    Write-Host "WARNING: No .env.local file found!" -ForegroundColor Yellow
+    Write-Host "Make sure to add these required variables in the AWS Amplify Console:" -ForegroundColor Yellow
+    Write-Host "  - NEXT_PUBLIC_SUPABASE_URL" -ForegroundColor Yellow
+    Write-Host "  - NEXT_PUBLIC_SUPABASE_ANON_KEY" -ForegroundColor Yellow
+}
+
 Write-Host "Repository structure verification complete!" -ForegroundColor Green
 Write-Host "Your project appears to have the correct structure for AWS Amplify deployment." -ForegroundColor Green
 
@@ -40,5 +63,8 @@ Write-Host "Your project appears to have the correct structure for AWS Amplify d
 Write-Host "`nRecommended next steps:" -ForegroundColor Cyan
 Write-Host "1. Commit and push your changes to GitHub"
 Write-Host "2. In the AWS Amplify console, ensure your build settings match the ones in amplify.yml"
-Write-Host "3. Set up any required environment variables (like NEXT_PUBLIC_API_URL)"
+Write-Host "3. Set up required environment variables:"
+Write-Host "   - NEXT_PUBLIC_SUPABASE_URL"
+Write-Host "   - NEXT_PUBLIC_SUPABASE_ANON_KEY"
+Write-Host "   - NEXT_PUBLIC_API_URL (if connecting to your EC2 backend)"
 Write-Host "4. Click 'Save and deploy' in the AWS Amplify console" 

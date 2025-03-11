@@ -76,6 +76,14 @@ The frontend is deployed using AWS Amplify, which integrates with your Git repos
 3. **Environment variables (if needed):**
    - Add the backend API URL to environment variables in the Amplify Console:
      - NEXT_PUBLIC_API_URL: `http://your-ec2-ip:8000` (use your actual EC2 public IP)
+   - **Required Supabase variables:**
+     - NEXT_PUBLIC_SUPABASE_URL: Your Supabase project URL (e.g., https://yourproject.supabase.co)
+     - NEXT_PUBLIC_SUPABASE_ANON_KEY: Your Supabase project's anonymous/public API key
+   - To find your Supabase credentials:
+     1. Log in to your Supabase dashboard (https://app.supabase.com)
+     2. Select your project
+     3. Go to "Project Settings" > "API"
+     4. Copy the URL and anon/public key values
    - For more security, consider:
      - Setting up a domain name for your backend API
      - Configuring HTTPS for your API endpoint
@@ -162,6 +170,30 @@ If you encounter errors related to file paths or directory structure:
    - These typically indicate that a file or directory doesn't exist at the expected path
    - Verify that you're using the correct directory structure in your build commands
    - Try simplifying the build process by using `cd` commands and relative paths
+
+## Troubleshooting Environment Variable Issues
+
+If you encounter errors related to missing environment variables:
+
+1. **Supabase authentication errors:**
+   - Error messages containing `NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY env variables are required` indicate missing Supabase credentials.
+   - Add these variables in the AWS Amplify Console under "Environment variables":
+     - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL 
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase project's anonymous API key
+
+2. **Verifying environment variables:**
+   - In the Amplify Console, go to "Build details" for your latest build
+   - Check the logs to ensure environment variables are being correctly applied
+   - Variables should appear (with values redacted) in the build logs
+
+3. **Environment variable scope:**
+   - Ensure variables are applied to all branches that need them
+   - You can set branch-specific variables for different environments (dev/prod)
+
+4. **Testing locally before deployment:**
+   - Create a `.env.local` file in your frontend directory using the `.env.local.example` template
+   - Fill in the actual values for your environment variables
+   - Run `npm run dev` to test the application locally
 
 ## Maintenance
 
