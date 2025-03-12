@@ -17,14 +17,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   
   try {
     console.log(`🔄 Proxying ${req.method} request to: ${targetUrl}`);
+    console.log(`Request body:`, req.body);
     
-    // Forward the request to the EC2 instance
+    // Forward the request to the EC2 instance with the same HTTP method
     const response = await axios({
       method: req.method,
       url: targetUrl,
       data: req.body,
       headers: {
         'Content-Type': 'application/json',
+        // Forward authorization headers if they exist
+        ...(req.headers.authorization && { 
+          'Authorization': req.headers.authorization 
+        }),
       },
     });
     
@@ -48,7 +53,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 // Configure API endpoint to accept all HTTP methods
 export const config = {
   api: {
-    bodyParser: true,
+    bodyParser: {
+      sizeLimit: '1mb',
+    },
     externalResolver: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   },
 } 
