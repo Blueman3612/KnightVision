@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
-import Button from '../components/ui/Button';
+import { Button, TextInput } from '../components/ui';
 
 // Define a more comprehensive game type
 interface ChessGame {
@@ -42,6 +42,7 @@ const Profile = () => {
     gamesPerSecond: number;
     fileSize: number;
   } | null>(null);
+  const [pgnText, setPgnText] = useState('');
   
   // Add a ref for the file input with proper typing
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -531,6 +532,152 @@ const Profile = () => {
     }
   };
 
+  // Function to process the pasted PGN text
+  const handlePgnTextSubmit = async () => {
+    if (!pgnText.trim()) {
+      setMessage({ 
+        text: 'Please enter PGN data',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (!session?.user?.id) {
+      setMessage({ 
+        text: 'You need to be logged in to upload games',
+        type: 'error'
+      });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ text: 'Processing PGN text...', type: 'info' });
+    setUploadProgress(0);
+    setParsingMetrics(null);
+
+    try {
+      // Calculate file size based on string length
+      const textSize = new Blob([pgnText]).size;
+      
+      // Start measuring parsing time
+      const parsingStartTime = performance.now();
+      
+      // Parse all games at once
+      const games = parsePgn(pgnText);
+      
+      const parsingEndTime = performance.now();
+      const parsingTimeMs = parsingEndTime - parsingStartTime;
+      
+      if (games.length === 0) {
+        setMessage({ text: 'No valid games found in the PGN text', type: 'error' });
+        setLoading(false);
+        return;
+      }
+      
+      setMessage({ text: `Found ${games.length} games. Checking for duplicates...`, type: 'info' });
+      
+      // Start measuring processing time
+      const processingStartTime = performance.now();
+      
+      // Extract all unique game IDs for batch duplicate checking
+      const uniqueGameIds = games.map(game => game.uniqueGameId);
+      
+      try {
+        // Batch check for duplicates in a single query
+        // Split into smaller chunks if there are too many IDs
+        const maxIdsPerQuery = 100; // Supabase has limits on query size
+        let existingGameIds = new Set<string>();
+        
+        // Process in chunks to avoid query size limitations
+        for (let i = 0; i < uniqueGameIds.length; i += maxIdsPerQuery) {
+          const idChunk = uniqueGameIds.slice(i, i + maxIdsPerQuery);
+          
+          const { data: existingGamesChunk, error: queryError } = await supabase
+            .from('games')
+            .select('unique_game_id')
+            .eq('user_id', session.user.id)
+            .in('unique_game_id', idChunk);
+            
+          if (queryError) {
+            console.error('Error checking for duplicates:', queryError);
+            // Continue anyway - we'll just assume no duplicates in this chunk
+          } else if (existingGamesChunk) {
+            // Add to our set of existing IDs
+            existingGamesChunk.forEach(game => existingGameIds.add(game.unique_game_id));
+          }
+        }
+        
+        // Filter out duplicates
+        const newGames = games.filter(game => !existingGameIds.has(game.uniqueGameId));
+        const duplicateCount = games.length - newGames.length;
+        
+        setMessage({ text: `Found ${newGames.length} new games. Uploading in batches...`, type: 'info' });
+        
+        // Prepare games for insertion using our new validation function
+        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
+        
+        // Process in batches of 50 to stay within limits
+        const batchSize = 50;
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
+          const batch = gamesToInsert.slice(i, i + batchSize);
+          
+          // Log the first game for debugging
+          if (i === 0) {
+            console.log("Sample game data:", batch[0]);
+          }
+          
+          const { error: insertError, data: insertedData } = await supabase
+            .from('games')
+            .insert(batch);
+            
+          if (insertError) {
+            errorCount += batch.length;
+            console.error('Error inserting batch:', insertError);
+          } else {
+            successCount += batch.length;
+          }
+          
+          // Update progress
+          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+        }
+        
+        // Calculate final metrics
+        const processingEndTime = performance.now();
+        const totalProcessingTimeMs = processingEndTime - processingStartTime;
+        const totalProcessingTimeSec = totalProcessingTimeMs / 1000;
+        const totalGamesProcessed = games.length;
+        const gamesPerSecond = totalGamesProcessed / totalProcessingTimeSec;
+        
+        setParsingMetrics({
+          totalGames: games.length,
+          parsingTime: totalProcessingTimeMs,
+          gamesPerSecond: gamesPerSecond,
+          fileSize: textSize
+        });
+        
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
+          type: errorCount > 0 ? 'error' : 'success'
+        });
+        
+        // Clear the input after successful upload
+        setPgnText('');
+      } catch (error) {
+        setMessage({ 
+          text: `Error during upload: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      setMessage({ text: 'Error processing PGN text: ' + (err as Error).message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!session) {
     return <div>Redirecting to login...</div>;
   }
@@ -575,6 +722,46 @@ const Profile = () => {
             >
               Select PGN File
             </Button>
+          </div>
+          
+          {/* Divider */}
+          <div className="flex items-center my-6">
+            <div className="flex-grow border-t border-gray-600"></div>
+            <span className="flex-shrink mx-4 text-gray-400">OR</span>
+            <div className="flex-grow border-t border-gray-600"></div>
+          </div>
+          
+          {/* PGN Paste Area */}
+          <div className="mb-4">
+            <TextInput
+              label="Paste PGN Data"
+              placeholder="Paste your PGN data here..."
+              helperText="Copy and paste PGN data from your chess platform"
+              multiline
+              rows={8}
+              variant="filled"
+              fullWidth
+              value={pgnText}
+              onChange={(e) => setPgnText(e.target.value)}
+              disabled={loading}
+              showClearButton
+            />
+            <div className="mt-4">
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handlePgnTextSubmit}
+                isLoading={loading}
+                disabled={!pgnText.trim()}
+                leftIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                }
+              >
+                Submit PGN Data
+              </Button>
+            </div>
           </div>
           
           {parsingMetrics && (

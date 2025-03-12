@@ -240,4 +240,62 @@ cg-board coord {
   .form-error {
     @apply text-red-600 text-sm mt-1;
   }
+}
+
+/* Custom scrollbar for textarea elements */
+textarea::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: #6366f1;
+  border-radius: 9999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background: #818cf8;
+}
+
+/* Firefox scrollbar styling */
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: #6366f1 #374151;
+}
+
+/* For Edge/IE */
+textarea {
+  -ms-overflow-style: none;
+}
+
+/* Custom utility classes for scrollbars */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-wide::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.scrollbar-thumb-indigo-500::-webkit-scrollbar-thumb {
+  background: #6366f1;
+}
+
+.scrollbar-track-gray-700::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+.scrollbar-thumb-rounded-full::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+}
+
+.scrollbar-track-rounded-full::-webkit-scrollbar-track {
+  border-radius: 9999px;
 } 

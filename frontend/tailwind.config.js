@@ -3,6 +3,7 @@ module.exports = {
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
@@ -51,7 +52,25 @@ module.exports = {
           '100%': { transform: 'scale(2)', opacity: '0' },
         },
       },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-conic':
+          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      },
     },
   },
   plugins: [],
+  // Add custom CSS for scrollbar styling
+  corePlugins: {
+    // Add any core plugins you want to disable
+  },
+  variants: {
+    extend: {
+      // Add scrollbar variants
+      display: ['scrollbar'],
+      width: ['scrollbar'],
+      borderRadius: ['scrollbar'],
+      backgroundColor: ['scrollbar-track', 'scrollbar-thumb'],
+    },
+  },
 } 
