@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 
 // Define variants and sizes for consistent styling
@@ -22,6 +22,12 @@ interface ButtonProps {
   [key: string]: any; // For additional props
 }
 
+interface RippleProps {
+  x: number;
+  y: number;
+  size: number;
+}
+
 const Button = ({
   children, 
   variant = 'primary', 
@@ -37,16 +43,44 @@ const Button = ({
   disabled,
   ...rest
 }: ButtonProps) => {
-  // Base styles that apply to all buttons
-  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed';
+  // State for ripple effect
+  const [ripples, setRipples] = useState<RippleProps[]>([]);
   
-  // Variant-specific styles
+  // Clean up ripples after they've animated
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (ripples.length > 0) {
+        setRipples([]);
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timeout);
+  }, [ripples]);
+  
+  // Handle ripple effect on click
+  const handleRipple = (e: any) => {
+    const button = e.currentTarget.getBoundingClientRect();
+    const size = Math.max(button.width, button.height);
+    const x = e.clientX - button.left - size / 2;
+    const y = e.clientY - button.top - size / 2;
+    
+    setRipples([...ripples, { x, y, size }]);
+    
+    if (onClick) {
+      onClick(e);
+    }
+  };
+  
+  // Base styles that apply to all buttons with enhanced transitions and interactions
+  const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium relative overflow-hidden transform transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] hover:-translate-y-[1px]';
+  
+  // Variant-specific styles with enhanced hover and active states
   const variantStyles = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
-    secondary: 'bg-gray-700 text-white hover:bg-gray-800',
-    outline: 'border border-gray-600 text-white hover:bg-gray-800 bg-transparent',
-    ghost: 'text-gray-300 hover:text-white hover:bg-gray-800 bg-transparent',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
+    primary: 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700 shadow-md hover:shadow-lg active:shadow active:from-indigo-700 active:to-indigo-800 hover:shadow-indigo-500/40',
+    secondary: 'bg-gray-700 text-white hover:bg-gray-800 shadow-md hover:shadow-lg active:shadow active:bg-gray-900 hover:shadow-gray-700/30',
+    outline: 'border-2 border-gray-600 text-white hover:bg-gray-800 hover:border-gray-500 bg-transparent active:bg-gray-900',
+    ghost: 'text-gray-300 hover:text-white hover:bg-gray-800 bg-transparent active:bg-gray-900',
+    danger: 'bg-gradient-to-br from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 shadow-md hover:shadow-lg active:shadow active:from-red-700 active:to-red-800 hover:shadow-red-500/40',
   };
   
   // Size-specific styles
@@ -71,12 +105,27 @@ const Button = ({
     </svg>
   );
 
+  // Ripple elements
+  const rippleElements = ripples.map((ripple, i) => (
+    <span 
+      key={i}
+      className="absolute rounded-full bg-white bg-opacity-30 animate-ripple pointer-events-none"
+      style={{
+        left: ripple.x,
+        top: ripple.y,
+        width: ripple.size,
+        height: ripple.size,
+      }}
+    />
+  ));
+
   // Content to render inside the button
   const content = (
     <>
+      {rippleElements}
       {isLoading && loadingSpinner}
       {!isLoading && leftIcon && <span className="mr-2">{leftIcon}</span>}
-      {children}
+      <span className="relative z-10">{children}</span>
       {!isLoading && rightIcon && <span className="ml-2">{rightIcon}</span>}
     </>
   );
@@ -85,7 +134,9 @@ const Button = ({
   if (href) {
     return (
       <Link href={href}>
-        <div className={buttonStyles}>{content}</div>
+        <div className={buttonStyles} onClick={handleRipple}>
+          {content}
+        </div>
       </Link>
     );
   }
@@ -95,7 +146,7 @@ const Button = ({
     <button 
       className={buttonStyles} 
       disabled={isLoading || disabled} 
-      onClick={onClick}
+      onClick={handleRipple}
       type={type}
       {...rest}
     >

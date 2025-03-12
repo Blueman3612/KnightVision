@@ -41,23 +41,28 @@ function Layout({ children, hideNav = false }: LayoutProps) {
           <nav className="w-full py-4 px-6 bg-black bg-opacity-30">
             <div className="container mx-auto flex justify-between items-center">
               <div className="text-white font-bold text-xl">Chess Tutor</div>
-              <div className="flex items-center space-x-6">
-                <Link 
+              <div className="flex items-center space-x-4">
+                <Button 
                   href="/tutor"
-                  className={`text-sm font-medium ${router.pathname === '/tutor' ? 'text-white' : 'text-gray-300 hover:text-white'} transition-colors`}
-                >
-                  Tutor
-                </Link>
-                <Link 
-                  href="/profile"
-                  className={`text-sm font-medium ${router.pathname === '/profile' ? 'text-white' : 'text-gray-300 hover:text-white'} transition-colors`}
-                >
-                  Profile
-                </Link>
-                <Button
                   variant="ghost"
                   size="sm"
+                  className={router.pathname === '/tutor' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                >
+                  Tutor
+                </Button>
+                <Button 
+                  href="/profile"
+                  variant="ghost"
+                  size="sm"
+                  className={router.pathname === '/profile' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                >
+                  Profile
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleSignOut}
+                  className="border-gray-500"
                 >
                   Sign Out
                 </Button>

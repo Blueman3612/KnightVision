@@ -42,6 +42,15 @@ module.exports = {
         sans: ['Inter', 'sans-serif'],
         serif: ['Merriweather', 'serif'],
       },
+      animation: {
+        'ripple': 'ripple 0.6s linear forwards',
+      },
+      keyframes: {
+        ripple: {
+          '0%': { transform: 'scale(0)', opacity: '0.5' },
+          '100%': { transform: 'scale(2)', opacity: '0' },
+        },
+      },
     },
   },
   plugins: [],
