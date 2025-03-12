@@ -27,8 +27,8 @@ function Layout({ children, hideNav = false }: LayoutProps) {
   return (
     <>
       <Head>
-        <title>Chess Tutor</title>
-        <meta name="description" content="Personalized chess training platform" />
+        <title>KnightVision</title>
+        <meta name="description" content="Personalized chess training and analysis platform" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

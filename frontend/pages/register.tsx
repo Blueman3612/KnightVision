@@ -4,6 +4,7 @@ import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
 import Head from 'next/head';
 import Button from '../components/ui/Button';
+import { TextInput } from '../components/ui';
 
 const Register = () => {
   const router = useRouter();
@@ -56,34 +57,40 @@ const Register = () => {
   return (
     <>
       <Head>
-        <title>Create Account | Chess Tutor</title>
+        <title>Create Account | KnightVision</title>
       </Head>
-      <div className="min-h-[80vh] flex flex-col justify-center">
+      <div className="min-h-screen flex flex-col justify-center">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
           <div className="flex justify-center">
-            <div className="h-12 w-12 text-indigo-600">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2L6 6V18L12 22L18 18V6L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                <path d="M12 6L12 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {/* KnightVision Logo - Twice as big */}
+            <div className="flex flex-col items-center">
+              <svg className="h-24 w-24" viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="knightGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#a5b4fc" /> {/* indigo-300, brighter */}
+                    <stop offset="60%" stopColor="#8b5cf6" /> {/* violet-500, mid transition */}
+                    <stop offset="100%" stopColor="#d946ef" /> {/* fuchsia-500, more vibrant end */}
+                  </linearGradient>
+                </defs>
+                <g fill="url(#knightGradient)" stroke="#4c1d95" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" />
+                  <path d="M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3" />
+                  <path d="M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0z" />
+                  <path d="M14.933 15.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z" />
+                </g>
               </svg>
+              <div className="mt-2 font-bold text-4xl flex items-center">
+                <span className="text-white font-extrabold">Knight</span>
+                <span className="bg-gradient-to-r from-indigo-400 to-purple-500 text-transparent bg-clip-text font-bold">Vision</span>
+              </div>
             </div>
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-              sign in to your existing account
-            </Link>
-          </p>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <div className="bg-gray-800 bg-opacity-50 backdrop-blur-sm py-8 px-4 shadow-lg rounded-lg border border-gray-700 sm:px-10">
             {error && (
-              <div className="mb-4 rounded-md bg-red-50 p-4">
+              <div className="mb-4 rounded-md bg-red-900 bg-opacity-50 p-4 text-red-200 border border-red-800">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -91,49 +98,37 @@ const Register = () => {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-800">{error}</p>
+                    <p className="text-sm font-medium">{error}</p>
                   </div>
                 </div>
               </div>
             )}
 
             <form className="space-y-6" onSubmit={handleRegister}>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email address
-                </label>
-                <div className="mt-1">
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-              </div>
+              <TextInput
+                id="email"
+                name="email"
+                type="email"
+                label="Email address"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                fullWidth
+              />
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Password
-                </label>
-                <div className="mt-1">
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-500">Must be at least 6 characters long</p>
-              </div>
+              <TextInput
+                id="password"
+                name="password"
+                type="password"
+                label="Password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                helperText="Must be at least 6 characters long"
+                fullWidth
+              />
 
               <div>
                 <Button
@@ -146,6 +141,13 @@ const Register = () => {
                   {loading ? 'Creating account...' : 'Create account'}
                 </Button>
               </div>
+              
+              <p className="mt-6 text-center text-sm text-gray-300">
+                Or{' '}
+                <Link href="/login" className="font-medium text-indigo-400 hover:text-indigo-300">
+                  sign in to your existing account
+                </Link>
+              </p>
             </form>
           </div>
         </div>
