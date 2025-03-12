@@ -27,22 +27,22 @@ if (isDevelopment || isDocker) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
 } 
-// In production, use our Next.js API proxy to avoid mixed content issues
-else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && 
-         (apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
-  // If we're in production with HTTPS, use our proxy endpoint
-  console.log('🔄 Production with HTTPS detected: Using API proxy');
-  apiUrl = '/api/proxy';
-}
-// Ensure we don't try to use HTTPS for our backend URLs
-else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
-  console.log('🌐 Using HTTP for API URL:', apiUrl);
-}
-// Ensure HTTPS for other production environments, especially on Vercel
-else if (apiUrl.startsWith('http://') && !apiUrl.includes('localhost')) {
-  apiUrl = apiUrl.replace('http://', 'https://');
-  console.log('🔒 Converting API URL to HTTPS for security:', apiUrl);
-}
+// // In production, use our Next.js API proxy to avoid mixed content issues
+// else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && 
+//          (apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
+//   // If we're in production with HTTPS, use our proxy endpoint
+//   console.log('🔄 Production with HTTPS detected: Using API proxy');
+//   apiUrl = '/api/proxy';
+// }
+// // Ensure we don't try to use HTTPS for our backend URLs
+// else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
+//   console.log('🌐 Using HTTP for API URL:', apiUrl);
+// }
+// // Ensure HTTPS for other production environments, especially on Vercel
+// else if (apiUrl.startsWith('http://') && !apiUrl.includes('localhost')) {
+//   apiUrl = apiUrl.replace('http://', 'https://');
+//   console.log('🔒 Converting API URL to HTTPS for security:', apiUrl);
+// }
 
 // Log the final API URL being used
 console.log('🌐 API URL:', apiUrl);
