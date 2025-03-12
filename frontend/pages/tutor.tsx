@@ -4,6 +4,7 @@ import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
+import Button from '../components/ui/Button';
 
 interface TutorPageProps {
   children?: ReactNode;
@@ -93,24 +94,30 @@ function TutorPage() {
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="chessboard-container relative">
           <div className="absolute top-3 right-3 z-10 flex space-x-2">
-            <button
+            <Button
               onClick={flipBoard}
-              className="p-2 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100 text-gray-800 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              title="Flip Board"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-              </svg>
-            </button>
-            <button
+              variant="ghost"
+              size="xs"
+              className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
+              aria-label="Flip Board"
+              leftIcon={
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              }
+            />
+            <Button
               onClick={resetGame}
-              className="p-2 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100 text-gray-800 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              title="Reset Game"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+              variant="ghost"
+              size="xs"
+              className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
+              aria-label="Reset Game"
+              leftIcon={
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              }
+            />
           </div>
           <div className="w-full h-full">
             <Chessboard 

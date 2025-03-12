@@ -64,6 +64,9 @@ coverage/
 .coverage
 htmlcov/
 
+# Supabase
+supabase/.temp/
+
 # Misc
 .cache/
 temp/

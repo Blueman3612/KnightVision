@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
 import Head from 'next/head';
+import Button from '../components/ui/Button';
 
 const Register = () => {
   const router = useRouter();
@@ -135,13 +136,15 @@ const Register = () => {
               </div>
 
               <div>
-                <button
+                <Button
                   type="submit"
-                  disabled={loading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  isLoading={loading}
                 >
                   {loading ? 'Creating account...' : 'Create account'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

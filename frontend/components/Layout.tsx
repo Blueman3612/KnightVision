@@ -2,12 +2,15 @@ import React, { ReactNode } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
+import Link from 'next/link';
+import Button from './ui/Button';
 
 interface LayoutProps {
   children: ReactNode;
+  hideNav?: boolean;
 }
 
-function Layout({ children }: LayoutProps) {
+function Layout({ children, hideNav = false }: LayoutProps) {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
@@ -17,8 +20,9 @@ function Layout({ children }: LayoutProps) {
     router.push('/login');
   };
 
-  // Don't show sign out button on login and register pages
+  // Don't show nav on login and register pages or when hideNav is true
   const isAuthPage = router.pathname === '/login' || router.pathname === '/register';
+  const shouldShowNav = session && !isAuthPage && !hideNav;
 
   return (
     <>
@@ -33,15 +37,38 @@ function Layout({ children }: LayoutProps) {
       </Head>
 
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-800 via-gray-900 to-black font-sans">
-        {session && !isAuthPage && (
-          <div className="absolute top-4 right-4 z-10">
-            <button
-              onClick={handleSignOut}
-              className="px-4 py-2 rounded-md text-sm font-medium text-white bg-black bg-opacity-30 hover:bg-opacity-40 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Sign Out
-            </button>
-          </div>
+        {shouldShowNav && (
+          <nav className="w-full py-4 px-6 bg-black bg-opacity-30">
+            <div className="container mx-auto flex justify-between items-center">
+              <div className="text-white font-bold text-xl">Chess Tutor</div>
+              <div className="flex items-center space-x-4">
+                <Button 
+                  href="/tutor"
+                  variant="ghost"
+                  size="sm"
+                  className={router.pathname === '/tutor' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                >
+                  Tutor
+                </Button>
+                <Button 
+                  href="/profile"
+                  variant="ghost"
+                  size="sm"
+                  className={router.pathname === '/profile' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                >
+                  Profile
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="border-gray-500"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          </nav>
         )}
 
         <main className="flex-grow flex items-center justify-center">
