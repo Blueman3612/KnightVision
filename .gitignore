@@ -35,6 +35,9 @@ venv/
 .venv/
 ENV/
 
+# backend prd.md - for annotation implementation
+backend/prd.md
+
 # Docker
 .dockerignore
 .docker/
