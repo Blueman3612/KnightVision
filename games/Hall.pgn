@@ -1,5 +1,960 @@
 [Event "Live Chess"]
 [Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "pisto74"]
+[Result "0-1"]
+[WhiteElo "1059"]
+[BlackElo "1100"]
+[TimeControl "300"]
+[EndTime "16:03:32 PDT"]
+[Termination "pisto74 won by resignation"]
+
+1. d4 d5 2. Bf4 e6 3. e3 Bd6 4. Bg3 Nf6 5. Bd3 Nc6 6. c3 e5 7. dxe5 Nxe5 8. Bxe5
+Bxe5 9. Nf3 Bd6 10. Nbd2 Bg4 11. Qc2 Bxf3 12. Nxf3 Qd7 13. O-O O-O 14. Bxh7+
+Nxh7 15. Rad1 c6 16. h3 f5 17. Rfe1 Rae8 18. Rd4 Re4 19. Rxe4 fxe4 20. Nd2 Qf5
+21. f3 exf3 22. gxf3 Qxc2 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "khark"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1077"]
+[BlackElo "1038"]
+[TimeControl "300"]
+[EndTime "16:10:28 PDT"]
+[Termination "khark won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 d6 4. O-O Nf6 5. Re1 Be7 6. c3 O-O 7. d4 Bd7 8. d5
+Na5 9. Bxd7 Qxd7 10. Bg5 Nc4 11. Qb3 b5 12. a4 Nb6 13. axb5 h6 14. Bxf6 Bxf6 15.
+Nbd2 c5 16. bxc6 Qc7 17. Nc4 Nxc4 18. Qxc4 Rfb8 19. b4 a5 20. Reb1 a4 21. Ra3
+Ra7 22. Rba1 Rba8 23. b5 Bd8 24. Qb4 Kf8 25. Nxe5 Ke7 26. Nc4 g6 27. e5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Jorjovsky"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1039"]
+[BlackElo "1017"]
+[TimeControl "300"]
+[EndTime "16:18:50 PDT"]
+[Termination "Jorjovsky won by checkmate"]
+
+1. d4 d5 2. Nf3 Nf6 3. e3 e6 4. Bd3 Bb4+ 5. c3 Ba5 6. Nbd2 O-O 7. Qe2 c5 8. e4
+c4 9. Bc2 Nc6 10. e5 Nd7 11. O-O h6 12. Re1 b5 13. Nf1 Rb8 14. b4 cxb3 15. axb3
+Bxc3 16. Bd2 Bxa1 17. Rxa1 a6 18. Qd3 g6 19. Bxh6 Re8 20. Ng3 Nb4 21. Qd2 Nxc2
+22. Qxc2 a5 23. h4 Ra8 24. Bg5 Qb6 25. h5 gxh5 26. Nxh5 f5 27. exf6 Nf8 28. Bf4
+Ra7 29. Be5 Rh7 30. g4 Nd7 31. Ng5 Rxh5 32. Qg6+ Kf8 33. Qf7# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "fsaglia"]
+[Result "1-0"]
+[WhiteElo "1036"]
+[BlackElo "995"]
+[TimeControl "300"]
+[EndTime "16:28:58 PDT"]
+[Termination "Blueman3612 won on time"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 a6 4. Bd3 Nb4 5. c3 Nxd3+ 6. Qxd3 Nf6 7. Nd2 e6 8.
+Ngf3 h6 9. O-O Bd7 10. Ne5 Bb5 11. c4 dxc4 12. Ndxc4 Be7 13. a4 Bc6 14. Nxc6
+bxc6 15. Ne5 Qd5 16. Rfe1 O-O 17. e4 Qd6 18. Ng6 Qd7 19. Nxf8 Bxf8 20. Rac1 Bb4
+21. Re2 a5 22. e5 Nd5 23. Bd2 Be7 24. g3 c5 25. dxc5 Qxa4 26. Be3 c6 27. Rc4 Qb5
+28. Rd4 Qb7 29. Rc2 Nb4 30. Rxb4 axb4 31. b3 Ra1+ 32. Kg2 Ra8 33. Rc4 Qa6 34.
+Kf3 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "NicolasLee"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1027"]
+[BlackElo "1017"]
+[TimeControl "300"]
+[EndTime "16:37:52 PDT"]
+[Termination "NicolasLee won by checkmate"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. Nc3 d6 5. a3 Nf6 6. d3 O-O 7. O-O Re8 8. h3
+Be6 9. Bb3 Nd4 10. Be3 Nxb3 11. cxb3 Bxe3 12. fxe3 c6 13. b4 b5 14. d4 d5 15.
+exd5 Bxd5 16. dxe5 Ne4 17. Rc1 Nxc3 18. bxc3 Bxf3 19. Qxd8 Raxd8 20. Rxf3 Rxe5
+21. Rcf1 f6 22. Rc1 Rd3 23. Kf2 Kf7 24. Ke2 Rd6 25. c4 a6 26. c5 Rd7 27. g4 g5
+28. Rd1 Rxd1 29. Kxd1 Ke6 30. Kd2 Kd5 31. Kd3 h6 32. Rxf6 Re6 33. Rf5+ Re5 34.
+Rf6 Re6 35. Rxe6 Kxe6 36. Ke4 Kf6 37. Kd4 Ke6 38. e4 Kf6 39. e5+ Ke6 40. Ke4 Ke7
+41. Kf5 Kf7 42. e6+ Ke7 43. Ke5 Ke8 44. Kd6 Kd8 45. e7+ Ke8 46. Ke6 a5 47. bxa5
+b4 48. axb4 h5 49. Kf6 hxg4 50. hxg4 Kd7 51. Kf7 Kc7 52. e8=Q Kb7 53. Qe7+ Ka8
+54. Qxg5 Kb8 55. Qe7 Ka8 56. g5 Kb8 57. g6 Kc8 58. g7 Kb8 59. g8=R# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "j_2_2"]
+[Result "0-1"]
+[WhiteElo "1000"]
+[BlackElo "1031"]
+[TimeControl "300"]
+[EndTime "16:47:43 PDT"]
+[Termination "j_2_2 won on time"]
+
+1. d4 b6 2. Bf4 Bb7 3. e3 d5 4. Nd2 a6 5. c3 b5 6. b4 e6 7. Ngf3 h6 8. Bd3 g5 9.
+Be5 Rh7 10. O-O f6 11. Bg3 h5 12. h4 Rg7 13. hxg5 fxg5 14. Be5 Rf7 15. Re1 g4
+16. Nh2 Bd6 17. Bxd6 Qxd6 18. Qc2 Kd8 19. e4 Qf4 20. Nb3 e5 21. Nc5 Ke7 22. Nxb7
+Nd7 23. Re2 Ngf6 24. Rf1 Nb6 25. f3 g3 26. Ng4 hxg4 27. fxg4 Qxg4 28. Rf3 Nh5
+29. Rxf7+ Kxf7 30. Kf1 Nf4 31. Re3 Nc4 32. Bxc4 dxc4 33. Rf3 Ra7 34. dxe5 Rxb7
+35. Ke1 c6 36. Qd2 Re7 37. Qxf4+ Qxf4 38. Rxf4+ Ke6 39. Ke2 Kxe5 40. Ke3 Re6 41.
+Rf3 Rd6 42. Rxg3 Rd3+ 43. Kf2 Rxg3 44. Kxg3 Kxe4 45. Kg4 Kd3 46. g3 Kxc3 47. Kf3
+Kxb4 48. g4 c3 49. g5 c2 50. g6 c1=Q 51. g7 Qg5 52. g8=Q Qxg8 53. Ke3 Qxa2 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "LordEon28"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "973"]
+[BlackElo "982"]
+[TimeControl "300"]
+[EndTime "16:52:41 PDT"]
+[Termination "LordEon28 won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. O-O Nf6 5. Bxf7+ Kxf7 6. Ng5+ Ke8 7. d3 d6 8.
+h3 h6 9. Nf3 Be6 10. Be3 Bxe3 11. fxe3 Qe7 12. c3 Rd8 13. Nbd2 Kd7 14. d4 exd4
+15. cxd4 d5 16. e5 Ne4 17. Nb3 Kc8 18. Rc1 a5 19. Nc5 Nxc5 20. Rxc5 Rhf8 21. Qa4
+Nxe5 22. Nxe5 Bd7 23. Rxa5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "bccorei2022"]
+[Result "0-1"]
+[WhiteElo "965"]
+[BlackElo "976"]
+[TimeControl "300"]
+[EndTime "17:01:17 PDT"]
+[Termination "bccorei2022 won by resignation"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 Bf5 4. Bd3 g6 5. c3 Ne4 6. Nd2 Nxf2 7. Kxf2 Bxd3 8.
+Ngf3 e6 9. Ne5 Ba6 10. Qc2 Bd6 11. Ndf3 Nd7 12. Rhe1 f6 13. Nxd7 Bxf4 14. exf4
+Qxd7 15. Re3 O-O-O 16. Rae1 Rde8 17. g4 Qd6 18. Kg3 g5 19. h4 Qxf4+ 20. Kf2 Qxg4
+21. hxg5 fxg5 22. Ne5 Rhf8+ 23. Nf3 Rf5 24. Qxf5 Qxf5 25. Kg3 Qf4+ 26. Kf2 g4
+27. Rxe6 Qxf3+ 28. Kg1 Rxe6 29. Rxe6 Kd7 30. Re1 Qg3+ 31. Kh1 Qxe1+ 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Afrimbs"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "965"]
+[BlackElo "981"]
+[TimeControl "300"]
+[EndTime "17:05:00 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. e4 e5 2. Qf3 Nf6 3. h3 Nc6 4. b3 Bb4 5. Bb2 d6 6. Bc4 O-O 7. Ne2 Re8 8. g4 h6
+9. h4 Be6 10. Bxe6 Rxe6 11. g5 hxg5 12. hxg5 Ne8 13. Qh5 Kf8 14. Qh8+ Ke7 15.
+Qxg7 Nxg7 16. Na3 Bxa3 17. Bxa3 Kd7 18. Rh7 Qxg5 19. O-O-O Rg8 20. Rdh1 Rf6 21.
+R1h5 Qxh5 22. Rxh5 Nxh5 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "tstsandoval"]
+[Result "1-0"]
+[WhiteElo "995"]
+[BlackElo "967"]
+[TimeControl "300"]
+[EndTime "17:06:49 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 g6 2. Bf4 Bg7 3. e3 e6 4. Bd3 Ne7 5. Nf3 d6 6. c3 a6 7. Nbd2 Bd7 8. O-O
+Bc6 9. Qc2 Nd7 10. Rfe1 Nb6 11. b3 d5 12. Ne5 Bb5 13. Ndf3 Bxd3 14. Qxd3 f6 15.
+Ng4 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "duapv"]
+[Result "0-1"]
+[WhiteElo "980"]
+[BlackElo "987"]
+[TimeControl "300"]
+[EndTime "17:15:49 PDT"]
+[Termination "duapv won by resignation"]
+
+1. d4 Nf6 2. Bf4 g6 3. e3 d6 4. Bd3 Bg7 5. Nf3 Bg4 6. Nbd2 O-O 7. O-O Nbd7 8. h3
+Bxf3 9. Nxf3 c5 10. c3 Qb6 11. Qc2 Nh5 12. b3 Nxf4 13. exf4 Rfe8 14. Rfe1 cxd4
+15. cxd4 Rac8 16. Qb2 a6 17. Rac1 Qa7 18. Rxe7 Rxc1+ 19. Qxc1 Rxe7 20. Qc3 Re8
+21. a4 b6 22. a5 b5 23. b4 Nb6 24. axb6 Qxb6 25. Qa3 h6 26. d5 Qb7 27. Nd2 Qxd5
+28. f3 Re3 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "gdcarpits"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1025"]
+[BlackElo "968"]
+[TimeControl "300"]
+[EndTime "17:19:43 PDT"]
+[Termination "gdcarpits won by checkmate"]
+
+1. e3 e5 2. d3 d5 3. a3 Nc6 4. h3 Nf6 5. Be2 Bd6 6. Nd2 O-O 7. g3 Be6 8. g4 h6
+9. Ngf3 Re8 10. g5 hxg5 11. Nxg5 Nd7 12. h4 f6 13. Nxe6 Rxe6 14. Bg4 Re7 15. Bf5
+Kf7 16. Qh5+ Kg8 17. Qh7+ Kf8 18. Qh8+ Kf7 19. Qh5+ Kg8 20. Bh7+ Kf8 21. Nf3 Qe8
+22. Bg6 Qd8 23. Qh8# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "docbrock1"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1010"]
+[BlackElo "956"]
+[TimeControl "300"]
+[EndTime "17:21:36 PDT"]
+[Termination "docbrock1 won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 d6 4. Bxc6+ bxc6 5. d4 exd4 6. Nxd4 Nf6 7. O-O Nxe4
+8. Re1 d5 9. f3 Bc5 10. fxe4 O-O 11. exd5 Qxd5 12. c3 Bxd4+ 13. Qxd4 Qxd4+ 14.
+cxd4 Bb7 15. Re7 Rac8 16. Bf4 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "aarend"]
+[Result "1-0"]
+[WhiteElo "970"]
+[BlackElo "994"]
+[TimeControl "300"]
+[EndTime "17:29:29 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 e6 3. e3 h6 4. Bd3 Nf6 5. Nf3 Be7 6. c3 Nbd7 7. Nbd2 c5 8. b3
+cxd4 9. cxd4 a6 10. O-O b5 11. Ne5 Bb7 12. Ndf3 Nxe5 13. Nxe5 Nd7 14. Rc1 Nxe5
+15. Bxe5 f6 16. Bg3 f5 17. f4 O-O 18. Qh5 Kh7 19. Rc2 g6 20. Qe2 Rg8 21. Rfc1
+Bd6 22. Kf2 Qe7 23. h4 Rac8 24. Bh2 Rxc2 25. Rxc2 Rc8 26. Rxc8 Bxc8 27. g3 h5
+28. Bg1 Bb7 29. Kf3 Qc7 30. Qb2 Bb4 31. a3 Be1 32. Bf2 Qc3 33. Qxc3 Bxc3 34. b4
+Bb2 35. Be1 Bxa3 36. Bc3 a5 37. bxa5 Ba6 38. Ke2 Bd6 39. Kd2 Kg7 40. Kc2 Kf7 41.
+Kb3 Ke7 42. Bb4 Kd7 43. Bxd6 Kxd6 44. Kb4 Kc6 45. Be2 Kb7 46. Bxb5 Bxb5 47. Kxb5
+Ka7 48. a6 Ka8 49. Kb6 Kb8 50. a7+ Ka8 51. Ka6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Nonigopal20"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1010"]
+[BlackElo "959"]
+[TimeControl "300"]
+[EndTime "17:38:09 PDT"]
+[Termination "Nonigopal20 won on time"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3 Nf6 5. Ng5 O-O 6. O-O h6 7. Nf3 d6 8. Nc3
+Re8 9. Nd5 Nxd5 10. Bxd5 Nd4 11. Nxd4 Bxd4 12. c3 Bb6 13. d4 c5 14. dxe5 dxe5
+15. Be3 Rb8 16. Qf3 Be6 17. Bxe6 Rxe6 18. Qg3 c4 19. Bxh6 Rxh6 20. Rad1 Qh4 21.
+Qxh4 Rxh4 22. Rd5 Rxe4 23. Kh1 Bxf2 24. h3 Bg3 25. b3 cxb3 26. axb3 Rc8 27. c4
+b6 28. Rdd1 a5 29. Rf3 Bf4 30. Rdf1 g5 31. g3 Bxg3 32. Rxg3 f6 33. h4 Rf4 34.
+Rd1 Kf7 35. hxg5 fxg5 36. Rxg5 Kf6 37. Rg2 Rh8+ 38. Rh2 Rxh2+ 39. Kxh2 Rf2+ 40.
+Kg3 Rf5 41. Rd6+ Kg5 42. Rxb6 e4 43. Ra6 e3 44. Rxa5 e2 45. Ra1 Kf6 46. Re1 Ke5
+47. Rxe2+ Kd4 48. Rb2 Kc3 49. Rb1 Re5 50. Kf4 Ra5 51. Ke4 Ra3 52. c5 Kb4 53. c6
+Ra7 54. Kd5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "alpian451"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "991"]
+[BlackElo "948"]
+[TimeControl "300"]
+[EndTime "17:47:28 PDT"]
+[Termination "alpian451 won on time"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 Bf5 4. c3 e6 5. Qa4 Qd7 6. Bb5 Bd6 7. Bxd6 Qxd6 8. Nf3
+Ne7 9. Nbd2 O-O 10. Ne5 Nxe5 11. Nf3 Nxf3+ 12. gxf3 a6 13. Be2 c5 14. Qd1 Nc6
+15. Bd3 Bxd3 16. Qxd3 cxd4 17. exd4 e5 18. O-O-O exd4 19. Rdg1 dxc3 20. bxc3 Ne5
+21. Qe3 Rac8 22. f4 Nc4 23. Qg3 g6 24. f5 b5 25. fxg6 fxg6 26. Qh4 Rf3 27. Qd4
+Rcf8 28. Rd1 Rxf2 29. Qxd5+ Qxd5 30. Rxd5 R8f3 31. Rd8+ Rf8 32. Rd7 R8f7 33.
+Rd8+ Rf8 34. Rd7 R2f7 35. Rd4 Rf1+ 36. Kc2 Rxh1 37. Kb3 Rc8 38. a4 Rb1+ 39. Kc2
+Ra1 40. Kb3 Ra3+ 41. Kb4 a5+ 42. Kxb5 Ne5 43. Re4 Nf7 44. Kxa5 Raxc3 45. Kb4 Nd6
+46. Rg4 Kf7 47. a5 Nb7 48. Kb5 R3c5+ 49. Kb6 Nxa5 50. Rf4+ Rf5 51. Re4 Rc6+ 52.
+Ka7 Rb5 53. Rf4+ Rf5 54. Rxf5+ gxf5 55. Kb8 Rd6 56. Kc7 Re6 57. Kd7 Rd6+ 58.
+Kxd6 Kf6 59. Kd5 f4 60. Ke4 Kg5 61. Kf3 Kh6 62. Kxf4 Kg6 63. h3 h5 64. Kg3 Nc4
+65. Kh4 Ne5 66. Kg3 Nf3 67. Kxf3 Kf5 68. Kg3 h4+ 69. Kxh4 Kg6 70. Kg4 Kh6 71. h4
+Kg6 72. h5+ Kh6 73. Kh4 Kg7 74. Kg5 Kh7 75. Kh4 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "Lykathea"]
+[Result "1-0"]
+[WhiteElo "959"]
+[BlackElo "942"]
+[TimeControl "300"]
+[EndTime "17:53:13 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 Nc6 4. Bd3 e6 5. Nf3 Bb4+ 6. c3 Ba5 7. Nbd2 Bd7 8. Qc2
+O-O 9. Ne5 Ng4 10. Nxg4 Qh4 11. Ne5 Nxe5 12. Bxe5 f6 13. Bg3 Qh5 14. O-O f5 15.
+Nf3 c6 16. Ne5 Bc8 17. f4 Bc7 18. Be2 Qe8 19. b3 Bxe5 20. fxe5 Bd7 21. c4 b6 22.
+a4 dxc4 23. bxc4 c5 24. d5 exd5 25. cxd5 Qg6 26. Rad1 Rfe8 27. Bf3 b5 28. d6
+Rab8 29. axb5 Bxb5 30. d7 Re7 31. d8=Q+ Rxd8 32. Rxd8+ Kf7 33. Rfd1 Rxe5 34.
+Bxe5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "ginganinja986"]
+[Result "1-0"]
+[WhiteElo "969"]
+[BlackElo "912"]
+[TimeControl "300"]
+[EndTime "18:00:32 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 g6 2. Bf4 Bg7 3. e3 b6 4. Nf3 Bb7 5. Bd3 h5 6. Nbd2 h4 7. h3 a5 8. O-O a4
+9. a3 f6 10. c4 g5 11. Bh2 g4 12. hxg4 h3 13. gxh3 Rxh3 14. Re1 c6 15. e4 b5 16.
+cxb5 cxb5 17. Bxb5 Bc6 18. Bxc6 Nxc6 19. d5 Na5 20. b4 axb3 21. Nxb3 Nxb3 22.
+Qxb3 f5 23. exf5 Bxa1 24. Rxa1 Rb8 25. Bxb8 Nf6 26. g5 Ne4 27. Re1 Nc5 28. Qe3
+e6 29. fxe6 dxe6 30. dxe6 Qe7 31. Kg2 Rh7 32. Rc1 Na6 33. Bg3 Nc7 34. Rxc7 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Metty3434"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "928"]
+[BlackElo "979"]
+[TimeControl "300"]
+[EndTime "18:10:01 PDT"]
+[Termination "Blueman3612 won on time"]
+
+1. e4 e5 2. Nf3 Nc6 3. b3 Bc5 4. Bb2 d6 5. h3 Nf6 6. d3 O-O 7. Nbd2 Nd4 8. Bxd4
+Bxd4 9. Nxd4 exd4 10. Nf3 c5 11. a4 a5 12. e5 dxe5 13. Be2 Re8 14. O-O b6 15.
+Ng5 h6 16. Nf3 Bb7 17. Nh4 e4 18. Nf5 Nd5 19. Bh5 g6 20. Nxh6+ Kg7 21. Qd2 gxh5
+22. Nf5+ Kf6 23. dxe4 Rxe4 24. f3 Rf4 25. Nh6 Qf8 26. g3 Qxh6 27. gxf4 Qxf4 28.
+Qe2 Nc3 29. Qg2 Re8 30. Rae1 Rxe1 31. Rxe1 Bxf3 32. Qf2 Ne4 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "crizancesar"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "958"]
+[BlackElo "989"]
+[TimeControl "300"]
+[EndTime "18:19:47 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. c4 e6 3. a3 Nf6 4. Nf3 Bd6 5. e3 b6 6. cxd5 exd5 7. Nbd2 O-O 8. Bd3
+c5 9. O-O Re8 10. Re1 Ne4 11. dxc5 bxc5 12. Bb5 Nxd2 13. Qxd2 Bd7 14. Qxd5 Bxb5
+15. Qxa8 Nc6 16. Qb7 a6 17. a4 Re7 18. Qxe7 Qxe7 19. axb5 Ne5 20. Nxe5 Bxe5 21.
+bxa6 Qa7 22. Ra5 f6 23. b4 cxb4 24. Bd2 b3 25. Rb1 b2 26. f4 Bc7 27. Ra2 Kf7 28.
+Rbxb2 Ke6 29. Kf1 Kd5 30. Rb7 Qc5 31. Ke1 Kc6 32. Rb1 Qd5 33. Ra5 Bxa5 34. a7
+Bxd2+ 35. Ke2 Qa2 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "wolfm14"]
+[Result "1-0"]
+[WhiteElo "997"]
+[BlackElo "899"]
+[TimeControl "300"]
+[EndTime "18:25:20 PDT"]
+[Termination "Blueman3612 won by checkmate"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 Nc6 4. c3 e6 5. Bd3 Bd6 6. Bg3 O-O 7. Nf3 Ne4 8. Bxd6
+Qxd6 9. Nbd2 Nf6 10. Qc2 e5 11. dxe5 Nxe5 12. Nxe5 Qxe5 13. O-O Qh5 14. f4 Ng4
+15. h3 Nxe3 16. Qc1 Nxf1 17. Qxf1 Bf5 18. Be2 Qg6 19. Qf3 Be4 20. Nxe4 dxe4 21.
+Qe3 Rfe8 22. Rd1 Qb6 23. Qxb6 axb6 24. a3 Rad8 25. Rxd8 e3 26. Rxe8# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "ashwinshelke"]
+[Result "0-1"]
+[WhiteElo "988"]
+[BlackElo "1016"]
+[TimeControl "300"]
+[EndTime "18:35:31 PDT"]
+[Termination "ashwinshelke won on time"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 a6 4. Nf3 Bf5 5. Bd3 Bg6 6. c3 e6 7. Qc2 Nc6 8. Nbd2
+Be7 9. O-O Qd7 10. Ne5 Nxe5 11. Bxe5 O-O-O 12. f4 h5 13. h3 Bh7 14. Bxf6 Bxf6
+15. Bxh7 g6 16. Bxg6 fxg6 17. Qxg6 Rdf8 18. Nf3 Bd8 19. Ne5 Qe7 20. Rf3 Rfg8 21.
+Qd3 Qg7 22. g3 h4 23. g4 Bf6 24. Kf2 Bxe5 25. fxe5 Rf8 26. Rxf8+ Rxf8+ 27. Ke2
+Qf7 28. Kd2 Qf2+ 29. Qe2 Qg3 30. Rf1 Rd8 31. Rf3 Qg1 32. Rf1 Qg3 33. Qf3 Qh2+
+34. Rf2 Qg1 35. Rf1 Qh2+ 36. Qf2 Qxh3 37. g5 Qg4 38. Qf6 Rg8 39. Kd3 Kb8 40. c4
+Qe4+ 41. Kd2 dxc4 42. Qxe6 Qd3+ 43. Ke1 Qxe3+ 44. Kd1 Qxd4+ 45. Kc1 Qe3+ 46. Kb1
+Rd8 47. Qxc4 Qxe5 48. Rc1 Qf5+ 49. Ka1 Rc8 50. Rg1 h3 51. g6 h2 52. Rh1 Rh8 53.
+g7 Rg8 54. Rxh2 Rxg7 55. Rh8+ Ka7 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "rgois1"]
+[Result "0-1"]
+[WhiteElo "977"]
+[BlackElo "951"]
+[TimeControl "300"]
+[EndTime "18:41:06 PDT"]
+[Termination "rgois1 won by resignation"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 Bf5 4. Bd3 Bxd3 5. Qxd3 f6 6. c3 g5 7. Bg3 h5 8. h4 e6
+9. Nf3 Qd7 10. Nbd2 g4 11. Ng1 O-O-O 12. f4 Bh6 13. O-O-O Nge7 14. Ne2 f5 15. c4
+dxc4 16. Nxc4 e5 17. fxe5 Nb4 18. Qa3 Na6 19. Bf4 Bxf4 20. Nxf4 Nd5 21. Nxd5
+Qxd5 22. Qb3 Qxg2 23. Rhf1 Qe4 24. Rd2 g3 25. Rc2 Qxh4 26. Rxf5 Qh1+ 27. Kd2 g2
+28. Rg5 Qh2 29. Rc1 Rhf8 30. Kd3 Nc5+ 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "bitcoinbour"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "991"]
+[BlackElo "968"]
+[TimeControl "300"]
+[EndTime "18:44:16 PDT"]
+[Termination "bitcoinbour won by checkmate"]
+
+1. e4 e5 2. Bc4 Nc6 3. Nf3 d6 4. O-O Nf6 5. d3 Be7 6. Bb5 Bd7 7. Bxc6 Bxc6 8.
+Qd2 O-O 9. Nc3 d5 10. exd5 Nxd5 11. Nxd5 Qxd5 12. Qd1 Rad8 13. d4 exd4 14. Re1
+d3 15. cxd3 Qxd3 16. Qxd3 Rxd3 17. Bf4 Bd6 18. Bxd6 Rxd6 19. Ne5 Re8 20. Nf3
+Bxf3 21. Rxe8# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "nightxshade16"]
+[Result "0-1"]
+[WhiteElo "960"]
+[BlackElo "1017"]
+[TimeControl "300"]
+[EndTime "18:44:25 PDT"]
+[Termination "nightxshade16 won by resignation"]
+
+1. d4 e5 2. Bf4 exf4 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "khiatt"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "945"]
+[BlackElo "951"]
+[TimeControl "300"]
+[EndTime "18:44:44 PDT"]
+[Termination "khiatt won by resignation"]
+
+1. e4 e5 2. Bc4 Nc6 3. d3 Bc5 4. Nf3 d6 5. Ng5 Nf6 6. Nxf7 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "bigbrainsa"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "918"]
+[BlackElo "941"]
+[TimeControl "300"]
+[EndTime "18:45:13 PDT"]
+[Termination "bigbrainsa won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 O-O 6. dxe5 Nxe5 7. Nxe5 Re8 8.
+Bxf7+ 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "jcscor"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "991"]
+[BlackElo "934"]
+[TimeControl "300"]
+[EndTime "18:45:23 PDT"]
+[Termination "jcscor won by resignation"]
+
+1. e4 e5 2. Nf3 Bc5 3. Bc4 d6 4. d4 Nc6 5. dxc5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "NahuelAchaval"]
+[Result "1-0"]
+[WhiteElo "943"]
+[BlackElo "946"]
+[TimeControl "300"]
+[EndTime "18:48:26 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 Nf6 4. c3 Ne4 5. Nd2 Nxd2 6. Qxd2 e6 7. Bd3 Bd6 8.
+Bxd6 Qxd6 9. Nf3 O-O 10. O-O e5 11. dxe5 Nxe5 12. Nxe5 Qxe5 13. f4 Qh5 14. Rae1
+Bf5 15. e4 dxe4 16. Bxe4 Rad8 17. Qc2 Bg4 18. Bxb7 Bf5 19. Be4 Qg4 20. Bxf5 g6
+1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "Pickacard2"]
+[Result "0-1"]
+[WhiteElo "933"]
+[BlackElo "867"]
+[TimeControl "300"]
+[EndTime "18:50:41 PDT"]
+[Termination "Pickacard2 won by resignation"]
+
+1. d4 d5 2. Bf4 Bf5 3. e3 e6 4. Bd3 Bg6 5. c3 c5 6. b3 Nc6 7. Qc2 cxd4 8. exd4
+Bd6 9. Bxd6 Qxd6 10. Nd2 e5 11. dxe5 Qxe5+ 12. Ne2 Nf6 13. O-O O-O 14. f4 Qe3+
+15. Kh1 Bxd3 16. Qd1 Bxe2 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "danilucia91"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "942"]
+[BlackElo "925"]
+[TimeControl "300"]
+[EndTime "18:51:29 PDT"]
+[Termination "danilucia91 won by resignation"]
+
+1. e4 e5 2. Qf3 Nc6 3. Bc4 Nf6 4. c3 d6 5. h3 Be7 6. g4 O-O 7. b4 a6 8. a4 b5 9.
+axb5 axb5 10. Rxa8 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "FBoogie1"]
+[Result "1/2-1/2"]
+[WhiteElo "925"]
+[BlackElo "920"]
+[TimeControl "300"]
+[EndTime "19:02:14 PDT"]
+[Termination "Game drawn by stalemate"]
+
+1. d4 d6 2. Bf4 Nf6 3. e3 e6 4. Nf3 Be7 5. Bd3 O-O 6. Nbd2 c5 7. c3 cxd4 8. exd4
+Nc6 9. O-O e5 10. dxe5 dxe5 11. Nxe5 Nxe5 12. Bxe5 Qxd3 13. Bxf6 Bxf6 14. Rc1
+Qa6 15. a3 Be6 16. Qc2 Bg5 17. Rfe1 Bxd2 18. Qxd2 Rad8 19. Qc2 Qc4 20. Re4 Qc6
+21. Rce1 Rfe8 22. f3 f5 23. Re5 Rd5 24. Rxd5 Qxd5 25. Kf2 Qc5+ 26. Re3 Bf7 27.
+Qe2 Rxe3 28. Qxe3 Qf8 29. Qxa7 b5 30. Qa5 h5 31. Qxb5 Bg6 32. f4 h4 33. g3 hxg3+
+34. hxg3 Kh7 35. a4 Qe7 36. Qd3 Qa7+ 37. Qd4 Qb7 38. b4 Qh1 39. b5 Qh2+ 40. Kf3
+Bh5+ 41. Ke3 Qxg3+ 42. Kd2 Qg2+ 43. Kc1 Qf1+ 44. Kb2 Bf7 45. b6 Qa6 46. Ka3 Qb7
+47. Kb4 Qe7+ 48. Qc5 Qe4+ 49. Qd4 Bd5 50. Qxe4 fxe4 51. c4 e3 52. Kc3 e2 53. Kd2
+Bf3 54. b7 Bxb7 55. Kxe2 Kg6 56. Ke3 Kf5 57. Kd4 g5 58. fxg5 Kxg5 59. Kc5 Kf6
+60. Kd6 Kf7 61. c5 Ke8 62. c6 Bc8 63. c7 Bb7 64. a5 Ba6 65. Kc6 Ke7 66. Kb6 Bc8
+67. a6 Bxa6 68. Kxa6 Kd7 69. Kb7 Kd6 70. c8=Q Kd5 71. Qc6+ Kd4 72. Kb6 Ke5 73.
+Kb5 Kd4 74. Qd6+ Ke4 75. Kc5 Kf5 76. Qd5+ Kf4 77. Kd4 Kg3 78. Qe4 Kf2 79. Kd3
+Kg3 80. Qe3+ Kg4 81. Ke4 Kh5 82. Qf4 Kg6 83. Ke5 Kg7 84. Qf5 Kh6 85. Ke6 Kg7 86.
+Qf6+ Kh7 87. Kf7 1/2-1/2
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "elpelagabriel"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "939"]
+[BlackElo "934"]
+[TimeControl "300"]
+[EndTime "19:05:59 PDT"]
+[Termination "Blueman3612 won - game abandoned"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 d6 4. Bxc6+ bxc6 5. d4 exd4 6. Nxd4 c5 7. Ne2 Nf6 8.
+f3 Be7 9. O-O O-O 10. c4 Bb7 11. b3 c6 12. Nbc3 Re8 13. g4 d5 14. Re1 dxe4 15.
+Qxd8 Raxd8 16. Nxe4 Nxe4 17. fxe4 Bh4 18. Ng3 Bxg3 19. hxg3 Rd4 20. Bb2 Rdxe4
+21. Rxe4 Rxe4 22. Rd1 h6 23. Rd7 Bc8 24. Rc7 Bxg4 25. Rxc6 Re2 26. Ba3 Rxa2 27.
+Bxc5 a5 28. Rc8+ Bxc8 29. Bd4 Bd7 30. c5 a4 31. b4 a3 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "shanmugamsubramani"]
+[Result "1/2-1/2"]
+[WhiteElo "934"]
+[BlackElo "935"]
+[TimeControl "300"]
+[EndTime "19:16:15 PDT"]
+[Termination "Game drawn - insufficient material"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 e6 4. Bd3 Be7 5. Nf3 O-O 6. c3 c5 7. b3 cxd4 8. exd4
+Re8 9. Nbd2 Bd6 10. Bxd6 Qxd6 11. Ne5 Nc6 12. f4 Nxe5 13. fxe5 Qd8 14. exf6 Qxf6
+15. Qf3 Qh4+ 16. g3 Qh6 17. O-O-O e5 18. dxe5 Rxe5 19. Rhf1 Qe6 20. Qf2 Bd7 21.
+Rde1 Rxe1+ 22. Rxe1 Qc6 23. Kb2 Rc8 24. Nb1 a5 25. Bf5 Bxf5 26. Qxf5 a4 27. Rf1
+f6 28. Rd1 axb3 29. Qxd5+ Kh8 30. Qd8+ Qe8 31. Qxe8+ Rxe8 32. axb3 h6 33. h4
+Re2+ 34. Rd2 Rxd2+ 35. Nxd2 g5 36. Ne4 f5 37. Nd6 f4 38. gxf4 gxf4 39. Nf5 f3
+40. Ne3 Kg7 41. Kc2 Kf6 42. Kd2 Ke5 43. Nf1 Ke4 44. h5 Kf4 45. c4 Ke4 46. b4 Kd4
+47. c5 Kc4 48. Ke3 Kxb4 49. Kxf3 Kxc5 50. Kf4 b5 51. Nd2 b4 52. Kf5 Kd4 53. Kg6
+Kd3 54. Nb3 Kc3 55. Nc5 Kc4 56. Kxh6 Kxc5 57. Kg7 b3 58. h6 b2 59. h7 b1=Q 60.
+h8=Q Qb2+ 61. Kg8 Qxh8+ 62. Kxh8 1/2-1/2
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "yasrah"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "907"]
+[BlackElo "942"]
+[TimeControl "300"]
+[EndTime "19:20:12 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. c4 e6 3. e3 Bb4+ 4. Nc3 Nf6 5. g3 O-O 6. Bg2 Bd7 7. cxd5 exd5 8. Qb3
+Bxc3+ 9. bxc3 Be6 10. Ba3 Re8 11. Qxb7 Nbd7 12. Ne2 Qc8 13. Qb4 a5 14. Qa4 c5
+15. Nf4 c4 16. Nxe6 Rxe6 17. O-O Ne4 18. Qd1 Nxc3 19. Qc2 Ne4 20. Bxe4 Rxe4 21.
+Rfb1 Rb8 22. Bd6 Rxb1+ 23. Rxb1 f5 24. Rb5 Qc6 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.16"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "bypest69"]
+[Result "1-0"]
+[WhiteElo "949"]
+[BlackElo "886"]
+[TimeControl "300"]
+[EndTime "19:28:49 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 e6 4. c3 g6 5. Bd3 Bg7 6. Nf3 Nf6 7. Nbd2 O-O 8. O-O
+a6 9. Qc2 b5 10. b3 Bb7 11. Ne5 Nxe5 12. Bxe5 Ng4 13. Bxg7 Kxg7 14. Nf3 Qe7 15.
+h3 Nf6 16. Ne5 c5 17. c4 cxd4 18. exd4 dxc4 19. bxc4 Rac8 20. f4 bxc4 21. Bxc4
+Bd5 22. Rab1 Bxc4 23. Nxc4 Qd7 24. Qd3 Nd5 25. a4 Nxf4 26. Rxf4 Qxa4 27. Nb6 Qb5
+28. Qxb5 axb5 29. Nxc8 Rxc8 30. Rxb5 Rc1+ 31. Kf2 Rc2+ 32. Kg3 g5 33. Rf2 Rc3+
+34. Rf3 Rc4 35. Rd3 h5 36. h4 f6 37. hxg5 f5 38. Kf4 Kg6 39. Re5 Kf7 40. g3 Rc2
+41. d5 Rf2+ 42. Rf3 Rxf3+ 43. Kxf3 exd5 44. Rxf5+ Kg6 45. Rxd5 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "Shalasushko"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1004"]
+[BlackElo "942"]
+[TimeControl "300+5"]
+[EndTime "4:35:30 PDT"]
+[Termination "Shalasushko won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bb6 5. Bb2 d6 6. O-O Nf6 7. Ng5 Qe7 8. Re1
+O-O 9. d3 Bg4 10. Qd2 a5 11. b5 Nd4 12. c3 h6 13. cxd4 Bxd4 14. Bxd4 exd4 15.
+Nf3 Bxf3 16. gxf3 Qd7 17. Kh1 d5 18. exd5 Nxd5 19. Rg1 f6 20. Qxh6 c6 21. bxc6
+bxc6 22. Bxd5+ cxd5 23. Nd2 a4 24. Rac1 Rf7 25. f4 Rb8 26. Nf3 Qa7 27. Nh4 g6
+28. Rxg6+ Rg7 29. Rxf6 Qb7 30. Ng6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "ujjwal29911"]
+[Result "1-0"]
+[WhiteElo "950"]
+[BlackElo "955"]
+[TimeControl "300+5"]
+[EndTime "4:44:36 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nc6 3. e3 e6 4. c3 Bd6 5. Bg3 Nf6 6. Bd3 O-O 7. Nd2 h6 8. Ngf3
+Bxg3 9. hxg3 Ne4 10. Nxe4 dxe4 11. Bxe4 f5 12. Bc2 Bd7 13. Qd3 a5 14. g4 b6 15.
+Ne5 Nxe5 16. dxe5 Bc6 17. Qxd8 Raxd8 18. gxf5 Bxg2 19. Rg1 Bh3 20. fxe6 Bxe6 21.
+Rd1 Bf5 22. Rxd8 Bxc2 23. Rxf8+ Kxf8 24. Kd2 Be4 25. c4 c6 26. Kc3 b5 27. cxb5
+cxb5 28. Kd4 Bc6 29. Kc5 Bd7 30. a3 a4 31. f4 Kf7 32. e4 Be8 33. f5 Kf8 34. b4
+h5 35. Rh1 g6 36. f6 Kf7 37. Kd6 Kg8 38. e6 Kh7 39. f7 Bxf7 40. exf7 Kg7 41. Ke7
+1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "utsania"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "1073"]
+[BlackElo "945"]
+[TimeControl "300+5"]
+[EndTime "4:48:27 PDT"]
+[Termination "utsania won by resignation"]
+
+1. Nf3 d5 2. e4 dxe4 3. Ng5 Nf6 4. d3 exd3 5. Bxd3 h6 6. Nxf7 Kxf7 7. Bg6+ Kxg6
+8. Qxd8 Nc6 9. Qd3+ Kf7 10. Qb3+ e6 11. O-O Nd4 12. Qc4 Nc6 13. Bf4 Bd6 14. Bxd6
+cxd6 15. Nc3 Ne5 16. Qc7+ 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "bianco81"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "974"]
+[BlackElo "937"]
+[TimeControl "300+5"]
+[EndTime "4:51:11 PDT"]
+[Termination "bianco81 won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 d6 4. d4 exd4 5. Nxd4 Bd7 6. Nc3 Nf6 7. O-O g6 8. Re1
+Bg7 9. Bxc6 Bxc6 10. e5 dxe5 11. Rxe5+ Kd7 12. Ne6+ 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "dchikharev"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "997"]
+[BlackElo "930"]
+[TimeControl "300+5"]
+[EndTime "5:05:49 PDT"]
+[Termination "dchikharev won by checkmate"]
+
+1. e4 e5 2. Nf3 Nc6 3. d4 exd4 4. Nxd4 Bc5 5. Nxc6 bxc6 6. Qf3 Nf6 7. Nc3 O-O 8.
+Bd3 Re8 9. O-O d5 10. exd5 cxd5 11. Nxd5 Nxd5 12. Bd2 Bb7 13. Be4 c6 14. c4 Nb6
+15. Bc3 Rc8 16. Qg4 g6 17. b4 Bf8 18. c5 Nd5 19. Rad1 Bg7 20. Bxg7 Kxg7 21. Bxd5
+cxd5 22. Qd4+ Kg8 23. a4 Re4 24. Qc3 d4 25. Qd3 Qh4 26. g3 Qg4 27. f3 Qd7 28.
+fxe4 Bxe4 29. Qxe4 Rd8 30. c6 Qd6 31. b5 f5 32. Qd3 Qb4 33. Rf4 Qxa4 34. Rxd4
+Rxd4 35. Qxd4 Qxb5 36. c7 Qb7 37. Qd8+ Kg7 38. Rd7+ Kh6 39. Qh4# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "najlapzd87"]
+[Result "0-1"]
+[WhiteElo "924"]
+[BlackElo "1010"]
+[TimeControl "300+5"]
+[EndTime "5:18:06 PDT"]
+[Termination "najlapzd87 won by checkmate"]
+
+1. d4 c6 2. Bf4 d5 3. e3 Nf6 4. Nf3 Bf5 5. Bd3 Bg4 6. Nbd2 e6 7. c3 Bd6 8. Bg3
+Nbd7 9. Qc2 Qc7 10. Bxd6 Qxd6 11. e4 dxe4 12. Bxe4 Nxe4 13. Qxe4 Bf5 14. Qe3
+O-O-O 15. O-O h6 16. Ne5 Nxe5 17. Qxe5 Qxe5 18. dxe5 Rxd2 19. b3 Rhd8 20. f4 Re2
+21. Rf2 Rdd2 22. Rxe2 Rxe2 23. Kf1 Bd3 24. Rd1 Rd2+ 25. Ke1 Rxd1+ 26. Kxd1 Bf1
+27. g3 Kd7 28. Kd2 Ke7 29. Ke3 f6 30. Kd4 fxe5+ 31. Kxe5 Kf7 32. h4 Bh3 33. a3
+Kg6 34. b4 Bf1 35. Kxe6 Bc4+ 36. Ke5 Kh5 37. Kf5 Bd3+ 38. Ke5 Kg4 39. Ke6 Kxg3
+40. Kf7 Kxf4 41. Kxg7 Kg4 42. Kxh6 Kxh4 43. Kg7 Kg4 44. Kf6 Kf4 45. Ke6 Ke4 46.
+Kd6 Ba6 47. Kc5 Kd3 48. a4 Kxc3 49. b5 cxb5 50. axb5 Kb3 51. b6 axb6+ 52. Kxb6
+Kc4 53. Ka5 Kc5 54. Ka4 b5+ 55. Ka5 b4 56. Ka4 Kc4 57. Ka5 Bb5 58. Kb6 b3 59.
+Ka5 b2 60. Kb6 b1=Q 61. Ka5 Qa2+ 62. Kb6 Qa6+ 63. Kc7 Qc6+ 64. Kb8 Ba6 65. Ka7
+Qb7# 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.17"]
+[Round "-"]
+[White "blackdog71"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "905"]
+[BlackElo "915"]
+[TimeControl "300+5"]
+[EndTime "5:21:30 PDT"]
+[Termination "blackdog71 won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 d6 5. b4 Bb6 6. Qb3 Qe7 7. d3 h6 8. a4 a5
+9. b5 Nd4 10. cxd4 Bxd4 11. Nxd4 exd4 12. O-O Nf6 13. Nd2 O-O 14. h3 Re8 15. Nf3
+Be6 16. Bxe6 Qxe6 17. Qxe6 Rxe6 18. Nxd4 c5 19. Nxe6 fxe6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "farid725"]
+[Result "1-0"]
+[WhiteElo "922"]
+[BlackElo "864"]
+[TimeControl "300+5"]
+[EndTime "7:13:35 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 e5 2. dxe5 Bc5 3. Nf3 Nc6 4. e3 Nge7 5. Bc4 d5 6. exd6 Bxd6 7. O-O O-O 8.
+b3 Bg4 9. Bb2 Ng6 10. h3 Be6 11. Bxe6 fxe6 12. Nbd2 Qf6 13. Bxf6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "iescerroteacher"]
+[Result "1-0"]
+[WhiteElo "929"]
+[BlackElo "888"]
+[TimeControl "300+5"]
+[EndTime "7:23:54 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 c6 4. c3 Bg4 5. Nf3 e6 6. Nbd2 Nbd7 7. h3 Bh5 8. Bd3
+Bg6 9. Qc2 Bxd3 10. Qxd3 Nb6 11. b3 Rc8 12. O-O c5 13. c4 cxd4 14. exd4 Bb4 15.
+Rac1 Bxd2 16. Nxd2 O-O 17. c5 Ne4 18. Nxe4 dxe4 19. Qxe4 Nd5 20. Rfd1 Qa5 21. a4
+Qb4 22. Rd3 Rc6 23. Rc4 Qa3 24. Rg3 f5 25. Qe5 Qa1+ 26. Rc1 Qxc1+ 27. Bxc1 Nf6
+28. Bh6 g6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "swadbasayev"]
+[Result "1-0"]
+[WhiteElo "938"]
+[BlackElo "944"]
+[TimeControl "300+5"]
+[EndTime "7:29:04 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 c5 2. dxc5 Nc6 3. Nf3 e6 4. e4 Bxc5 5. Bc4 Nf6 6. Nc3 h6 7. O-O Qc7 8. Nb5
+Qb6 9. Nd6+ Ke7 10. Nb5 Nxe4 11. Qe2 Nf6 12. Be3 Bb4 13. Bxb6 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "grzwrz"]
+[Black "Blueman3612"]
+[Result "1-0"]
+[WhiteElo "981"]
+[BlackElo "931"]
+[TimeControl "300+5"]
+[EndTime "7:36:27 PDT"]
+[Termination "grzwrz won by checkmate"]
+
+1. e4 e5 2. f4 exf4 3. Nf3 d5 4. exd5 Qxd5 5. Nc3 Qd6 6. d4 Nf6 7. Bd3 Bg4 8.
+O-O c6 9. Bc4 Nbd7 10. Be2 Be7 11. h3 Bh5 12. Bd3 O-O 13. Ne4 Nxe4 14. Bxe4 Rfe8
+15. Qd3 Nf6 16. Ng5 h6 17. Bh7+ Nxh7 18. Qxh7+ Kf8 19. Qh8# 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "linneychess"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "832"]
+[BlackElo "937"]
+[TimeControl "300+5"]
+[EndTime "7:38:25 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. d4 d5 2. Bf4 Nf6 3. e3 Bf5 4. Bd3 Bxd3 5. Qxd3 e6 6. Nf3 Bd6 7. O-O O-O 8. c3
+Re8 9. Nbd2 Nbd7 10. e4 e5 11. Nxe5 Bxe5 12. Bxe5 Nxe5 13. dxe5 Rxe5 14. exd5
+Rxd5 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "Blueman3612"]
+[Black "birdfish41"]
+[Result "0-1"]
+[WhiteElo "929"]
+[BlackElo "962"]
+[TimeControl "300+5"]
+[EndTime "7:48:37 PDT"]
+[Termination "birdfish41 won by resignation"]
+
+1. d4 d5 2. Bf4 c6 3. e3 Nf6 4. Bd3 e6 5. Nf3 Be7 6. c3 Nbd7 7. O-O O-O 8. Nbd2
+c5 9. b3 b6 10. c4 cxd4 11. exd4 dxc4 12. bxc4 Bb7 13. Qc2 Rc8 14. Ne5 Re8 15.
+Ndf3 Bxf3 16. Nxf3 b5 17. Rfe1 a6 18. a4 bxc4 19. Bxc4 Nb6 20. Ne5 Nxc4 21. Nxc4
+Nd5 22. Be3 Qc7 23. Rac1 Bf6 24. Red1 Nxe3 25. fxe3 Bg5 26. Rd3 h5 27. Rc3 h4
+28. Ne5 Qxc3 29. Qxc3 Rxc3 30. Rxc3 Rb8 31. Kf2 Rb2+ 32. Kf3 Bf6 33. h3 Bxe5 34.
+dxe5 g5 35. g3 Ra2 36. gxh4 gxh4 37. Kg4 Rxa4+ 38. Kh5 Kg7 39. Rc2 Re4 40. Rg2+
+Kf8 41. Rg5 Rxe3 42. Kxh4 Re4+ 43. Kh5 a5 0-1
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2022.08.19"]
+[Round "-"]
+[White "RobbieP1337"]
+[Black "Blueman3612"]
+[Result "0-1"]
+[WhiteElo "942"]
+[BlackElo "938"]
+[TimeControl "300+5"]
+[EndTime "8:00:37 PDT"]
+[Termination "Blueman3612 won by resignation"]
+
+1. e4 e5 2. Nf3 Nc6 3. d3 Bc5 4. g3 Nf6 5. Bg2 O-O 6. O-O d6 7. Nbd2 Bg4 8. h3
+Bh5 9. c3 d5 10. Qe1 d4 11. b4 Bb6 12. b5 Na5 13. c4 c6 14. Nh4 cxb5 15. cxb5 a6
+16. f4 Re8 17. fxe5 Rxe5 18. g4 Bxg4 19. hxg4 Nxg4 20. Ndf3 Re8 21. Qg3 Ne3 22.
+Bxe3 dxe3 23. Kh2 Qxd3 24. Rg1 e2 25. Bf1 Bxg1+ 0-1
+
+
+[Event "Live Chess"]
+[Site "Chess.com"]
 [Date "2022.08.19"]
 [Round "-"]
 [White "jurrow"]

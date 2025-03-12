@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Link from 'next/link';
+import Button from './ui/Button';
 
 interface LayoutProps {
   children: ReactNode;
@@ -53,12 +54,13 @@ function Layout({ children, hideNav = false }: LayoutProps) {
                 >
                   Profile
                 </Link>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleSignOut}
-                  className="px-4 py-2 rounded-md text-sm font-medium text-white bg-black bg-opacity-30 hover:bg-opacity-40 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Sign Out
-                </button>
+                </Button>
               </div>
             </div>
           </nav>

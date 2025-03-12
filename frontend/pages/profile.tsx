@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
+import Button from '../components/ui/Button';
 
 // Define a more comprehensive game type
 interface ChessGame {
@@ -41,6 +42,9 @@ const Profile = () => {
     gamesPerSecond: number;
     fileSize: number;
   } | null>(null);
+  
+  // Add a ref for the file input with proper typing
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Redirect if not logged in
   useEffect(() => {
@@ -127,6 +131,69 @@ const Profile = () => {
     }
   };
 
+  // Prepare games for insertion with better field validation
+  const prepareGameForInsert = (game: ChessGame, userId: string) => {
+    // Start with required fields
+    const gameData: Record<string, any> = {
+      user_id: userId,
+      pgn: game.pgn,
+      analyzed: false,
+      unique_game_id: game.uniqueGameId,
+    };
+    
+    // Only add result if it's not a placeholder
+    if (game.result && game.result !== '?' && game.result !== '*') {
+      gameData.result = game.result;
+    }
+    
+    // Only add fields that have valid values
+    if (game.event && game.event.trim()) gameData.event = game.event;
+    if (game.site && game.site.trim()) gameData.site = game.site;
+    if (game.round && game.round.trim()) gameData.round = game.round;
+    if (game.whitePlayer && game.whitePlayer.trim()) gameData.white_player = game.whitePlayer;
+    if (game.blackPlayer && game.blackPlayer.trim()) gameData.black_player = game.blackPlayer;
+    
+    // Add numeric fields only if they're valid numbers
+    if (game.whiteElo && !isNaN(game.whiteElo)) gameData.white_elo = game.whiteElo;
+    if (game.blackElo && !isNaN(game.blackElo)) gameData.black_elo = game.blackElo;
+    
+    // Add other metadata if present
+    if (game.eco && game.eco.trim()) gameData.eco = game.eco;
+    if (game.timeControl && game.timeControl.trim()) gameData.time_control = game.timeControl;
+    if (game.termination && game.termination.trim()) gameData.termination = game.termination;
+    if (game.gameLink && game.gameLink.trim()) gameData.game_link = game.gameLink;
+    if (game.movesOnly && game.movesOnly.trim()) gameData.moves_only = game.movesOnly;
+    if (game.platform && game.platform.trim()) gameData.platform = game.platform;
+    
+    // Special handling for date - check for placeholders like "??"
+    if (game.gameDate && game.gameDate.trim() && !game.gameDate.includes('?')) {
+      // Try to parse the date to ensure it's valid
+      try {
+        // Standard PGN date format is YYYY.MM.DD
+        const dateParts = game.gameDate.split('.');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0]);
+          const month = parseInt(dateParts[1]);
+          const day = parseInt(dateParts[2]);
+          
+          // Basic validation - using ISO format for Postgres compatibility
+          if (!isNaN(year) && !isNaN(month) && !isNaN(day) && 
+              year > 1500 && year < 2100 && 
+              month >= 1 && month <= 12 && 
+              day >= 1 && day <= 31) {
+            // Format as YYYY-MM-DD for PostgreSQL
+            gameData.game_date = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not parse date:", game.gameDate);
+        // Skip adding the date field
+      }
+    }
+    
+    return gameData;
+  };
+
   // Enhanced file upload with batched processing
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -159,8 +226,6 @@ const Profile = () => {
       const parsingEndTime = performance.now();
       const parsingTimeMs = parsingEndTime - parsingStartTime;
       
-      console.log(`Total games found in PGN: ${games.length}`);
-      
       if (games.length === 0) {
         setMessage({ text: 'No valid games found in the PGN file', type: 'error' });
         setLoading(false);
@@ -175,123 +240,150 @@ const Profile = () => {
       // Extract all unique game IDs for batch duplicate checking
       const uniqueGameIds = games.map(game => game.uniqueGameId);
       
-      // Batch size for checking duplicates (PostgreSQL IN clause has limits)
-      const duplicateCheckBatchSize = 50;
-      const existingGameIds = new Set<string>();
-      
-      // Check for duplicates in batches to avoid IN clause limitations
-      for (let i = 0; i < uniqueGameIds.length; i += duplicateCheckBatchSize) {
-        const idBatch = uniqueGameIds.slice(i, i + duplicateCheckBatchSize);
+      try {
+        // Batch check for duplicates in a single query
+        // Split into smaller chunks if there are too many IDs
+        const maxIdsPerQuery = 100; // Supabase has limits on query size
+        let existingGameIds = new Set<string>();
         
-        const { data: existingGames, error: queryError } = await supabase
-          .from('games')
-          .select('unique_game_id')
-          .eq('user_id', session.user.id)
-          .in('unique_game_id', idBatch);
+        // Process in chunks to avoid query size limitations
+        for (let i = 0; i < uniqueGameIds.length; i += maxIdsPerQuery) {
+          const idChunk = uniqueGameIds.slice(i, i + maxIdsPerQuery);
           
-        if (queryError) {
-          console.error('Error in duplicate batch check:', queryError);
-          continue; // Continue with other batches even if one fails
-        }
-        
-        // Add found existing games to our set
-        existingGames?.forEach(game => {
-          if (game.unique_game_id) {
-            existingGameIds.add(game.unique_game_id);
+          const { data: existingGamesChunk, error: queryError } = await supabase
+            .from('games')
+            .select('unique_game_id')
+            .eq('user_id', session.user.id)
+            .in('unique_game_id', idChunk);
+            
+          if (queryError) {
+            console.error('Error checking for duplicates:', queryError);
+            // Continue anyway - we'll just assume no duplicates in this chunk
+          } else if (existingGamesChunk) {
+            // Add to our set of existing IDs
+            existingGamesChunk.forEach(game => existingGameIds.add(game.unique_game_id));
           }
-        });
-      }
-      
-      // Filter out duplicates using our accumulated set of existing IDs
-      const newGames = games.filter(game => !existingGameIds.has(game.uniqueGameId));
-      const duplicateCount = games.length - newGames.length;
-      
-      console.log(`After duplicate checking - New games: ${newGames.length}, Duplicates: ${duplicateCount}`);
-      setMessage({ text: `Found ${newGames.length} new games. Uploading in batches...`, type: 'info' });
-      
-      // Prepare games for insertion
-      const gamesToInsert = newGames.map(game => ({
-        user_id: session.user.id,
-        pgn: game.pgn,
-        result: game.result,
-        event: game.event,
-        site: game.site,
-        game_date: game.gameDate,
-        round: game.round,
-        white_player: game.whitePlayer,
-        black_player: game.blackPlayer,
-        white_elo: game.whiteElo,
-        black_elo: game.blackElo,
-        eco: game.eco,
-        time_control: game.timeControl,
-        termination: game.termination,
-        game_link: game.gameLink,
-        moves_only: game.movesOnly,
-        platform: game.platform,
-        unique_game_id: game.uniqueGameId,
-        analyzed: false
-      }));
-      
-      // Process in batches of 50 to stay within limits
-      const insertBatchSize = 50;
-      let successCount = 0;
-      let errorCount = 0;
-      
-      for (let i = 0; i < gamesToInsert.length; i += insertBatchSize) {
-        const batch = gamesToInsert.slice(i, i + insertBatchSize);
-        
-        // Remove problematic timestamp fields from each game object in the batch
-        const cleanedBatch = batch.map(game => {
-          // Create a shallow copy of the game object to avoid modifying the original
-          const gameClone = { ...game };
-          
-          // Delete potential timestamp fields if they exist
-          // Using delete operator to safely remove properties that might not exist
-          delete (gameClone as any).end_time;
-          delete (gameClone as any).start_time;
-          
-          return gameClone;
-        });
-        
-        // Log the first game for debugging
-        if (i === 0) {
-          console.log("Sample game data:", cleanedBatch[0]);
         }
         
-        const { error: insertError, data: insertedData } = await supabase
-          .from('games')
-          .insert(cleanedBatch);
+        // Filter out duplicates
+        const newGames = games.filter(game => !existingGameIds.has(game.uniqueGameId));
+        const duplicateCount = games.length - newGames.length;
+        
+        setMessage({ text: `Found ${newGames.length} new games. Uploading in batches...`, type: 'info' });
+        
+        // Prepare games for insertion using our new validation function
+        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
+        
+        // Process in batches of 50 to stay within limits
+        const batchSize = 50;
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
+          const batch = gamesToInsert.slice(i, i + batchSize);
           
-        if (insertError) {
-          errorCount += batch.length;
-          console.error('Error inserting batch:', insertError);
-        } else {
-          successCount += batch.length;
-          console.log(`Inserted batch ${i/insertBatchSize + 1}/${Math.ceil(gamesToInsert.length/insertBatchSize)}: ${batch.length} games`);
+          // Log the first game for debugging
+          if (i === 0) {
+            console.log("Sample game data:", batch[0]);
+          }
+          
+          const { error: insertError, data: insertedData } = await supabase
+            .from('games')
+            .insert(batch);
+            
+          if (insertError) {
+            errorCount += batch.length;
+            console.error('Error inserting batch:', insertError);
+          } else {
+            successCount += batch.length;
+          }
+          
+          // Update progress
+          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
         }
         
-        // Update progress - based on all games to insert, not just current batch
-        setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+        // Calculate final metrics
+        const processingEndTime = performance.now();
+        const totalProcessingTimeMs = processingEndTime - processingStartTime;
+        const totalProcessingTimeSec = totalProcessingTimeMs / 1000;
+        const totalGamesProcessed = games.length;
+        const gamesPerSecond = totalGamesProcessed / totalProcessingTimeSec;
+        
+        setParsingMetrics({
+          totalGames: games.length,
+          parsingTime: totalProcessingTimeMs,
+          gamesPerSecond: gamesPerSecond,
+          fileSize: fileSize
+        });
+        
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
+          type: errorCount > 0 ? 'error' : 'success'
+        });
+      } catch (fetchError) {
+        // Handle the fetch error gracefully
+        console.error('Error during duplicate checking:', fetchError);
+        setMessage({ 
+          text: `Error checking for duplicates. Proceeding with upload anyway.`,
+          type: 'error'
+        });
+        
+        // Continue with all games, assuming no duplicates
+        const newGames = games;
+        const duplicateCount = 0;
+        
+        setMessage({ text: `Found ${newGames.length} games. Uploading in batches...`, type: 'info' });
+        
+        // Prepare games for insertion using our new validation function
+        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
+        
+        // Process in batches of 50 to stay within limits
+        const batchSize = 50;
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
+          const batch = gamesToInsert.slice(i, i + batchSize);
+          
+          // Log the first game for debugging
+          if (i === 0) {
+            console.log("Sample game data:", batch[0]);
+          }
+          
+          const { error: insertError, data: insertedData } = await supabase
+            .from('games')
+            .insert(batch);
+            
+          if (insertError) {
+            errorCount += batch.length;
+            console.error('Error inserting batch:', insertError);
+          } else {
+            successCount += batch.length;
+          }
+          
+          // Update progress
+          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+        }
+        
+        // Calculate final metrics
+        const processingEndTime = performance.now();
+        const totalProcessingTimeMs = processingEndTime - processingStartTime;
+        const totalProcessingTimeSec = totalProcessingTimeMs / 1000;
+        const totalGamesProcessed = games.length;
+        const gamesPerSecond = totalGamesProcessed / totalProcessingTimeSec;
+        
+        setParsingMetrics({
+          totalGames: games.length,
+          parsingTime: totalProcessingTimeMs,
+          gamesPerSecond: gamesPerSecond,
+          fileSize: fileSize
+        });
+        
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
+          type: errorCount > 0 ? 'error' : 'success'
+        });
       }
-      
-      // Calculate final metrics
-      const processingEndTime = performance.now();
-      const totalProcessingTimeMs = processingEndTime - processingStartTime;
-      const totalProcessingTimeSec = totalProcessingTimeMs / 1000;
-      const totalGamesProcessed = games.length;
-      const gamesPerSecond = totalGamesProcessed / totalProcessingTimeSec;
-      
-      setParsingMetrics({
-        totalGames: games.length,  // This will now correctly show all 1100+ games
-        parsingTime: totalProcessingTimeMs,
-        gamesPerSecond: gamesPerSecond,
-        fileSize: fileSize
-      });
-      
-      setMessage({ 
-        text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
-        type: errorCount > 0 ? 'error' : 'success'
-      });
     } catch (err) {
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
     } finally {
@@ -362,18 +454,36 @@ const Profile = () => {
         }
       }
       
-      // Create unique game ID
+      // Create unique game ID - more robust handling of missing fields
+      // Use white/black or White/Black as available
+      const whitePlayer = headers.White || headers.white || '';
+      const blackPlayer = headers.Black || headers.black || '';
+      
+      // Generate a more reliable unique ID that works across different PGN formats
       const uniqueComponents = [
         headers.Event || '',
         headers.Date || '',
-        headers.White || '',
-        headers.Black || '',
+        whitePlayer,
+        blackPlayer,
         headers.Round || '',
-        headers.EndTime || headers.TimeControl || '',
-        platform
-      ].filter(Boolean);
+        // Add a more reliable fallback for time fields
+        headers.TimeControl || ''
+      ]
+      // Only use non-empty strings for the ID
+      .filter(val => val && val.trim() !== '');
       
-      const uniqueGameId = uniqueComponents.join('_');
+      // Add a fallback if we don't have enough components to make a unique ID
+      let uniqueGameId = uniqueComponents.join('_');
+      
+      // If we don't have enough unique components, add a hash of the moves
+      if (uniqueComponents.length < 3 && movesOnly) {
+        uniqueGameId += '_' + simpleHash(movesOnly);
+      }
+      
+      // Ensure we always have a unique ID even if all metadata is missing
+      if (!uniqueGameId) {
+        uniqueGameId = simpleHash(gameText);
+      }
       
       // Construct the game object with all extracted metadata
       games.push({
@@ -402,6 +512,25 @@ const Profile = () => {
     return games;
   };
 
+  // Simple hash function to create a numeric hash from a string
+  const simpleHash = (str: string): string => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(16).substring(0, 8);
+  };
+
+  // Function to trigger file input click 
+  const handleUploadButtonClick = () => {
+    // Non-null assertion operator tells TypeScript that current will not be null
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   if (!session) {
     return <div>Redirecting to login...</div>;
   }
@@ -421,18 +550,31 @@ const Profile = () => {
           </p>
           
           <div className="mb-4">
+            {/* Hidden file input */}
             <input 
+              ref={fileInputRef}
               type="file" 
               accept=".pgn"
               onChange={handleFileUpload}
               disabled={loading}
-              className="block w-full text-sm text-gray-300
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-md file:border-0
-                file:text-sm file:font-semibold
-                file:bg-gray-700 file:text-gray-200
-                hover:file:bg-gray-600"
+              className="hidden"
             />
+            
+            {/* Use our new Button component */}
+            <Button
+              variant="secondary"
+              size="md"
+              fullWidth
+              isLoading={loading}
+              onClick={handleUploadButtonClick}
+              leftIcon={
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              }
+            >
+              Select PGN File
+            </Button>
           </div>
           
           {parsingMetrics && (
