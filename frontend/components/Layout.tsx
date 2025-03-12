@@ -6,9 +6,10 @@ import Link from 'next/link';
 
 interface LayoutProps {
   children: ReactNode;
+  hideNav?: boolean;
 }
 
-function Layout({ children }: LayoutProps) {
+function Layout({ children, hideNav = false }: LayoutProps) {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
@@ -18,8 +19,9 @@ function Layout({ children }: LayoutProps) {
     router.push('/login');
   };
 
-  // Don't show nav on login and register pages
+  // Don't show nav on login and register pages or when hideNav is true
   const isAuthPage = router.pathname === '/login' || router.pathname === '/register';
+  const shouldShowNav = session && !isAuthPage && !hideNav;
 
   return (
     <>
@@ -34,7 +36,7 @@ function Layout({ children }: LayoutProps) {
       </Head>
 
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-800 via-gray-900 to-black font-sans">
-        {session && !isAuthPage && (
+        {shouldShowNav && (
           <nav className="w-full py-4 px-6 bg-black bg-opacity-30">
             <div className="container mx-auto flex justify-between items-center">
               <div className="text-white font-bold text-xl">Chess Tutor</div>

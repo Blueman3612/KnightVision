@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
-import Layout from '../components/Layout';
 
 const Profile = () => {
   const router = useRouter();
@@ -13,7 +12,6 @@ const Profile = () => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [userData, setUserData] = useState<any>(null);
-  const [tableStatus, setTableStatus] = useState<any>(null);
   
   // Redirect if not logged in
   useEffect(() => {
@@ -26,37 +24,17 @@ const Profile = () => {
   useEffect(() => {
     if (session) {
       fetchUserData();
-      checkTablesStatus();
     }
   }, [session]);
-
-  // Get database table information via secure RPC function
-  const checkTablesStatus = async () => {
-    try {
-      const { data, error } = await supabase.rpc('check_tables_info');
-      
-      if (error) {
-        console.error('Error checking tables info:', error);
-      } else {
-        console.log('Tables info:', data);
-        setTableStatus(data);
-      }
-    } catch (err) {
-      console.error('Error checking tables info:', err);
-    }
-  };
 
   // Fetch user data - protected by RLS policies
   const fetchUserData = async () => {
     if (!session?.user?.id) {
-      console.error('No user ID available');
       return;
     }
 
     try {
-      console.log('Fetching user data for ID:', session.user.id);
-      
-      // Direct table query - RLS is disabled so this should work
+      // Direct table query with RLS protection
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -64,8 +42,6 @@ const Profile = () => {
         .single();
         
       if (error) {
-        console.error('Error fetching user data:', error);
-        
         // Try to create user if doesn't exist
         if (error.code === 'PGRST116') { // No rows returned
           await createUser();
@@ -77,10 +53,8 @@ const Profile = () => {
         }
       } else {
         setUserData(data);
-        console.log('User data loaded:', data);
       }
     } catch (err) {
-      console.error('Error fetching user:', err);
       setMessage({
         text: `Error with user data: ${err instanceof Error ? err.message : 'Unknown error'}`,
         type: 'error'
@@ -93,8 +67,6 @@ const Profile = () => {
     if (!session?.user?.id || !session?.user?.email) return null;
     
     try {
-      console.log('Creating user record for:', session.user.email);
-      
       const { data, error } = await supabase
         .from('users')
         .insert([{
@@ -108,7 +80,6 @@ const Profile = () => {
         .single();
         
       if (error) {
-        console.error('Error creating user:', error);
         setMessage({
           text: `Failed to create user: ${error.message}`,
           type: 'error'
@@ -116,7 +87,6 @@ const Profile = () => {
         return null;
       }
       
-      console.log('User created successfully:', data);
       setUserData(data);
       setMessage({
         text: 'User profile created successfully',
@@ -124,65 +94,7 @@ const Profile = () => {
       });
       return data;
     } catch (err) {
-      console.error('Error creating user:', err);
       return null;
-    }
-  };
-
-  // Test the database connection with RLS policies
-  const testDatabaseConnection = async () => {
-    if (!session) {
-      setMessage({
-        text: 'You need to be logged in to test the database connection.',
-        type: 'error'
-      });
-      return;
-    }
-    
-    setLoading(true);
-    setMessage({ text: 'Testing database connection...', type: 'info' });
-    
-    try {
-      // Game insertion - protected by RLS policies
-      const { data, error } = await supabase
-        .from('games')
-        .insert([{
-          user_id: session.user.id,
-          pgn: `[Event "Test Game Direct Insert"]
-[Site "Test Site"]
-[Date "2023.01.01"]
-[Round "1"]
-[White "Test White"]
-[Black "Test Black"]
-[Result "1-0"]
-
-1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 1-0`,
-          result: '1-0',
-          analyzed: false
-        }])
-        .select();
-        
-      if (error) {
-        console.error('Database test failed:', error);
-        setMessage({
-          text: `Database test failed: ${error.message}`,
-          type: 'error'
-        });
-      } else {
-        console.log('Game inserted successfully:', data);
-        setMessage({
-          text: 'Database connection test successful! Game inserted.',
-          type: 'success'
-        });
-      }
-    } catch (err) {
-      console.error('Test error:', err);
-      setMessage({
-        text: `Test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -247,14 +159,12 @@ const Profile = () => {
               }]);
               
             if (error) {
-              console.error('Error uploading game:', error);
               errorCount++;
             } else {
               successCount++;
             }
           }
         } catch (err) {
-          console.error('Error processing game:', err);
           errorCount++;
         }
         
@@ -268,7 +178,6 @@ const Profile = () => {
         type: errorCount > 0 ? 'error' : 'success'
       });
     } catch (err) {
-      console.error('Error processing PGN file:', err);
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
     } finally {
       setLoading(false);
@@ -307,59 +216,13 @@ const Profile = () => {
   }
 
   return (
-    <Layout>
+    <>
       <Head>
         <title>Chess Tutor - Profile</title>
         <meta name="description" content="Chess Tutor Profile Page" />
       </Head>
       
       <div className="container mx-auto px-4 py-8 w-full max-w-4xl">
-        <h1 className="text-3xl font-bold mb-6 text-white">Your Profile</h1>
-        
-        {userData && (
-          <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
-            <h2 className="text-xl font-semibold mb-4 text-white">User Information</h2>
-            <div className="mb-4">
-              <p><span className="font-semibold">Email:</span> {userData.email}</p>
-              <p><span className="font-semibold">Name:</span> {userData.full_name || 'Not set'}</p>
-              <p><span className="font-semibold">ELO Rating:</span> {userData.elo_rating}</p>
-              <p><span className="font-semibold">Games Played:</span> {userData.games_played}</p>
-              <p><span className="font-semibold">User ID:</span> {userData.id}</p>
-            </div>
-          </div>
-        )}
-        
-        {/* Status panel showing database information and RLS status */}
-        {tableStatus && (
-          <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
-            <h2 className="text-xl font-semibold mb-4 text-white">Database Info</h2>
-            <div className="mb-4">
-              <p><span className="font-semibold">Users Count:</span> {tableStatus.users_count}</p>
-              <p><span className="font-semibold">Games Count:</span> {tableStatus.games_count}</p>
-              <p><span className="font-semibold">Database User:</span> {tableStatus.current_user}</p>
-              <p><span className="font-semibold">Role:</span> {tableStatus.current_role}</p>
-              <p><span className="font-semibold">Auth UID:</span> {tableStatus.auth_uid || 'Not authenticated'}</p>
-              <p>
-                <span className="font-semibold">RLS Status:</span> 
-                <span className={tableStatus.rls_enabled ? "text-green-400 ml-1" : "text-red-400 ml-1"}>
-                  {tableStatus.rls_enabled ? "Enabled" : "Disabled"}
-                </span>
-                {tableStatus.using_permissive_policy && (
-                  <span className="text-yellow-400 ml-2">(using permissive policies)</span>
-                )}
-              </p>
-              <div className="mt-4">
-                <button
-                  onClick={checkTablesStatus}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
-                >
-                  Refresh Info
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
         <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
           <h2 className="text-xl font-semibold mb-4 text-white">Upload PGN Files</h2>
           <p className="mb-4 text-gray-300">
@@ -379,19 +242,6 @@ const Profile = () => {
                 file:bg-gray-700 file:text-gray-200
                 hover:file:bg-gray-600"
             />
-          </div>
-          
-          <div className="my-4">
-            <button
-              onClick={testDatabaseConnection}
-              disabled={loading}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Test Database Connection
-            </button>
-            <p className="text-xs text-gray-400 mt-1">
-              Click to test if you can upload games to the database
-            </p>
           </div>
           
           {loading && (
@@ -419,7 +269,7 @@ const Profile = () => {
           )}
         </div>
       </div>
-    </Layout>
+    </>
   );
 };
 
