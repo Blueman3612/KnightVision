@@ -26,6 +26,7 @@ interface ChessGame {
   startTime?: string;
   platform?: string;
   uniqueGameId: string;
+  user_color?: 'white' | 'black';
 }
 
 const GamesPage = () => {
@@ -44,6 +45,12 @@ const GamesPage = () => {
   const [pgnText, setPgnText] = useState('');
   const [gameCount, setGameCount] = useState<number | null>(null);
   
+  // User aliases and player confirmation state
+  const [userAliases, setUserAliases] = useState<string[]>([]);
+  const [pendingGames, setPendingGames] = useState<ChessGame[]>([]);
+  const [currentGameIndex, setCurrentGameIndex] = useState<number>(-1);
+  const [showPlayerConfirmation, setShowPlayerConfirmation] = useState(false);
+  
   // Add a ref for the file input with proper typing
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -53,8 +60,218 @@ const GamesPage = () => {
       router.push('/login');
     } else {
       fetchGameCount();
+      fetchUserAliases();
     }
   }, [session, router]);
+
+  // Fetch user aliases from the database
+  const fetchUserAliases = async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('aliases')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (error) {
+        console.error('Error fetching user aliases:', error);
+        // If aliases column is missing or empty, set to empty array
+        setUserAliases([]);
+      } else if (data) {
+        setUserAliases(data.aliases || []);
+      }
+    } catch (err) {
+      console.error('Error with user aliases:', err);
+    }
+  };
+
+  // Update user aliases in the database
+  const updateUserAliases = async (newAlias: string) => {
+    if (!session?.user?.id || !newAlias.trim()) return;
+
+    // Don't add if already exists
+    if (userAliases.includes(newAlias)) return;
+
+    const updatedAliases = [...userAliases, newAlias];
+    
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ aliases: updatedAliases })
+        .eq('id', session.user.id);
+        
+      if (error) {
+        console.error('Error updating user aliases:', error);
+      } else {
+        setUserAliases(updatedAliases);
+      }
+    } catch (err) {
+      console.error('Error with updating aliases:', err);
+    }
+  };
+
+  // Determine user color based on player names and aliases
+  const determineUserColor = (game: ChessGame, aliasesOverride?: string[]): 'white' | 'black' | null => {
+    if (!game.whitePlayer && !game.blackPlayer) return null;
+    
+    // Use provided aliases or fall back to state
+    const aliases = aliasesOverride || userAliases;
+    
+    // Check if either player matches any alias
+    if (game.whitePlayer && aliases.some(alias => 
+      game.whitePlayer!.toLowerCase() === alias.toLowerCase())) {
+      return 'white';
+    }
+    
+    if (game.blackPlayer && aliases.some(alias => 
+      game.blackPlayer!.toLowerCase() === alias.toLowerCase())) {
+      return 'black';
+    }
+    
+    return null; // No match found
+  };
+
+  // Process games after confirmation
+  const processConfirmedGames = async () => {
+    if (!session?.user?.id || pendingGames.length === 0) return;
+    
+    setLoading(true);
+    setMessage({ text: 'Uploading confirmed games...', type: 'info' });
+    
+    try {
+      // Prepare games for insertion
+      const gamesToInsert = pendingGames.map(game => prepareGameForInsert(game, session.user.id));
+      
+      // Process in batches of 50 to stay within limits
+      const batchSize = 50;
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (let i = 0; i < gamesToInsert.length; i += batchSize) {
+        const batch = gamesToInsert.slice(i, i + batchSize);
+        
+        const { error: insertError } = await supabase
+          .from('games')
+          .insert(batch);
+          
+        if (insertError) {
+          errorCount += batch.length;
+          console.error('Error inserting batch:', insertError);
+        } else {
+          successCount += batch.length;
+        }
+        
+        // Update progress
+        setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+      }
+      
+      setMessage({ 
+        text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors`,
+        type: errorCount > 0 ? 'error' : 'success'
+      });
+      
+      // Reset state
+      setPendingGames([]);
+      setCurrentGameIndex(-1);
+      setShowPlayerConfirmation(false);
+      
+      // Update game count after successful upload
+      fetchGameCount();
+    } catch (err) {
+      setMessage({ text: 'Error uploading games: ' + (err as Error).message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle player confirmation
+  const confirmPlayerColor = (color: 'white' | 'black') => {
+    if (currentGameIndex < 0 || currentGameIndex >= pendingGames.length) return;
+    
+    // Update the current game with the selected color
+    const updatedGames = [...pendingGames];
+    const currentGame = updatedGames[currentGameIndex];
+    currentGame.user_color = color;
+    
+    // Add the player name to aliases
+    const playerName = color === 'white' ? currentGame.whitePlayer : currentGame.blackPlayer;
+    if (playerName) {
+      // Update local state immediately to use for reassessment
+      const newAliases = [...userAliases, playerName];
+      setUserAliases(newAliases);
+      
+      // Save to database (async)
+      updateUserAliasesInDb(playerName);
+      
+      // Reassess all remaining games with the new alias
+      for (let i = 0; i < updatedGames.length; i++) {
+        const game = updatedGames[i];
+        if (!game.user_color) {
+          // We have to check two scenarios - either:
+          // 1. The player's username appears in the game and we just added it as an alias
+          // 2. Some other alias already matched a player in this game
+
+          // First check the new alias
+          if ((game.whitePlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'white') {
+            game.user_color = 'white';
+          } else if ((game.blackPlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'black') {
+            game.user_color = 'black';
+          } else {
+            // Try to match with any existing alias
+            const computedColor = determineUserColor(game, newAliases);
+            if (computedColor) {
+              game.user_color = computedColor;
+            }
+          }
+        }
+      }
+    }
+    
+    // Move to the next unconfirmed game
+    setPendingGames(updatedGames);
+    findNextUnconfirmedGame(updatedGames, 0); // Start from beginning to ensure we don't miss any
+  };
+
+  // Update user aliases in the database (separate from state update)
+  const updateUserAliasesInDb = async (newAlias: string) => {
+    if (!session?.user?.id || !newAlias.trim()) return;
+
+    // Don't add if already exists
+    if (userAliases.includes(newAlias)) return;
+
+    const updatedAliases = [...userAliases, newAlias];
+    
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ aliases: updatedAliases })
+        .eq('id', session.user.id);
+        
+      if (error) {
+        console.error('Error updating user aliases:', error);
+      }
+    } catch (err) {
+      console.error('Error with updating aliases:', err);
+    }
+  };
+
+  // Find the next game that needs confirmation
+  const findNextUnconfirmedGame = (games: ChessGame[], startIndex: number) => {
+    for (let i = startIndex; i < games.length; i++) {
+      if (!games[i].user_color) {
+        setCurrentGameIndex(i);
+        setShowPlayerConfirmation(true);
+        return;
+      }
+    }
+    
+    // No more games to confirm, process all games
+    setCurrentGameIndex(-1);
+    setShowPlayerConfirmation(false);
+    processConfirmedGames();
+  };
 
   // Fetch total game count
   const fetchGameCount = async () => {
@@ -84,6 +301,7 @@ const GamesPage = () => {
       pgn: game.pgn,
       analyzed: false,
       unique_game_id: game.uniqueGameId,
+      user_color: game.user_color,
     };
     
     // Only add result if it's not a placeholder
@@ -214,37 +432,38 @@ const GamesPage = () => {
         const newGames = games.filter(game => !existingGameIds.has(game.uniqueGameId));
         const duplicateCount = games.length - newGames.length;
         
-        setMessage({ text: `Found ${newGames.length} new games. Uploading in batches...`, type: 'info' });
+        if (newGames.length === 0) {
+          setMessage({ text: `All ${duplicateCount} games are duplicates. Nothing to upload.`, type: 'info' });
+          setLoading(false);
+          return;
+        }
         
-        // Prepare games for insertion using our new validation function
-        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
+        setMessage({ text: `Found ${newGames.length} new games. Determining player colors...`, type: 'info' });
         
-        // Process in batches of 50 to stay within limits
-        const batchSize = 50;
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
-          const batch = gamesToInsert.slice(i, i + batchSize);
-          
-          // Log the first game for debugging
-          if (i === 0) {
-            console.log("Sample game data:", batch[0]);
+        // Try to automatically determine user_color for each game
+        const gamesWithColor = newGames.map(game => {
+          const determinedColor = determineUserColor(game, userAliases);
+          if (determinedColor) {
+            return { ...game, user_color: determinedColor };
           }
-          
-          const { error: insertError, data: insertedData } = await supabase
-            .from('games')
-            .insert(batch);
-            
-          if (insertError) {
-            errorCount += batch.length;
-            console.error('Error inserting batch:', insertError);
-          } else {
-            successCount += batch.length;
-          }
-          
-          // Update progress
-          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+          return game;
+        });
+        
+        // Check if any games need user confirmation
+        const unconfirmedGames = gamesWithColor.filter(game => !game.user_color);
+        
+        if (unconfirmedGames.length > 0) {
+          // Some games need player confirmation
+          setPendingGames(gamesWithColor);
+          setMessage({ 
+            text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
+            type: 'info'
+          });
+          findNextUnconfirmedGame(gamesWithColor, 0);
+        } else {
+          // All games have user_color determined, proceed with upload
+          setPendingGames(gamesWithColor);
+          processConfirmedGames();
         }
         
         // Calculate final metrics
@@ -260,84 +479,16 @@ const GamesPage = () => {
           gamesPerSecond: gamesPerSecond,
           fileSize: fileSize
         });
-        
-        setMessage({ 
-          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
-          type: errorCount > 0 ? 'error' : 'success'
-        });
-
-        // Update game count after successful upload
-        fetchGameCount();
       } catch (fetchError) {
-        // Handle the fetch error gracefully
         console.error('Error during duplicate checking:', fetchError);
         setMessage({ 
-          text: `Error checking for duplicates. Proceeding with upload anyway.`,
+          text: `Error checking for duplicates: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
           type: 'error'
         });
-        
-        // Continue with all games, assuming no duplicates
-        const newGames = games;
-        const duplicateCount = 0;
-        
-        setMessage({ text: `Found ${newGames.length} games. Uploading in batches...`, type: 'info' });
-        
-        // Prepare games for insertion using our new validation function
-        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
-        
-        // Process in batches of 50 to stay within limits
-        const batchSize = 50;
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
-          const batch = gamesToInsert.slice(i, i + batchSize);
-          
-          // Log the first game for debugging
-          if (i === 0) {
-            console.log("Sample game data:", batch[0]);
-          }
-          
-          const { error: insertError, data: insertedData } = await supabase
-            .from('games')
-            .insert(batch);
-            
-          if (insertError) {
-            errorCount += batch.length;
-            console.error('Error inserting batch:', insertError);
-          } else {
-            successCount += batch.length;
-          }
-          
-          // Update progress
-          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
-        }
-        
-        // Calculate final metrics
-        const processingEndTime = performance.now();
-        const totalProcessingTimeMs = processingEndTime - processingStartTime;
-        const totalProcessingTimeSec = totalProcessingTimeMs / 1000;
-        const totalGamesProcessed = games.length;
-        const gamesPerSecond = totalGamesProcessed / totalProcessingTimeSec;
-        
-        setParsingMetrics({
-          totalGames: games.length,
-          parsingTime: totalProcessingTimeMs,
-          gamesPerSecond: gamesPerSecond,
-          fileSize: fileSize
-        });
-        
-        setMessage({ 
-          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
-          type: errorCount > 0 ? 'error' : 'success'
-        });
-
-        // Update game count after successful upload
-        fetchGameCount();
+        setLoading(false);
       }
     } catch (err) {
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
-    } finally {
       setLoading(false);
     }
   };
@@ -561,37 +712,38 @@ const GamesPage = () => {
         const newGames = games.filter(game => !existingGameIds.has(game.uniqueGameId));
         const duplicateCount = games.length - newGames.length;
         
-        setMessage({ text: `Found ${newGames.length} new games. Uploading in batches...`, type: 'info' });
+        if (newGames.length === 0) {
+          setMessage({ text: `All ${duplicateCount} games are duplicates. Nothing to upload.`, type: 'info' });
+          setLoading(false);
+          return;
+        }
         
-        // Prepare games for insertion using our new validation function
-        const gamesToInsert = newGames.map(game => prepareGameForInsert(game, session.user.id));
+        setMessage({ text: `Found ${newGames.length} new games. Determining player colors...`, type: 'info' });
         
-        // Process in batches of 50 to stay within limits
-        const batchSize = 50;
-        let successCount = 0;
-        let errorCount = 0;
-        
-        for (let i = 0; i < gamesToInsert.length; i += batchSize) {
-          const batch = gamesToInsert.slice(i, i + batchSize);
-          
-          // Log the first game for debugging
-          if (i === 0) {
-            console.log("Sample game data:", batch[0]);
+        // Try to automatically determine user_color for each game
+        const gamesWithColor = newGames.map(game => {
+          const determinedColor = determineUserColor(game, userAliases);
+          if (determinedColor) {
+            return { ...game, user_color: determinedColor };
           }
-          
-          const { error: insertError, data: insertedData } = await supabase
-            .from('games')
-            .insert(batch);
-            
-          if (insertError) {
-            errorCount += batch.length;
-            console.error('Error inserting batch:', insertError);
-          } else {
-            successCount += batch.length;
-          }
-          
-          // Update progress
-          setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+          return game;
+        });
+        
+        // Check if any games need user confirmation
+        const unconfirmedGames = gamesWithColor.filter(game => !game.user_color);
+        
+        if (unconfirmedGames.length > 0) {
+          // Some games need player confirmation
+          setPendingGames(gamesWithColor);
+          setMessage({ 
+            text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
+            type: 'info'
+          });
+          findNextUnconfirmedGame(gamesWithColor, 0);
+        } else {
+          // All games have user_color determined, proceed with upload
+          setPendingGames(gamesWithColor);
+          processConfirmedGames();
         }
         
         // Calculate final metrics
@@ -608,25 +760,17 @@ const GamesPage = () => {
           fileSize: textSize
         });
         
-        setMessage({ 
-          text: `Upload complete: ${successCount} games uploaded, ${duplicateCount} duplicates skipped, ${errorCount} errors`,
-          type: errorCount > 0 ? 'error' : 'success'
-        });
-        
-        // Clear the input after successful upload
+        // Clear the input after processing
         setPgnText('');
-        
-        // Update game count after successful upload
-        fetchGameCount();
       } catch (error) {
         setMessage({ 
           text: `Error during upload: ${error instanceof Error ? error.message : 'Unknown error'}`,
           type: 'error'
         });
+        setLoading(false);
       }
     } catch (err) {
       setMessage({ text: 'Error processing PGN text: ' + (err as Error).message, type: 'error' });
-    } finally {
       setLoading(false);
     }
   };
@@ -729,6 +873,7 @@ const GamesPage = () => {
             </div>
           )}
           
+          {/* Progress and message displays */}
           {loading && (
             <div className="mb-4">
               <div className="w-full bg-gray-700 rounded-full h-2.5">
@@ -740,6 +885,57 @@ const GamesPage = () => {
               <p className="text-sm text-gray-400 mt-1">
                 Uploading: {uploadProgress}%
               </p>
+            </div>
+          )}
+          
+          {/* Player Confirmation Modal */}
+          {showPlayerConfirmation && currentGameIndex >= 0 && currentGameIndex < pendingGames.length && (
+            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+              <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                <h3 className="text-xl font-semibold mb-4 text-white">Which player are you?</h3>
+                <p className="mb-6 text-gray-300">
+                  We couldn't automatically determine which player you are in this game:
+                </p>
+                
+                <div className="mb-6 bg-gray-700 p-4 rounded-md">
+                  <p className="text-sm text-gray-300 mb-2">Game {currentGameIndex + 1} of {pendingGames.length}:</p>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-white font-medium">Event:</span>
+                    <span className="text-gray-300">{pendingGames[currentGameIndex].event || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-white font-medium">Date:</span>
+                    <span className="text-gray-300">{pendingGames[currentGameIndex].gameDate || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-white font-medium">White:</span>
+                    <span className="text-gray-300">{pendingGames[currentGameIndex].whitePlayer || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-white font-medium">Black:</span>
+                    <span className="text-gray-300">{pendingGames[currentGameIndex].blackPlayer || 'Unknown'}</span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => confirmPlayerColor('white')}
+                    disabled={!pendingGames[currentGameIndex].whitePlayer}
+                  >
+                    I played as White
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => confirmPlayerColor('black')}
+                    disabled={!pendingGames[currentGameIndex].blackPlayer}
+                  >
+                    I played as Black
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
           
@@ -758,4 +954,4 @@ const GamesPage = () => {
   );
 };
 
-export default GamesPage; 
+export default GamesPage;
