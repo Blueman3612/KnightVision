@@ -643,13 +643,6 @@ const GamesPage = () => {
       </Head>
       
       <div className="w-full max-w-4xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">My Games</h1>
-          <p className="text-gray-300">
-            {gameCount !== null ? `You have ${gameCount} games in your collection.` : 'Loading game data...'}
-          </p>
-        </div>
-        
         <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
           <h2 className="text-xl font-semibold mb-4 text-white">Upload Chess Games</h2>
           <p className="mb-4 text-gray-300">
@@ -759,12 +752,6 @@ const GamesPage = () => {
               {message.text}
             </div>
           )}
-        </div>
-        
-        {/* Game listing section - we'll add this in the future */}
-        <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
-          <h2 className="text-xl font-semibold mb-4 text-white">Recent Games</h2>
-          <p className="text-gray-400">Game listing functionality coming soon.</p>
         </div>
       </div>
     </>

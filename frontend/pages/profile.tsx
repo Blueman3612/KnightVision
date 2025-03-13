@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { useSession } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
-import { Button } from '../components/ui';
 
 const Profile = () => {
   const router = useRouter();
@@ -12,12 +11,6 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [userData, setUserData] = useState<any>(null);
-  const [gameStats, setGameStats] = useState<{
-    total: number;
-    wins: number;
-    losses: number;
-    draws: number;
-  } | null>(null);
   
   // Redirect if not logged in
   useEffect(() => {
@@ -30,7 +23,6 @@ const Profile = () => {
   useEffect(() => {
     if (session) {
       fetchUserData();
-      fetchGameStats();
     }
   }, [session]);
 
@@ -105,69 +97,6 @@ const Profile = () => {
     }
   };
 
-  // Fetch game statistics
-  const fetchGameStats = async () => {
-    if (!session?.user?.id) return;
-    
-    try {
-      // Get total game count
-      const { count: total, error: totalError } = await supabase
-        .from('games')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id);
-      
-      if (totalError) {
-        console.error('Error fetching game count:', totalError);
-        return;
-      }
-      
-      // Get win count (filter where result contains "1-0" when playing as white or "0-1" when playing as black)
-      const { count: wins, error: winsError } = await supabase
-            .from('games')
-        .select('*', { count: 'exact', head: true })
-            .eq('user_id', session.user.id)
-        .or('and(result.eq.1-0,white_player.eq.' + session.user.email + '),and(result.eq.0-1,black_player.eq.' + session.user.email + ')');
-      
-      if (winsError) {
-        console.error('Error fetching wins count:', winsError);
-        return;
-      }
-      
-      // Get loss count (filter where result contains "0-1" when playing as white or "1-0" when playing as black)
-      const { count: losses, error: lossesError } = await supabase
-        .from('games')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .or('and(result.eq.0-1,white_player.eq.' + session.user.email + '),and(result.eq.1-0,black_player.eq.' + session.user.email + ')');
-      
-      if (lossesError) {
-        console.error('Error fetching losses count:', lossesError);
-        return;
-      }
-      
-      // Get draw count
-      const { count: draws, error: drawsError } = await supabase
-        .from('games')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .eq('result', '1/2-1/2');
-      
-      if (drawsError) {
-        console.error('Error fetching draws count:', drawsError);
-        return;
-      }
-      
-      setGameStats({
-        total: total || 0,
-        wins: wins || 0,
-        losses: losses || 0,
-        draws: draws || 0
-      });
-    } catch (err) {
-      console.error('Error fetching game stats:', err);
-    }
-  };
-
   if (!session) {
     return <div>Redirecting to login...</div>;
   }
@@ -180,13 +109,6 @@ const Profile = () => {
       </Head>
       
       <div className="w-full max-w-4xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">My Profile</h1>
-          <p className="text-gray-300">
-            View and manage your user profile and statistics.
-          </p>
-        </div>
-        
         {/* User Profile Card */}
         <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
           <div className="flex items-start md:items-center flex-col md:flex-row">
@@ -226,48 +148,6 @@ const Profile = () => {
               {message.text}
             </div>
           )}
-        </div>
-        
-        {/* Game Statistics Card */}
-        <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
-          <h2 className="text-xl font-semibold mb-6">Game Statistics</h2>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gray-700 bg-opacity-50 p-4 rounded-md text-center">
-              <p className="text-2xl font-bold">{gameStats?.total || 0}</p>
-              <p className="text-gray-400 text-sm">Total Games</p>
-            </div>
-            
-            <div className="bg-green-900 bg-opacity-30 p-4 rounded-md text-center">
-              <p className="text-2xl font-bold">{gameStats?.wins || 0}</p>
-              <p className="text-gray-400 text-sm">Wins</p>
-            </div>
-            
-            <div className="bg-red-900 bg-opacity-30 p-4 rounded-md text-center">
-              <p className="text-2xl font-bold">{gameStats?.losses || 0}</p>
-              <p className="text-gray-400 text-sm">Losses</p>
-            </div>
-            
-            <div className="bg-blue-900 bg-opacity-30 p-4 rounded-md text-center">
-              <p className="text-2xl font-bold">{gameStats?.draws || 0}</p>
-              <p className="text-gray-400 text-sm">Draws</p>
-            </div>
-          </div>
-          
-          <div className="flex justify-center">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => router.push('/games')}
-              leftIcon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              }
-            >
-              Manage Games
-            </Button>
-          </div>
         </div>
       </div>
     </>
