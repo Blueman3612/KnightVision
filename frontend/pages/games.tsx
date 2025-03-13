@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
-import { Button, TextInput } from '../components/ui';
+import { Button, TextInput, Modal } from '../components/ui';
 
 // Define a more comprehensive game type
 interface ChessGame {
@@ -890,53 +890,66 @@ const GamesPage = () => {
           
           {/* Player Confirmation Modal */}
           {showPlayerConfirmation && currentGameIndex >= 0 && currentGameIndex < pendingGames.length && (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-              <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full">
-                <h3 className="text-xl font-semibold mb-4 text-white">Which player are you?</h3>
-                <p className="mb-6 text-gray-300">
-                  We couldn't automatically determine which player you are in this game:
-                </p>
-                
-                <div className="mb-6 bg-gray-700 p-4 rounded-md">
-                  <p className="text-sm text-gray-300 mb-2">Game {currentGameIndex + 1} of {pendingGames.length}:</p>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-white font-medium">Event:</span>
-                    <span className="text-gray-300">{pendingGames[currentGameIndex].event || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-white font-medium">Date:</span>
-                    <span className="text-gray-300">{pendingGames[currentGameIndex].gameDate || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-white font-medium">White:</span>
-                    <span className="text-gray-300">{pendingGames[currentGameIndex].whitePlayer || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-white font-medium">Black:</span>
-                    <span className="text-gray-300">{pendingGames[currentGameIndex].blackPlayer || 'Unknown'}</span>
-                  </div>
+            <Modal
+              isOpen={showPlayerConfirmation}
+              onClose={() => {}} // Not allowing close without selection
+              size="md"
+              title={`Game ${currentGameIndex + 1} of ${pendingGames.length}`}
+              showCloseButton={false}
+              primaryButton={{
+                label: "I played as White",
+                variant: "primary",
+                onClick: () => confirmPlayerColor('white'),
+                disabled: !pendingGames[currentGameIndex].whitePlayer
+              }}
+              secondaryButton={{
+                label: "I played as Black",
+                variant: "secondary",
+                onClick: () => confirmPlayerColor('black'),
+                disabled: !pendingGames[currentGameIndex].blackPlayer
+              }}
+            >
+              <p className="mb-4 text-gray-300">
+                Please select which player you were in this game:
+              </p>
+              
+              <div className="mb-6 bg-gray-700 p-4 rounded-md">
+                <div className="flex justify-between mb-2">
+                  <span className="text-white font-medium">Event:</span>
+                  <span className="text-gray-300">{pendingGames[currentGameIndex].event || 'Unknown'}</span>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    onClick={() => confirmPlayerColor('white')}
-                    disabled={!pendingGames[currentGameIndex].whitePlayer}
-                  >
-                    I played as White
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    fullWidth
-                    onClick={() => confirmPlayerColor('black')}
-                    disabled={!pendingGames[currentGameIndex].blackPlayer}
-                  >
-                    I played as Black
-                  </Button>
+                <div className="flex justify-between mb-2">
+                  <span className="text-white font-medium">Date:</span>
+                  <span className="text-gray-300">{pendingGames[currentGameIndex].gameDate || 'Unknown'}</span>
+                </div>
+                <div className="flex justify-between mb-2 items-center">
+                  <span className="text-white font-medium">White:</span>
+                  <span className="text-gray-300 flex items-center">
+                    {pendingGames[currentGameIndex].whitePlayer || 'Unknown'}
+                    {pendingGames[currentGameIndex].whiteElo && (
+                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
+                        {pendingGames[currentGameIndex].whiteElo}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between mb-2 items-center">
+                  <span className="text-white font-medium">Black:</span>
+                  <span className="text-gray-300 flex items-center">
+                    {pendingGames[currentGameIndex].blackPlayer || 'Unknown'}
+                    {pendingGames[currentGameIndex].blackElo && (
+                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
+                        {pendingGames[currentGameIndex].blackElo}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-white font-medium">Platform:</span>
+                  <span className="text-gray-300">{pendingGames[currentGameIndex].platform || 'Unknown'}</span>
                 </div>
               </div>
-            </div>
+            </Modal>
           )}
           
           {message && (
