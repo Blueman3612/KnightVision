@@ -775,6 +775,21 @@ const GamesPage = () => {
     }
   };
 
+  // Add this cancel upload function
+  const cancelUpload = () => {
+    // Clear all upload state
+    setPendingGames([]);
+    setCurrentGameIndex(-1);
+    setShowPlayerConfirmation(false);
+    setLoading(false); // Reset loading state so the progress bar disappears
+    setUploadProgress(0); // Reset progress back to 0
+    setParsingMetrics(null); // Reset parsing metrics when canceling
+    setMessage({ 
+      text: 'Game upload canceled', 
+      type: 'info' 
+    });
+  };
+
   if (!session) {
     return <div>Redirecting to login...</div>;
   }
@@ -892,28 +907,39 @@ const GamesPage = () => {
           {showPlayerConfirmation && currentGameIndex >= 0 && currentGameIndex < pendingGames.length && (
             <Modal
               isOpen={showPlayerConfirmation}
-              onClose={() => {}} // Not allowing close without selection
+              onClose={cancelUpload} // Allow closing, which cancels the upload
               size="md"
-              title={`Game ${currentGameIndex + 1} of ${pendingGames.length}`}
-              showCloseButton={false}
+              title={
+                <div className="flex items-center space-x-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 10a8 8 0 1116 0 8 8 0 01-16 0zm6.39-2.908a.75.75 0 01.766.027l3.5 2.25a.75.75 0 010 1.262l-3.5 2.25A.75.75 0 018 12.25v-4.5a.75.75 0 01.39-.658z" />
+                  </svg>
+                  <span>Who did you play as?</span>
+                </div>
+              }
+              showCloseButton={true} // Show close button as well
               primaryButton={{
                 label: "I played as White",
-                variant: "primary",
+                variant: "outline",
                 onClick: () => confirmPlayerColor('white'),
-                disabled: !pendingGames[currentGameIndex].whitePlayer
+                disabled: !pendingGames[currentGameIndex].whitePlayer,
+                className: "bg-white text-gray-900 hover:bg-gray-200 border-gray-300"
               }}
               secondaryButton={{
                 label: "I played as Black",
-                variant: "secondary",
+                variant: "outline",
                 onClick: () => confirmPlayerColor('black'),
-                disabled: !pendingGames[currentGameIndex].blackPlayer
+                disabled: !pendingGames[currentGameIndex].blackPlayer,
+                className: "bg-gray-900 text-white hover:bg-gray-800 border-gray-700"
               }}
             >
-              <p className="mb-4 text-gray-300">
-                Please select which player you were in this game:
-              </p>
+              <div className="mb-4 text-center">
+                <p className="text-gray-300">
+                  Please select which player you were in this game:
+                </p>
+              </div>
               
-              <div className="mb-6 bg-gray-700 p-4 rounded-md">
+              <div className="mb-4 bg-gray-700 p-4 rounded-md shadow-inner">
                 <div className="flex justify-between mb-2">
                   <span className="text-white font-medium">Event:</span>
                   <span className="text-gray-300">{pendingGames[currentGameIndex].event || 'Unknown'}</span>
@@ -944,11 +970,15 @@ const GamesPage = () => {
                     )}
                   </span>
                 </div>
-                <div className="flex justify-between mb-2">
+                <div className="flex justify-between">
                   <span className="text-white font-medium">Platform:</span>
                   <span className="text-gray-300">{pendingGames[currentGameIndex].platform || 'Unknown'}</span>
                 </div>
               </div>
+              
+              <p className="text-center text-xs text-gray-400 italic mb-3">
+                The alias you confirm will be remembered to automatically parse future games
+              </p>
             </Modal>
           )}
           

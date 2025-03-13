@@ -12,6 +12,7 @@ export interface ModalButtonProps {
   disabled?: boolean;
   isLoading?: boolean;
   type?: 'button' | 'submit' | 'reset';
+  className?: string; // Add custom class support for buttons
 }
 
 // Modal component props
@@ -23,15 +24,20 @@ export interface ModalProps {
   // Styling and layout
   size?: ModalSize;
   className?: string;
+  overlayClassName?: string;
+  contentClassName?: string;
   
   // Modal content structure
-  title?: string;
+  title?: string | ReactNode;
   showCloseButton?: boolean;
   children: ReactNode;
   
   // Pre-configured buttons
   primaryButton?: ModalButtonProps;
   secondaryButton?: ModalButtonProps;
+  
+  // Animation options
+  animationDuration?: number;
 }
 
 export default function Modal({
@@ -39,11 +45,14 @@ export default function Modal({
   onClose,
   size = 'md',
   className = '',
+  overlayClassName = '',
+  contentClassName = '',
   title,
   showCloseButton = true,
   children,
   primaryButton,
   secondaryButton,
+  animationDuration = 200,
 }: ModalProps) {
   // Prevent scrolling when modal is open
   useEffect(() => {
@@ -68,24 +77,38 @@ export default function Modal({
     full: 'max-w-full mx-4',
   };
 
+  const animationStyle = {
+    transition: `all ${animationDuration}ms ease-in-out`,
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Background overlay */}
-      <div className="fixed inset-0 bg-black bg-opacity-75" onClick={onClose}></div>
+    <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+      {/* Background overlay with improved animation */}
+      <div 
+        className={`fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm transition-opacity ${overlayClassName}`} 
+        onClick={onClose}
+        style={animationStyle}
+      ></div>
       
-      <div className="flex min-h-full items-center justify-center p-4 text-center">
+      <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
         <div 
-          className={`relative w-full ${sizeClasses[size]} transform overflow-hidden rounded-lg bg-gray-800 text-white shadow-xl transition-all ${className}`}
+          className={`relative w-full ${sizeClasses[size]} transform overflow-hidden rounded-lg bg-gray-800 text-white shadow-2xl transition-all 
+          ${className}`}
+          style={animationStyle}
         >
-          {/* Header */}
+          {/* Header with improved styling */}
           {(title || showCloseButton) && (
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-              {title && <h3 className="text-lg font-semibold">{title}</h3>}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-gray-900">
+              {title && (
+                typeof title === 'string' 
+                  ? <h3 className="text-lg font-semibold text-white">{title}</h3>
+                  : title
+              )}
               
               {showCloseButton && (
                 <button
                   type="button"
-                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1 transition-colors duration-150"
+                  className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1.5 hover:bg-gray-700 transition-colors duration-150"
                   onClick={onClose}
                   aria-label="Close"
                 >
@@ -97,12 +120,12 @@ export default function Modal({
             </div>
           )}
           
-          {/* Content */}
-          <div className="px-6 py-4">
+          {/* Content with improved padding and styling */}
+          <div className={`px-6 py-5 ${contentClassName}`}>
             {children}
           </div>
           
-          {/* Footer */}
+          {/* Footer with improved styling */}
           {(primaryButton || secondaryButton) && (
             <div className="px-6 py-4 bg-gray-900 border-t border-gray-700 flex justify-end space-x-3">
               {secondaryButton && (
@@ -112,6 +135,7 @@ export default function Modal({
                   disabled={secondaryButton.disabled}
                   isLoading={secondaryButton.isLoading}
                   type={secondaryButton.type || 'button'}
+                  className={secondaryButton.className}
                 >
                   {secondaryButton.label}
                 </Button>
@@ -124,6 +148,7 @@ export default function Modal({
                   disabled={primaryButton.disabled}
                   isLoading={primaryButton.isLoading}
                   type={primaryButton.type || 'button'}
+                  className={primaryButton.className}
                 >
                   {primaryButton.label}
                 </Button>
