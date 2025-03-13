@@ -68,7 +68,7 @@ function Layout({ children, hideNav = false }: LayoutProps) {
                   href="/tutor"
                   variant="ghost"
                   size="sm"
-                  className={router.pathname === '/tutor' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                  className={router.pathname === '/tutor' ? 'nav-button-active' : 'text-gray-300 hover:text-white h-9 flex items-center'}
                   leftIcon={
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -81,7 +81,7 @@ function Layout({ children, hideNav = false }: LayoutProps) {
                   href="/profile"
                   variant="ghost"
                   size="sm"
-                  className={router.pathname === '/profile' ? 'text-white bg-gray-800 bg-opacity-50' : 'text-gray-300'}
+                  className={router.pathname === '/profile' ? 'nav-button-active' : 'text-gray-300 hover:text-white h-9 flex items-center'}
                   leftIcon={
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -94,7 +94,7 @@ function Layout({ children, hideNav = false }: LayoutProps) {
                   variant="outline"
                   size="sm"
                   onClick={handleSignOut}
-                  className="border-gray-500"
+                  className="border-gray-500 hover:border-gray-400 h-9 flex items-center"
                   leftIcon={
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

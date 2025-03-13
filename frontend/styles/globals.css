@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Nav button animated gradient styles */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.nav-button-active {
+  background: linear-gradient(90deg, 
+    rgba(165, 180, 252, 0.5), 
+    rgba(149, 120, 240, 0.4), 
+    rgba(165, 180, 252, 0.5));
+  background-size: 200% 100%;
+  animation: gradient-shift 8s ease infinite;
+  color: white;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 4px rgba(139, 92, 246, 0.2);
+  backdrop-filter: blur(2px);
+  padding: 0.375rem 0.75rem;
+  display: flex;
+  align-items: center;
+  height: 2.25rem;
+}
+
 /* Chessboard base styles */
 cg-board {
   background-image: url(/assets/chessboard/board-brown.svg);
