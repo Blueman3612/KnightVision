@@ -950,7 +950,7 @@ const GamesPage = () => {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                 {userGames.map((game) => {
                   // Determine if the user played as white or black
                   const userPlayedAs = game.user_color || 'unknown';
@@ -987,43 +987,55 @@ const GamesPage = () => {
                   return (
                     <div 
                       key={game.id} 
-                      className="bg-gray-700 rounded-lg p-3 border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer"
+                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0"
+                      style={{
+                        backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
+                      }}
+                      onClick={() => router.push(`/analyze?gameId=${game.id}`)}
+                      onMouseDown={(e) => {
+                        e.currentTarget.style.transform = 'scale(0.98)';
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
+                      }}
+                      onMouseUp={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = '';
+                        e.currentTarget.style.boxShadow = '';
+                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
+                      }}
                     >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="text-xs text-gray-400">
-                          {formattedDate}
-                        </div>
-                        {game.platform && (
-                          <div className="text-xs text-gray-500">
-                            {game.platform}
-                          </div>
-                        )}
+                      <div className="text-base font-medium text-white mb-3">
+                        {formattedDate}
                       </div>
                       
-                      <div className="mt-2">
-                        <div className={whitePlayerClass}>
-                          {userPlayedAs === 'white' && (
-                            <span className="inline-block w-2 h-2 rounded-full bg-blue-400 mr-2"></span>
-                          )}
-                          {game.white_player || 'Unknown'}
-                          {game.white_elo && (
-                            <span className="ml-2 text-xs text-gray-400">({game.white_elo})</span>
-                          )}
+                      <div className="mt-2 space-y-2">
+                        <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
+                          <div className="flex items-center space-x-2">
+                            {userPlayedAs === 'white' && (
+                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                            )}
+                            <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
+                          </div>
                         </div>
                         
-                        <div className="text-xs text-gray-500 my-1 flex items-center">
-                          <div className="w-2 mr-2"></div>
-                          vs
+                        <div className="flex items-center justify-center">
+                          <div className="border-t border-gray-600 w-full"></div>
+                          <div className="text-xs text-gray-400 font-medium px-2">vs</div>
+                          <div className="border-t border-gray-600 w-full"></div>
                         </div>
                         
-                        <div className={blackPlayerClass}>
-                          {userPlayedAs === 'black' && (
-                            <span className="inline-block w-2 h-2 rounded-full bg-blue-400 mr-2"></span>
-                          )}
-                          {game.black_player || 'Unknown'}
-                          {game.black_elo && (
-                            <span className="ml-2 text-xs text-gray-400">({game.black_elo})</span>
-                          )}
+                        <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
+                          <div className="flex items-center space-x-2">
+                            {userPlayedAs === 'black' && (
+                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                            )}
+                            <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1184,22 +1196,12 @@ const GamesPage = () => {
                   <span className="text-white font-medium">White:</span>
                   <span className="text-gray-300 flex items-center">
                     {pendingGames[currentGameIndex].whitePlayer || 'Unknown'}
-                    {pendingGames[currentGameIndex].whiteElo && (
-                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
-                        {pendingGames[currentGameIndex].whiteElo}
-                      </span>
-                    )}
                   </span>
                 </div>
                 <div className="flex justify-between mb-2 items-center">
                   <span className="text-white font-medium">Black:</span>
                   <span className="text-gray-300 flex items-center">
                     {pendingGames[currentGameIndex].blackPlayer || 'Unknown'}
-                    {pendingGames[currentGameIndex].blackElo && (
-                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
-                        {pendingGames[currentGameIndex].blackElo}
-                      </span>
-                    )}
                   </span>
                 </div>
                 <div className="flex justify-between">
