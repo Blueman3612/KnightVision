@@ -94,7 +94,7 @@ const Login = () => {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium">
-                      Registration successful! Please sign in with your new account.
+                      Registration successful! Please check your email to confirm your account before signing in.
                     </p>
                   </div>
                 </div>

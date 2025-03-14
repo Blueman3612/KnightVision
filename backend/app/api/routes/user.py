@@ -12,14 +12,14 @@ class UserProfile(BaseModel):
     """User profile model."""
     id: str
     email: EmailStr
-    full_name: Optional[str] = None
+    display_name: Optional[str] = None
     elo_rating: Optional[int] = 1200
     games_played: Optional[int] = 0
     created_at: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     """User profile update model."""
-    full_name: Optional[str] = None
+    display_name: Optional[str] = None
     elo_rating: Optional[int] = None
 
 @router.get("/me", response_model=UserProfile)

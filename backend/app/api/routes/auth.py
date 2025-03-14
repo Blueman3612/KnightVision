@@ -12,7 +12,7 @@ class UserRegisterRequest(BaseModel):
     """User registration request model."""
     email: EmailStr
     password: str = Field(..., min_length=8)
-    full_name: Optional[str] = None
+    display_name: Optional[str] = None
 
 class UserLoginRequest(BaseModel):
     """User login request model."""
@@ -51,7 +51,7 @@ async def register(user_data: UserRegisterRequest):
             user_profile = {
                 "id": response.user.id,
                 "email": user_data.email,
-                "full_name": user_data.full_name,
+                "display_name": user_data.display_name,
             }
             
             supabase.table("users").insert(user_profile).execute()

@@ -71,7 +71,7 @@ const Profile = () => {
         .insert([{
           id: session.user.id,
           email: session.user.email,
-          full_name: session.user.user_metadata?.full_name || 'New User',
+          display_name: session.user.user_metadata?.display_name || session.user.user_metadata?.name || session.user.email.split('@')[0] || 'New User',
           elo_rating: 1200,
           games_played: 0
         }])
@@ -118,7 +118,7 @@ const Profile = () => {
               </svg>
           </div>
             <div>
-              <h2 className="text-2xl font-bold mb-2">{userData?.full_name || 'User'}</h2>
+              <h2 className="text-2xl font-bold mb-2">{userData?.display_name || 'User'}</h2>
               <p className="text-gray-400 mb-1">{session.user.email}</p>
               <p className="text-gray-400">Estimated Rating: {userData?.elo_rating || 'Not available'}</p>
             </div>
