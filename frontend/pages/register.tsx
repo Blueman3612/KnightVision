@@ -13,6 +13,7 @@ const Register = () => {
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,13 +37,26 @@ const Register = () => {
     }
     
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
       });
       
-      if (error) {
-        throw error;
+      if (authError) {
+        throw authError;
+      }
+      
+      // If signup was successful and we have a new user ID, update the display_name
+      if (authData?.user?.id && displayName) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ display_name: displayName })
+          .eq('id', authData.user.id);
+          
+        if (updateError) {
+          console.error('Error updating display name:', updateError);
+          // Continue with registration even if display name update fails
+        }
       }
       
       // Redirect to confirmation page or login
@@ -105,6 +119,17 @@ const Register = () => {
             )}
 
             <form className="space-y-6" onSubmit={handleRegister}>
+              <TextInput
+                id="display-name"
+                name="display-name"
+                type="text"
+                label="Display Name (optional)"
+                autoComplete="name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                fullWidth
+              />
+
               <TextInput
                 id="email"
                 name="email"

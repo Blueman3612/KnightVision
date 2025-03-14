@@ -122,7 +122,7 @@ export const userApi = {
   },
 
   // Update user profile
-  updateProfile: async (data: { full_name?: string; elo_rating?: number }) => {
+  updateProfile: async (data: { display_name?: string; elo_rating?: number }) => {
     const response = await api.patch('/users/me', data);
     return response.data;
   },
@@ -131,8 +131,8 @@ export const userApi = {
 // Auth API
 export const authApi = {
   // Register a new user
-  register: async (email: string, password: string, fullName?: string) => {
-    const response = await api.post('/auth/register', { email, password, full_name: fullName });
+  register: async (email: string, password: string, displayName?: string) => {
+    const response = await api.post('/auth/register', { email, password, display_name: displayName });
     return response.data;
   },
 

@@ -112,6 +112,56 @@ const GamesPage = () => {
     }
   };
 
+  // Update user aliases in the database (separate from state update)
+  const updateUserAliasesInDb = async (newAlias: string) => {
+    if (!session?.user?.id || !newAlias.trim()) return;
+
+    // Don't add if already exists
+    if (userAliases.includes(newAlias)) return;
+
+    const updatedAliases = [...userAliases, newAlias];
+    
+    try {
+      // First, check if the user's display_name is NULL
+      const { data: userData, error: fetchError } = await supabase
+        .from('users')
+        .select('display_name')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (fetchError) {
+        console.error('Error fetching user data:', fetchError);
+      }
+      
+      // If display_name is NULL or empty, set it to this first alias
+      if (!userData?.display_name) {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ 
+            aliases: updatedAliases,
+            display_name: newAlias 
+          })
+          .eq('id', session.user.id);
+          
+        if (updateError) {
+          console.error('Error updating user aliases and display name:', updateError);
+        }
+      } else {
+        // Otherwise just update the aliases
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ aliases: updatedAliases })
+          .eq('id', session.user.id);
+          
+        if (updateError) {
+          console.error('Error updating user aliases:', updateError);
+        }
+      }
+    } catch (err) {
+      console.error('Error with updating aliases:', err);
+    }
+  };
+
   // Determine user color based on player names and aliases
   const determineUserColor = (game: ChessGame, aliasesOverride?: string[]): 'white' | 'black' | null => {
     if (!game.whitePlayer && !game.blackPlayer) return null;
@@ -232,29 +282,6 @@ const GamesPage = () => {
     // Move to the next unconfirmed game
     setPendingGames(updatedGames);
     findNextUnconfirmedGame(updatedGames, 0); // Start from beginning to ensure we don't miss any
-  };
-
-  // Update user aliases in the database (separate from state update)
-  const updateUserAliasesInDb = async (newAlias: string) => {
-    if (!session?.user?.id || !newAlias.trim()) return;
-
-    // Don't add if already exists
-    if (userAliases.includes(newAlias)) return;
-
-    const updatedAliases = [...userAliases, newAlias];
-    
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ aliases: updatedAliases })
-        .eq('id', session.user.id);
-        
-      if (error) {
-        console.error('Error updating user aliases:', error);
-      }
-    } catch (err) {
-      console.error('Error with updating aliases:', err);
-    }
   };
 
   // Find the next game that needs confirmation
@@ -918,20 +945,6 @@ const GamesPage = () => {
                 </div>
               }
               showCloseButton={true} // Show close button as well
-              primaryButton={{
-                label: "I played as White",
-                variant: "outline",
-                onClick: () => confirmPlayerColor('white'),
-                disabled: !pendingGames[currentGameIndex].whitePlayer,
-                className: "bg-white text-gray-900 hover:bg-gray-200 border-gray-300"
-              }}
-              secondaryButton={{
-                label: "I played as Black",
-                variant: "outline",
-                onClick: () => confirmPlayerColor('black'),
-                disabled: !pendingGames[currentGameIndex].blackPlayer,
-                className: "bg-gray-900 text-white hover:bg-gray-800 border-gray-700"
-              }}
             >
               <div className="mb-4 text-center">
                 <p className="text-gray-300">
@@ -979,6 +992,34 @@ const GamesPage = () => {
               <p className="text-center text-xs text-gray-400 italic mb-3">
                 The alias you confirm will be remembered to automatically parse future games
               </p>
+
+              <div className="flex justify-center space-x-4 mt-4">
+                <Button
+                  onClick={() => confirmPlayerColor('black')}
+                  disabled={!pendingGames[currentGameIndex].blackPlayer}
+                  variant="outline"
+                  style={{
+                    backgroundColor: "#000000",
+                    color: "#FFFFFF",
+                    borderColor: "#000000"
+                  }}
+                >
+                  I played as Black
+                </Button>
+                
+                <Button
+                  onClick={() => confirmPlayerColor('white')}
+                  disabled={!pendingGames[currentGameIndex].whitePlayer}
+                  variant="outline"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    color: "#000000",
+                    borderColor: "#CCCCCC"
+                  }}
+                >
+                  I played as White
+                </Button>
+              </div>
             </Modal>
           )}
           

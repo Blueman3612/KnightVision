@@ -28,6 +28,18 @@ A comprehensive web application for personalized chess training that analyzes yo
 - Supabase (PostgreSQL)
 - Supabase Auth
 
+## Recent Updates
+
+### Column Rename: full_name → display_name
+We've renamed the `full_name` column to `display_name` in the users table for better semantic accuracy. This change affects:
+
+- Database schema
+- User profile display
+- Registration and login flows
+- Player confirmations when uploading games
+
+The migration file `supabase/migrations/20240625_fix_user_trigger.sql` updates the necessary triggers to maintain functionality after this change.
+
 ## Getting Started
 
 ### Prerequisites
@@ -68,7 +80,8 @@ A comprehensive web application for personalized chess training that analyzes yo
 
 1. Create a new Supabase project
 2. Run the SQL schema from `backend/app/db/schema.sql` in the Supabase SQL editor
-3. Configure authentication in the Supabase dashboard
+3. Apply any additional migrations from the `supabase/migrations` directory
+4. Configure authentication in the Supabase dashboard
 
 ## Development Workflow
 
@@ -127,6 +140,8 @@ chess-tutor/
 │   ├── types/              # TypeScript type definitions
 │   ├── Dockerfile          # Frontend Docker configuration
 │   └── package.json        # Node.js dependencies
+├── supabase/               # Supabase configuration
+│   └── migrations/         # SQL migration files
 ├── docker-compose.yml      # Docker Compose configuration
 └── README.md               # Project documentation
 ```
