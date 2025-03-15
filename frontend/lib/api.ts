@@ -109,6 +109,21 @@ export const gameApi = {
     return response.data;
   },
 
+  // Process unannotated games 
+  processUnannotatedGames: async (userId: string) => {
+    try {
+      const response = await api.post('/games/process-unannotated', { user_id: userId });
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error processing unannotated games:', error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+      }
+      throw error;
+    }
+  },
+
   // Get best move from Stockfish
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
     try {

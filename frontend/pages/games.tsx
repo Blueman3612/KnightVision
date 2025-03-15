@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
 import supabase from '../lib/supabase';
+import { gameApi } from '../lib/api';
 import { Button, TextInput, Modal } from '../components/ui';
 
 // Define a more comprehensive game type
@@ -87,6 +88,12 @@ const GamesPage = () => {
   const [gamesLoading, setGamesLoading] = useState(false);
   const [gamesPage, setGamesPage] = useState(1);
   const [hasMoreGames, setHasMoreGames] = useState(true);
+  
+  // Add a new state for the confirmation timeout
+  const [confirmationTimeoutId, setConfirmationTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  
+  // Add a processing flag to prevent duplicate uploads
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Redirect if not logged in
   useEffect(() => {
@@ -259,58 +266,90 @@ const GamesPage = () => {
     // Use provided aliases or fall back to state
     const aliases = aliasesOverride || userAliases;
     
-    // Check if either player matches any alias
+    console.log('Determining color for game:', {
+      whitePlayer: game.whitePlayer,
+      blackPlayer: game.blackPlayer,
+      aliases: aliases
+    });
+    
+    // Check if either player matches any alias - use lowercase comparison for case insensitive matching
     if (game.whitePlayer && aliases.some(alias => 
       game.whitePlayer!.toLowerCase() === alias.toLowerCase())) {
+      console.log(`✅ Match found: ${game.whitePlayer} matches an alias, user played as white`);
       return 'white';
     }
     
     if (game.blackPlayer && aliases.some(alias => 
       game.blackPlayer!.toLowerCase() === alias.toLowerCase())) {
+      console.log(`✅ Match found: ${game.blackPlayer} matches an alias, user played as black`);
       return 'black';
     }
     
+    console.log('❌ No match found for either player');
     return null; // No match found
   };
 
   // Process games after confirmation
-  const processConfirmedGames = async () => {
-    if (!session?.user?.id || pendingGames.length === 0) return;
+  const processConfirmedGames = async (gamesToProcess?: ChessGame[]) => {
+    // Use provided games or fall back to state
+    const games = gamesToProcess || pendingGames;
+    console.log('processConfirmedGames called with', games.length, 'games');
+    
+    if (!session?.user?.id || games.length === 0) {
+      console.log('Aborting processConfirmedGames: no session user or no pending games');
+      setIsProcessing(false);
+      return;
+    }
     
     setLoading(true);
     setMessage({ text: 'Uploading confirmed games...', type: 'info' });
+    console.log('Set loading state and updated message to uploading');
     
     try {
       // Prepare games for insertion
-      const gamesToInsert = pendingGames.map(game => prepareGameForInsert(game, session.user.id));
+      console.log('Preparing games for insertion...');
+      const gamesToInsert = games.map(game => prepareGameForInsert(game, session.user.id));
+      console.log('Prepared', gamesToInsert.length, 'games for insertion');
       
       // Process in batches of 50 to stay within limits
       const batchSize = 50;
       let successCount = 0;
       let errorCount = 0;
       
+      console.log('Starting batch uploads with batch size', batchSize);
       for (let i = 0; i < gamesToInsert.length; i += batchSize) {
         const batch = gamesToInsert.slice(i, i + batchSize);
+        console.log(`Processing batch ${Math.floor(i/batchSize) + 1} with ${batch.length} games`);
         
-        const { error: insertError } = await supabase
-          .from('games')
-          .insert(batch);
-          
-        if (insertError) {
+        try {
+          const { error: insertError } = await supabase
+            .from('games')
+            .insert(batch);
+            
+          if (insertError) {
+            errorCount += batch.length;
+            console.error('Error inserting batch:', insertError);
+          } else {
+            successCount += batch.length;
+            console.log(`Successfully inserted batch, total success count: ${successCount}`);
+          }
+        } catch (batchError) {
+          console.error('Exception during batch insert:', batchError);
           errorCount += batch.length;
-          console.error('Error inserting batch:', insertError);
-        } else {
-          successCount += batch.length;
         }
         
         // Update progress
         setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
+        console.log(`Upload progress: ${Math.round(((i + batch.length) / gamesToInsert.length) * 100)}%`);
       }
       
-      setMessage({ 
-        text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors`,
-        type: errorCount > 0 ? 'error' : 'success'
-      });
+      // Only show error message immediately if there were errors
+      if (errorCount > 0) {
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors`,
+          type: 'error'
+        });
+      }
       
       // Reset state
       setPendingGames([]);
@@ -319,10 +358,32 @@ const GamesPage = () => {
       
       // Update game count after successful upload
       fetchGameCount();
+      
+      // Call the processUnannotatedGames API after successful upload
+      if (session?.user?.id) {
+        try {
+          await gameApi.processUnannotatedGames(session.user.id);
+          console.log('✅ Triggered analysis of unannotated games');
+          
+          // Add notification about background processing
+          setMessage({ 
+            text: `${successCount} games uploaded. Analysis has been started in the background.`,
+            type: 'success'
+          });
+        } catch (analysisError) {
+          console.error('Error triggering game analysis:', analysisError);
+          // Still show success for upload but mention analysis couldn't be started
+          setMessage({ 
+            text: `${successCount} games uploaded. Game analysis could not be started automatically.`,
+            type: 'success'
+          });
+        }
+      }
     } catch (err) {
       setMessage({ text: 'Error uploading games: ' + (err as Error).message, type: 'error' });
     } finally {
       setLoading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -374,20 +435,74 @@ const GamesPage = () => {
     findNextUnconfirmedGame(updatedGames, 0); // Start from beginning to ensure we don't miss any
   };
 
-  // Find the next game that needs confirmation
+  // Modify the findNextUnconfirmedGame function to include a timeout
   const findNextUnconfirmedGame = (games: ChessGame[], startIndex: number) => {
-    for (let i = startIndex; i < games.length; i++) {
-      if (!games[i].user_color) {
-        setCurrentGameIndex(i);
-        setShowPlayerConfirmation(true);
+    try {
+      console.log(`Finding next unconfirmed game starting from index ${startIndex} out of ${games.length} games`);
+      
+      // Clear any existing timeout
+      if (confirmationTimeoutId) {
+        clearTimeout(confirmationTimeoutId);
+        setConfirmationTimeoutId(null);
+      }
+      
+      let unconfirmedCount = 0;
+      for (let i = 0; i < games.length; i++) {
+        if (!games[i].user_color) {
+          unconfirmedCount++;
+        }
+      }
+      console.log(`Total unconfirmed games: ${unconfirmedCount}`);
+      
+      // If no unconfirmed games found, just process all games
+      if (unconfirmedCount === 0) {
+        console.log('No unconfirmed games found in findNextUnconfirmedGame, proceeding to upload');
+        setCurrentGameIndex(-1);
+        setShowPlayerConfirmation(false);
+        handleAllGamesColored(games);
         return;
       }
+      
+      for (let i = startIndex; i < games.length; i++) {
+        if (!games[i].user_color) {
+          console.log(`Found unconfirmed game at index ${i}: Event: ${games[i].event}, White: ${games[i].whitePlayer}, Black: ${games[i].blackPlayer}`);
+          setCurrentGameIndex(i);
+          setShowPlayerConfirmation(true);
+          
+          // Set a timeout to force proceed if the confirmation modal doesn't appear
+          const timeoutId = setTimeout(() => {
+            console.log('⚠️ Player confirmation timeout - forcing upload');
+            // Force setting user colors to prevent getting stuck
+            const updatedGames = [...games];
+            for (let j = 0; j < updatedGames.length; j++) {
+              if (!updatedGames[j].user_color) {
+                // Default to playing as white if we don't know
+                updatedGames[j].user_color = 'white';
+              }
+            }
+            setPendingGames(updatedGames);
+            setCurrentGameIndex(-1);
+            setShowPlayerConfirmation(false);
+            setTimeout(() => processConfirmedGames(updatedGames), 50);
+          }, 5000); // 5 second timeout
+          
+          setConfirmationTimeoutId(timeoutId);
+          return;
+        }
+      }
+      
+      // No more games to confirm, process all games
+      console.log('No more unconfirmed games found, proceeding to upload');
+      setCurrentGameIndex(-1);
+      setShowPlayerConfirmation(false);
+      handleAllGamesColored(games);
+    } catch (error) {
+      console.error('Error in findNextUnconfirmedGame:', error);
+      // If there's an error, try to continue with uploading anyway
+      setCurrentGameIndex(-1);
+      setShowPlayerConfirmation(false);
+      handleAllGamesColored(games); 
     }
-    
-    // No more games to confirm, process all games
-    setCurrentGameIndex(-1);
-    setShowPlayerConfirmation(false);
-    processConfirmedGames();
   };
 
   // Fetch total game count
@@ -572,15 +687,27 @@ const GamesPage = () => {
         if (unconfirmedGames.length > 0) {
           // Some games need player confirmation
           setPendingGames(gamesWithColor);
-          setMessage({ 
-            text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
-            type: 'info'
-          });
-          findNextUnconfirmedGame(gamesWithColor, 0);
+          
+          // If we have no aliases at all, we need to ask for at least one
+          if (userAliases.length === 0) {
+            console.log('No aliases configured yet, proceeding to confirmation');
+            setMessage({ 
+              text: `Please confirm which player you are in the games.`,
+              type: 'info'
+            });
+            findNextUnconfirmedGame(gamesWithColor, 0);
+          } else {
+            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
+            setMessage({ 
+              text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
+              type: 'info'
+            });
+            findNextUnconfirmedGame(gamesWithColor, 0);
+          }
         } else {
           // All games have user_color determined, proceed with upload
-          setPendingGames(gamesWithColor);
-          processConfirmedGames();
+          console.log('All games have user color determined automatically, proceeding to upload');
+          handleAllGamesColored(gamesWithColor);
         }
         
         // Calculate final metrics
@@ -852,15 +979,27 @@ const GamesPage = () => {
         if (unconfirmedGames.length > 0) {
           // Some games need player confirmation
           setPendingGames(gamesWithColor);
-          setMessage({ 
-            text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
-            type: 'info'
-          });
-          findNextUnconfirmedGame(gamesWithColor, 0);
+          
+          // If we have no aliases at all, we need to ask for at least one
+          if (userAliases.length === 0) {
+            console.log('No aliases configured yet, proceeding to confirmation');
+            setMessage({ 
+              text: `Please confirm which player you are in the games.`,
+              type: 'info'
+            });
+            findNextUnconfirmedGame(gamesWithColor, 0);
+          } else {
+            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
+            setMessage({ 
+              text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
+              type: 'info'
+            });
+            findNextUnconfirmedGame(gamesWithColor, 0);
+          }
         } else {
           // All games have user_color determined, proceed with upload
-          setPendingGames(gamesWithColor);
-          processConfirmedGames();
+          console.log('All games have user color determined automatically, proceeding to upload');
+          handleAllGamesColored(gamesWithColor);
         }
         
         // Calculate final metrics
@@ -892,8 +1031,24 @@ const GamesPage = () => {
     }
   };
 
+  // Add cleanup for the confirmation timeout
+  useEffect(() => {
+    return () => {
+      // Clean up the timeout when the component unmounts
+      if (confirmationTimeoutId) {
+        clearTimeout(confirmationTimeoutId);
+      }
+    };
+  }, [confirmationTimeoutId]);
+
   // Add this cancel upload function
   const cancelUpload = () => {
+    // Clear timeout if active
+    if (confirmationTimeoutId) {
+      clearTimeout(confirmationTimeoutId);
+      setConfirmationTimeoutId(null);
+    }
+    
     // Clear all upload state
     setPendingGames([]);
     setCurrentGameIndex(-1);
@@ -905,6 +1060,33 @@ const GamesPage = () => {
       text: 'Game upload canceled', 
       type: 'info' 
     });
+  };
+
+  // This function is causing issues, let's wrap it in a try-catch and add more logging
+  const handleAllGamesColored = (gamesWithColor: ChessGame[]) => {
+    console.log('handleAllGamesColored called with', gamesWithColor.length, 'games');
+    
+    if (isProcessing) {
+      console.log('Upload already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    try {
+      setIsProcessing(true);
+      console.log('All games have user color determined automatically, proceeding to upload');
+      setTimeout(() => {
+        console.log('Starting processConfirmedGames after delay');
+        processConfirmedGames(gamesWithColor);
+      }, 50);
+    } catch (error) {
+      console.error('Error in handleAllGamesColored:', error);
+      setMessage({ 
+        text: 'Error preparing games for upload',
+        type: 'error'
+      });
+      setLoading(false);
+      setIsProcessing(false);
+    }
   };
 
   if (!session) {
