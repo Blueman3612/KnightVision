@@ -29,6 +29,34 @@ interface ChessGame {
   user_color?: 'white' | 'black';
 }
 
+// Define a database game type
+interface DBChessGame {
+  id: string;
+  user_id: string;
+  pgn: string;
+  result: string;
+  analyzed: boolean;
+  created_at: string;
+  event?: string;
+  site?: string;
+  game_date?: string;
+  round?: string;
+  white_player?: string;
+  black_player?: string;
+  white_elo?: number;
+  black_elo?: number;
+  eco?: string;
+  time_control?: string;
+  termination?: string;
+  game_link?: string;
+  unique_game_id: string;
+  moves_only?: string;
+  end_time?: string;
+  start_time?: string;
+  platform?: string;
+  user_color?: 'white' | 'black';
+}
+
 const GamesPage = () => {
   const router = useRouter();
   const session = useSession();
@@ -54,6 +82,12 @@ const GamesPage = () => {
   // Add a ref for the file input with proper typing
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
+  // Add state for user's games
+  const [userGames, setUserGames] = useState<DBChessGame[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(false);
+  const [gamesPage, setGamesPage] = useState(1);
+  const [hasMoreGames, setHasMoreGames] = useState(true);
+  
   // Redirect if not logged in
   useEffect(() => {
     if (!session) {
@@ -61,6 +95,7 @@ const GamesPage = () => {
     } else {
       fetchGameCount();
       fetchUserAliases();
+      fetchUserGames();
     }
   }, [session, router]);
 
@@ -85,6 +120,61 @@ const GamesPage = () => {
     } catch (err) {
       console.error('Error with user aliases:', err);
     }
+  };
+
+  // Fetch user's games from the database with pagination
+  const fetchUserGames = async (page = 1, pageSize = 12) => {
+    if (!session?.user?.id) return;
+    
+    setGamesLoading(true);
+    
+    try {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('game_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false }) // Fallback to created_at if game_date is null
+        .range(from, to);
+      
+      if (error) {
+        console.error('Error fetching games:', error);
+        setMessage({
+          text: `Error fetching games: ${error.message}`,
+          type: 'error'
+        });
+      } else {
+        if (data.length < pageSize) {
+          setHasMoreGames(false);
+        }
+        
+        // If it's the first page, replace all games
+        // Otherwise append to existing games
+        if (page === 1) {
+          setUserGames(data);
+        } else {
+          setUserGames(prevGames => [...prevGames, ...data]);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching games:', err);
+      setMessage({
+        text: `Error fetching games: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        type: 'error'
+      });
+    } finally {
+      setGamesLoading(false);
+    }
+  };
+  
+  // Load more games
+  const loadMoreGames = () => {
+    const nextPage = gamesPage + 1;
+    setGamesPage(nextPage);
+    fetchUserGames(nextPage);
   };
 
   // Update user aliases in the database
@@ -829,6 +919,147 @@ const GamesPage = () => {
       </Head>
       
       <div className="w-full max-w-4xl px-4 py-8">
+        {/* Games List Section */}
+        <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold text-white">My Chess Games</h2>
+            <div className="text-sm text-gray-400">
+              {gameCount !== null ? `${gameCount} games total` : 'Loading...'}
+            </div>
+          </div>
+          
+          {userGames.length === 0 ? (
+            <div className="text-center py-10">
+              {gamesLoading ? (
+                <div className="flex flex-col items-center">
+                  <svg className="animate-spin h-8 w-8 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-gray-400">Loading your games...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-gray-400 mb-2">No games found</p>
+                  <p className="text-gray-500 text-sm">Upload your first game below</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                {userGames.map((game) => {
+                  // Determine if the user played as white or black
+                  const userPlayedAs = game.user_color || 'unknown';
+                  
+                  // Format the date
+                  const formattedDate = game.game_date 
+                    ? new Date(game.game_date).toLocaleDateString() 
+                    : 'Unknown date';
+                  
+                  // Determine the winner for highlighting
+                  let whitePlayerClass = 'text-gray-300';
+                  let blackPlayerClass = 'text-gray-300';
+                  
+                  if (game.result === '1-0') {
+                    // White won
+                    whitePlayerClass = 'text-green-400 font-medium';
+                  } else if (game.result === '0-1') {
+                    // Black won
+                    blackPlayerClass = 'text-green-400 font-medium';
+                  } else if (game.result === '1/2-1/2') {
+                    // Draw - highlight both
+                    whitePlayerClass = 'text-yellow-400 font-medium';
+                    blackPlayerClass = 'text-yellow-400 font-medium';
+                  }
+                  
+                  // Add indicator for user's color
+                  if (userPlayedAs === 'white') {
+                    whitePlayerClass += ' flex items-center';
+                  }
+                  if (userPlayedAs === 'black') {
+                    blackPlayerClass += ' flex items-center';
+                  }
+                  
+                  return (
+                    <div 
+                      key={game.id} 
+                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0"
+                      style={{
+                        backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
+                      }}
+                      onClick={() => router.push(`/analyze?gameId=${game.id}`)}
+                      onMouseDown={(e) => {
+                        e.currentTarget.style.transform = 'scale(0.98)';
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
+                      }}
+                      onMouseUp={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = '';
+                        e.currentTarget.style.boxShadow = '';
+                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
+                      }}
+                    >
+                      <div className="text-base font-medium text-white mb-3">
+                        {formattedDate}
+                      </div>
+                      
+                      <div className="mt-2 space-y-2">
+                        <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
+                          <div className="flex items-center space-x-2">
+                            {userPlayedAs === 'white' && (
+                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                            )}
+                            <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-center">
+                          <div className="border-t border-gray-600 w-full"></div>
+                          <div className="text-xs text-gray-400 font-medium px-2">vs</div>
+                          <div className="border-t border-gray-600 w-full"></div>
+                        </div>
+                        
+                        <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
+                          <div className="flex items-center space-x-2">
+                            {userPlayedAs === 'black' && (
+                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                            )}
+                            <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {hasMoreGames && (
+                <div className="mt-4 text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadMoreGames}
+                    isLoading={gamesLoading}
+                    disabled={gamesLoading}
+                  >
+                    Load More Games
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        
         <div className="bg-gray-800 shadow-lg rounded-lg p-6 mb-8 text-gray-100">
           <h2 className="text-xl font-semibold mb-4 text-white">Upload Chess Games</h2>
           <p className="mb-4 text-gray-300">
@@ -965,22 +1196,12 @@ const GamesPage = () => {
                   <span className="text-white font-medium">White:</span>
                   <span className="text-gray-300 flex items-center">
                     {pendingGames[currentGameIndex].whitePlayer || 'Unknown'}
-                    {pendingGames[currentGameIndex].whiteElo && (
-                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
-                        {pendingGames[currentGameIndex].whiteElo}
-                      </span>
-                    )}
                   </span>
                 </div>
                 <div className="flex justify-between mb-2 items-center">
                   <span className="text-white font-medium">Black:</span>
                   <span className="text-gray-300 flex items-center">
                     {pendingGames[currentGameIndex].blackPlayer || 'Unknown'}
-                    {pendingGames[currentGameIndex].blackElo && (
-                      <span className="ml-2 px-2 py-0.5 bg-gray-600 rounded text-xs">
-                        {pendingGames[currentGameIndex].blackElo}
-                      </span>
-                    )}
                   </span>
                 </div>
                 <div className="flex justify-between">

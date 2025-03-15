@@ -139,6 +139,7 @@ declare module 'chess.js' {
     // Other methods
     history(): string[];
     load(fen: string): boolean;
+    loadPgn(pgn: string): boolean;
     
     // Position inquiry
     get(square: string): any;
