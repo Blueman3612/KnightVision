@@ -237,9 +237,17 @@ function TutorPage() {
   // State for menu toggle
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   
+  // Reference for the hamburger button
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  
   // Handle click outside to close menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Skip if click was on the button - this is handled by handleButtonClick
+      if (menuButtonRef.current && menuButtonRef.current.contains(event.target as Node)) {
+        return;
+      }
+      
       // Close menu when clicking outside
       if (menuOpen) {
         setMenuOpen(false);
@@ -260,6 +268,12 @@ function TutorPage() {
     e.stopPropagation();
   };
 
+  // Handle button click
+  const handleButtonClick = (e: any) => {
+    e.stopPropagation();
+    setMenuOpen(!menuOpen);
+  };
+
   // If not logged in, show nothing (will redirect)
   if (!session) {
     return null;
@@ -275,8 +289,9 @@ function TutorPage() {
           <div className="absolute top-2 right-2 z-20">
             <div className="relative" onClick={handleMenuClick}>
               <button 
-                onClick={() => setMenuOpen(!menuOpen)} 
-                className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                ref={menuButtonRef}
+                onClick={handleButtonClick}
+                className="absolute right-1 cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -284,7 +299,7 @@ function TutorPage() {
               </button>
               
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                <div className="absolute top-8 right-1 top-full mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
                   <div className="py-1">
                     <button 
                       onClick={flipBoard}
