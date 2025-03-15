@@ -21,7 +21,7 @@ class StockfishService:
         self.threads = settings.STOCKFISH_THREADS
         self._engine = None
         self._engine_pool = []
-        self._max_engines = 3  # Maximum number of engine instances to create
+        self._max_engines = 6  # Maximum number of engine instances to create
         self._engine_locks = []  # Locks to control access to each engine
         
     async def _get_engine(self) -> chess.engine.SimpleEngine:
