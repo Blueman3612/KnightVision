@@ -51,6 +51,32 @@ function Chessboard({
   const previousEvalRef = useRef<number | null>(null);
   const currentEvalRef = useRef<number | null>(null);
   
+  // Utility to safely update evaluation references
+  const updateEvaluation = async (fen: string, target: { current: number | null }) => {
+    try {
+      console.log(`Updating evaluation for position: ${fen}`);
+      const eval_score = await evaluatePosition(fen);
+      
+      console.log(`Received evaluation score: ${eval_score}`);
+      
+      if (eval_score !== null) {
+        // Make sure we have a finite number
+        const safeScore = isFinite(eval_score) ? eval_score : 0;
+        target.current = safeScore;
+        return safeScore;
+      } else {
+        console.error("Evaluation returned null or undefined");
+        target.current = 0;
+        return 0;
+      }
+    } catch (error) {
+      console.error("Error updating evaluation:", error);
+      // Set a safe default
+      target.current = 0;
+      return 0;
+    }
+  };
+  
   // Function to calculate legal moves for the current position
   function calculateDests() {
     const dests = new Map();
@@ -77,7 +103,18 @@ function Chessboard({
   async function evaluatePosition(fen: string) {
     try {
       const response = await gameApi.evaluatePosition(fen, 12); // Use standard depth of 12
-      const score = response.score;
+      
+      // Log the full response to debug
+      console.log("Evaluation response:", response);
+      
+      // The API returns 'evaluation', not 'score'
+      const score = response.evaluation;
+      
+      // Validate that score is a number
+      if (score === undefined || score === null || isNaN(score)) {
+        console.error("Invalid score from evaluation:", score);
+        return 0; // Return a safe default
+      }
       
       // Get the current turn from the FEN string
       const turn = fen.split(' ')[1]; // 'w' for white, 'b' for black
@@ -88,7 +125,7 @@ function Chessboard({
       return turn === 'b' ? -score : score;
     } catch (error) {
       console.error("Error evaluating position:", error);
-      return null;
+      return 0; // Return 0 instead of null to avoid NaN in calculations
     }
   }
   
@@ -108,8 +145,16 @@ function Chessboard({
         
         // Calculate eval change if we have previous evaluation
         if (previousEvalRef.current !== null && currentEvalRef.current !== null) {
+          // Verify we're not using stale data - previousEvalRef should represent the eval
+          // after the computer's last move and before the player's move
           evalChange = currentEvalRef.current - previousEvalRef.current;
           console.log(`Eval change: ${evalChange} (prev: ${previousEvalRef.current}, current: ${currentEvalRef.current})`);
+          
+          // Validate that evalChange is a proper number before proceeding
+          if (isNaN(evalChange) || !isFinite(evalChange)) {
+            console.error("Invalid eval change detected:", evalChange);
+            evalChange = 0; // Use a safe default value
+          }
           
           // For even-move, we need to adjust the eval change
           // from the perspective of the player who just moved
@@ -156,9 +201,10 @@ function Chessboard({
             }
           }, 50);
           
-          // Get the evaluation after engine move
-          const postMoveEval = await evaluatePosition(chess.fen());
-          previousEvalRef.current = postMoveEval;
+          // Get the evaluation after engine move - this will be the reference point
+          // BEFORE the player's next move
+          await updateEvaluation(chess.fen(), previousEvalRef);
+          console.log("Position evaluation after computer move:", previousEvalRef.current);
         }
       } catch (apiError) {
         console.error("Stockfish API error, using fallback:", apiError);
@@ -204,11 +250,10 @@ function Chessboard({
     try {
       // Store the evaluation before the player's move
       const chess = chessRef.current;
+      console.log("Player move:", from, "to", to);
       
-      // Store previous evaluation as reference point
-      if (previousEvalRef.current !== null) {
-        previousEvalRef.current = currentEvalRef.current;
-      }
+      // IMPORTANT: previousEvalRef holds the evaluation BEFORE player's move
+      // It should not be updated here, as it's already set after computer's move
       
       // Try to make the move in chess.js
       const moveResult = chess.move({
@@ -222,8 +267,10 @@ function Chessboard({
         return false;
       }
       
-      // Evaluate the position after player's move
-      currentEvalRef.current = await evaluatePosition(chess.fen());
+      // Evaluate the position after player's move - this will be compared to previousEvalRef
+      // to determine how much the position changed due to player's move
+      await updateEvaluation(chess.fen(), currentEvalRef);
+      console.log("New evaluation after player move:", currentEvalRef.current);
       
       // Call onMove callback if provided
       if (onMove) {
@@ -373,26 +420,29 @@ function Chessboard({
   
   // Initialize the evaluation when the board is first set up
   useEffect(() => {
-    // Wait briefly for the board to be initialized
-    const timer = setTimeout(() => {
+    if (!hasInitializedRef.current) {
+      updateChessground();
+      hasInitializedRef.current = true;
+      
+      // Initialize evaluation references
       const initEvaluation = async () => {
         try {
-          if (!hasInitializedRef.current) return;
+          // Set both references to the same initial evaluation
+          await updateEvaluation(chessRef.current.fen(), previousEvalRef);
+          currentEvalRef.current = previousEvalRef.current;
           
-          const initialEval = await evaluatePosition(chessRef.current.fen());
-          previousEvalRef.current = initialEval;
-          currentEvalRef.current = initialEval;
-          console.log(`Initial position evaluation: ${initialEval}`);
+          console.log("Evaluation tracking initialized - both refs set to:", previousEvalRef.current);
         } catch (error) {
           console.error("Error initializing evaluation:", error);
+          // Set safe defaults
+          previousEvalRef.current = 0;
+          currentEvalRef.current = 0;
         }
       };
       
       initEvaluation();
-    }, 500); // Give the board time to initialize
-    
-    return () => clearTimeout(timer);
-  }, [hasInitializedRef.current]);
+    }
+  }, []);
   
   return (
     <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>

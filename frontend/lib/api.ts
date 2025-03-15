@@ -23,7 +23,7 @@ const isVercel = typeof window !== 'undefined' && window.location.hostname.inclu
 let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Force local URL if we're in development/Docker
-if (isDevelopment || isDocker) {
+if (isDevelopment || isDocker || !apiUrl) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
 } 
@@ -132,6 +132,17 @@ export const gameApi = {
   // Get adaptive "even move" from Stockfish
   getEvenMove: async (fen: string, evalChange: number, skillLevel: number = 20, moveTime: number = 1.0) => {
     try {
+      // Pre-validate parameters to help debug
+      if (!fen || typeof fen !== 'string') {
+        console.error('❌ Invalid FEN parameter:', fen);
+        throw new Error('Invalid FEN parameter');
+      }
+      
+      if (evalChange === undefined || evalChange === null || isNaN(evalChange) || !isFinite(evalChange)) {
+        console.error('❌ Invalid evalChange parameter:', evalChange);
+        throw new Error('Invalid evalChange parameter');
+      }
+      
       const response = await api.post('/games/even-move', { 
         fen, 
         eval_change: evalChange,
@@ -145,6 +156,12 @@ export const gameApi = {
       if (error.response) {
         console.error('Response data:', error.response.data);
         console.error('Response status:', error.response.status);
+        console.error('Request data sent:', {
+          fen,
+          eval_change: evalChange,
+          skill_level: skillLevel,
+          move_time: moveTime
+        });
       }
       throw error;
     }
@@ -152,8 +169,33 @@ export const gameApi = {
 
   // Evaluate a position
   evaluatePosition: async (fen: string, depth?: number) => {
-    const response = await api.post('/games/evaluate', { fen, depth });
-    return response.data;
+    try {
+      if (!fen || typeof fen !== 'string') {
+        console.error('❌ Invalid FEN parameter for evaluation:', fen);
+        throw new Error('Invalid FEN parameter');
+      }
+      
+      const response = await api.post('/games/evaluate', { fen, depth });
+      
+      // Log the response for debugging
+      console.log('Evaluation API response:', response.data);
+      
+      if (!response.data || response.data.evaluation === undefined) {
+        console.error('❌ Invalid evaluation response format:', response.data);
+        throw new Error('Invalid response format from evaluation endpoint');
+      }
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error evaluating position:', error);
+      // Log additional detail if it's an axios error
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+        console.error('Request data sent:', { fen, depth });
+      }
+      throw error;
+    }
   },
 };
 
