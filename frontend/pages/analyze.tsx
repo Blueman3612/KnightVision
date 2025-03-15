@@ -287,26 +287,59 @@ const AnalyzePage = () => {
                 />
               </div>
               
-              {/* Evaluation bar - now as absolute overlay that doesn't affect layout */}
-              <div className="absolute left-0 top-0 bottom-0 w-6 bg-gray-200 z-10 flex flex-col pointer-events-none">
-                {/* Black side (top) */}
-                <div 
-                  className="bg-gray-800 w-full transition-height duration-300 ease-out"
-                  style={{ 
-                    height: `${calculateEvalBarHeight(evaluation)}%`,
-                    borderBottom: '1px solid #666' 
-                  }}
-                ></div>
-                {/* White side (bottom) */}
-                <div className="bg-white flex-grow"></div>
+              {/* Evaluation bar - now as absolute overlay with proper spacing */}
+              <div 
+                className="absolute top-0 bottom-0 w-8 flex flex-col z-10"
+                style={{ 
+                  left: '-16px', 
+                  transform: 'translateX(-100%)',
+                  borderRadius: '3px',
+                  overflow: 'visible'
+                }}
+              >
+                <div className="relative h-full w-full overflow-hidden rounded-[3px] shadow-sm">
+                  {/* Black side (top) */}
+                  <div 
+                    className="absolute top-0 left-0 right-0 transition-height duration-300 ease-out"
+                    style={{ 
+                      height: `${calculateEvalBarHeight(evaluation)}%`,
+                      background: 'linear-gradient(to bottom, #252525, #3e3e3e)'
+                    }}
+                  ></div>
+                  {/* White side (bottom) */}
+                  <div 
+                    className="absolute bottom-0 left-0 right-0"
+                    style={{
+                      height: `${100 - calculateEvalBarHeight(evaluation)}%`,
+                      background: 'linear-gradient(to bottom, #ffffff, #d8d8d8)'
+                    }}
+                  ></div>
+                  
+                  {/* Divider line between colors */}
+                  <div 
+                    className="absolute left-0 right-0 h-px bg-gray-400"
+                    style={{ 
+                      top: `${calculateEvalBarHeight(evaluation)}%`
+                    }}
+                  ></div>
+                </div>
                 
-                {/* Evaluation text */}
+                {/* Evaluation number - positioned in the center of the bar */}
                 <div 
-                  className="absolute left-0 right-0 flex items-center justify-center text-xs font-bold"
+                  className="absolute flex items-center justify-center text-xs font-medium"
                   style={{
-                    top: `calc(${calculateEvalBarHeight(evaluation)}% - 10px)`,
-                    color: calculateEvalBarHeight(evaluation) < 50 ? 'white' : 'black',
-                    textShadow: '0px 0px 2px rgba(0,0,0,0.5)'
+                    left: '50%',
+                    top: `${calculateEvalBarHeight(evaluation)}%`,
+                    transform: 'translate(-50%, -50%)',
+                    height: '18px',
+                    minWidth: '36px',
+                    paddingLeft: '8px',
+                    paddingRight: '8px',
+                    background: 'white',
+                    color: '#333',
+                    borderRadius: '9px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                    zIndex: 20
                   }}
                 >
                   {isEvaluating ? (
@@ -317,7 +350,7 @@ const AnalyzePage = () => {
                 </div>
               </div>
               
-              {/* Chessboard wrapper with perfect square ratio - remove padding-left */}
+              {/* Chessboard wrapper */}
               <div className="h-full w-full">
                 <Chessboard
                   fen={currentFen}
