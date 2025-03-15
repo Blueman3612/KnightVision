@@ -547,6 +547,9 @@ async def get_even_move(request: EvenMoveRequest):
     This is ideal for beginner-friendly responses that don't immediately punish mistakes.
     
     All position evaluations use the standard depth of 12 for consistency.
+    This endpoint uses a two-phase evaluation approach for better performance:
+    1. First, all moves are evaluated at a shallow depth for quick filtering
+    2. Then, only the most promising candidates are evaluated at full depth
     
     Args:
         request: Even move request with FEN, evaluation change, and options
@@ -555,73 +558,23 @@ async def get_even_move(request: EvenMoveRequest):
         EvenMoveResponse: Selected move that aims for the target evaluation
     """
     try:
-        board = chess.Board(request.fen)
-        
-        # If game is already over, return error
-        if board.is_game_over():
-            raise HTTPException(status_code=400, detail="Game is already over")
-            
-        # Get current position evaluation
-        current_eval_result = await stockfish_service.evaluate_position(request.fen)
-        current_eval = current_eval_result["evaluation"]
-        
-        # Calculate target evaluation (add eval_change to current evaluation)
-        # If player blundered (negative eval_change), we aim for a less crushing response
-        target_eval = current_eval + request.eval_change
-        
-        # Get all legal moves
-        legal_moves = list(board.legal_moves)
-        
-        if not legal_moves:
-            raise HTTPException(status_code=400, detail="No legal moves available")
-            
-        # Find the move that results in evaluation closest to target
-        best_move = None
-        best_eval = None
-        best_eval_diff = float('inf')
-        
-        # For each legal move, evaluate the resulting position
-        for move in legal_moves:
-            # Make the move on a copy of the board
-            temp_board = board.copy()
-            temp_board.push(move)
-            
-            # Get evaluation after move
-            move_result = await stockfish_service.evaluate_position(temp_board.fen())
-            
-            # Get evaluation from engine's perspective and convert to our perspective
-            # We need to negate here since evaluations flip between moves
-            move_eval = -move_result["evaluation"]
-            
-            # Calculate difference from target
-            eval_diff = abs(move_eval - target_eval)
-            
-            # If this move is closer to target than any previous move, save it
-            if eval_diff < best_eval_diff:
-                best_eval_diff = eval_diff
-                best_move = move
-                best_eval = move_eval
-        
-        if not best_move:
-            # Fallback to best move if we couldn't find a suitable move
-            best_move_result = await stockfish_service.get_best_move(
-                request.fen, 
-                skill_level=request.skill_level,
-                move_time=request.move_time
-            )
-            best_move = chess.Move.from_uci(best_move_result["move"])
-            best_eval = best_move_result["evaluation"]
-            best_eval_diff = abs(best_eval - target_eval)
-            
-        return EvenMoveResponse(
-            move=best_move.uci(),
-            evaluation=best_eval,
-            target_eval=target_eval,
-            eval_difference=best_eval_diff
+        # Call the optimized service method that implements the two-phase evaluation approach
+        result = await stockfish_service.get_even_move(
+            fen=request.fen,
+            eval_change=request.eval_change,
+            skill_level=request.skill_level,
+            move_time=request.move_time
         )
         
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid FEN format")
+        return EvenMoveResponse(
+            move=result["move"],
+            evaluation=result["evaluation"],
+            target_eval=result["target_eval"],
+            eval_difference=result["eval_difference"]
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logging.error(f"Error getting even move: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Engine error: {str(e)}")
