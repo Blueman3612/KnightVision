@@ -336,6 +336,15 @@ function TutorPage() {
             </div>
           </div>
           <div className="w-full h-full">
+            {/* 
+              The Chess Tutor's adaptive learning system:
+              - Uses the "even-move" endpoint for a more forgiving learning experience
+              - Tracks position evaluation before and after player moves
+              - When player makes a mistake, engine responds with a move that maintains
+                relative evaluation instead of maximizing advantage
+              - This gives players opportunity to recover and learn from mistakes
+              - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
+            */}
             <Chessboard 
               fen={fen} 
               onMove={handleMove}

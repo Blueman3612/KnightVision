@@ -106,6 +106,27 @@ export const gameApi = {
     }
   },
 
+  // Get adaptive "even move" from Stockfish
+  getEvenMove: async (fen: string, evalChange: number, skillLevel: number = 20, moveTime: number = 1.0) => {
+    try {
+      const response = await api.post('/games/even-move', { 
+        fen, 
+        eval_change: evalChange,
+        skill_level: skillLevel, 
+        move_time: moveTime 
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error getting even move:', error);
+      // Log additional detail if it's an axios error
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+      }
+      throw error;
+    }
+  },
+
   // Evaluate a position
   evaluatePosition: async (fen: string, depth?: number) => {
     const response = await api.post('/games/evaluate', { fen, depth });

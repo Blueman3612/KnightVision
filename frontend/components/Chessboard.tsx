@@ -47,6 +47,10 @@ function Chessboard({
   const currentFenRef = useRef(fen);
   const currentOrientationRef = useRef(orientation);
   
+  // Track position evaluation before player's move
+  const previousEvalRef = useRef<number | null>(null);
+  const currentEvalRef = useRef<number | null>(null);
+  
   // Function to calculate legal moves for the current position
   function calculateDests() {
     const dests = new Map();
@@ -69,6 +73,25 @@ function Chessboard({
     return dests;
   }
   
+  // Function to evaluate the current position
+  async function evaluatePosition(fen: string) {
+    try {
+      const response = await gameApi.evaluatePosition(fen, 12); // Use standard depth of 12
+      const score = response.score;
+      
+      // Get the current turn from the FEN string
+      const turn = fen.split(' ')[1]; // 'w' for white, 'b' for black
+      
+      // Normalize the score from the engine's perspective
+      // Engine always returns positive scores as good for the side to move
+      // We want to normalize to white's perspective: positive = good for white
+      return turn === 'b' ? -score : score;
+    } catch (error) {
+      console.error("Error evaluating position:", error);
+      return null;
+    }
+  }
+  
   // Function to make a Stockfish move
   async function makeStockfishMove() {
     // Skip if no chessground or processing another move
@@ -80,8 +103,31 @@ function Chessboard({
       const currentFen = chess.fen();
       
       try {
-        // Call API for best move
-        const response = await gameApi.getBestMove(currentFen, skillLevel);
+        let response;
+        let evalChange = 0;
+        
+        // Calculate eval change if we have previous evaluation
+        if (previousEvalRef.current !== null && currentEvalRef.current !== null) {
+          evalChange = currentEvalRef.current - previousEvalRef.current;
+          console.log(`Eval change: ${evalChange} (prev: ${previousEvalRef.current}, current: ${currentEvalRef.current})`);
+          
+          // For even-move, we need to adjust the eval change
+          // from the perspective of the player who just moved
+          const playerIsWhite = orientation === 'white';
+          const playerJustMoved = chess.turn() === 'b'; // If it's black's turn, white just moved
+          
+          // If the player is black and just moved, or is white and didn't just move,
+          // we need to flip the sign of the eval change
+          if ((playerIsWhite && !playerJustMoved) || (!playerIsWhite && playerJustMoved)) {
+            evalChange = -evalChange;
+          }
+          
+          // Use even-move endpoint for adaptive response
+          response = await gameApi.getEvenMove(currentFen, evalChange, skillLevel);
+        } else {
+          // Fallback to best-move if we don't have evaluation data
+          response = await gameApi.getBestMove(currentFen, skillLevel);
+        }
         
         if (response && response.move) {
           const from = response.move.substring(0, 2) as Key;
@@ -109,6 +155,10 @@ function Chessboard({
               chessgroundRef.current.move(from, to);
             }
           }, 50);
+          
+          // Get the evaluation after engine move
+          const postMoveEval = await evaluatePosition(chess.fen());
+          previousEvalRef.current = postMoveEval;
         }
       } catch (apiError) {
         console.error("Stockfish API error, using fallback:", apiError);
@@ -150,9 +200,15 @@ function Chessboard({
   }
   
   // Function to handle a user move
-  function handleMove(from: Key, to: Key) {
+  async function handleMove(from: Key, to: Key) {
     try {
+      // Store the evaluation before the player's move
       const chess = chessRef.current;
+      
+      // Store previous evaluation as reference point
+      if (previousEvalRef.current !== null) {
+        previousEvalRef.current = currentEvalRef.current;
+      }
       
       // Try to make the move in chess.js
       const moveResult = chess.move({
@@ -165,6 +221,9 @@ function Chessboard({
         console.error('Invalid move:', from, to);
         return false;
       }
+      
+      // Evaluate the position after player's move
+      currentEvalRef.current = await evaluatePosition(chess.fen());
       
       // Call onMove callback if provided
       if (onMove) {
@@ -270,63 +329,70 @@ function Chessboard({
     }
   }
   
-  // Initialize chessground once on mount
+  // Initialize board when component mounts or FEN/orientation changes
   useEffect(() => {
-    // Wait briefly for the DOM to be ready
-    const timer = setTimeout(() => {
+    if (!boardRef.current) return;
+    
+    // Store current values in refs for easier access
+    currentFenRef.current = fen;
+    currentOrientationRef.current = orientation;
+    
+    try {
+      // Reset chess instance to the new FEN
+      const chess = chessRef.current;
+      chess.load(fen);
+      
+      // Create or update the chessground instance
       updateChessground();
-    }, 10);
+      
+      // If we're not in viewOnly mode, calculate whose turn it is and set up correctly
+      if (!viewOnly) {
+        const playerColor = orientation;
+        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+        
+        // If it's the computer's turn, make a move after a short delay
+        if (playerColor !== turnColor && chessgroundRef.current) {
+          setTimeout(() => {
+            makeStockfishMove();
+          }, 500);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error initializing board:", error);
+    }
     
     // Cleanup on unmount
     return () => {
-      clearTimeout(timer);
       if (chessgroundRef.current) {
         chessgroundRef.current.destroy();
         chessgroundRef.current = null;
+        hasInitializedRef.current = false;
       }
     };
-  }, []);
+  }, [fen, orientation, viewOnly]);
   
-  // Handle FEN changes
+  // Initialize the evaluation when the board is first set up
   useEffect(() => {
-    if (fen === currentFenRef.current) return;
-    
-    try {
-      // Update refs
-      currentFenRef.current = fen;
+    // Wait briefly for the board to be initialized
+    const timer = setTimeout(() => {
+      const initEvaluation = async () => {
+        try {
+          if (!hasInitializedRef.current) return;
+          
+          const initialEval = await evaluatePosition(chessRef.current.fen());
+          previousEvalRef.current = initialEval;
+          currentEvalRef.current = initialEval;
+          console.log(`Initial position evaluation: ${initialEval}`);
+        } catch (error) {
+          console.error("Error initializing evaluation:", error);
+        }
+      };
       
-      // Update chess instance
-      chessRef.current.load(fen);
-      
-      // Update board if initialized
-      if (hasInitializedRef.current && chessgroundRef.current) {
-        const dests = calculateDests();
-        chessgroundRef.current.set({
-          fen,
-          turnColor: chessRef.current.turn() === 'w' ? 'white' : 'black',
-          movable: { dests }
-        });
-      } else if (boardRef.current) {
-        // If chessground not initialized but board ref exists, initialize it
-        updateChessground();
-      }
-    } catch (error) {
-      console.error("Error updating position:", error);
-    }
-  }, [fen]);
-  
-  // Handle orientation changes
-  useEffect(() => {
-    if (orientation === currentOrientationRef.current) return;
+      initEvaluation();
+    }, 500); // Give the board time to initialize
     
-    // Update ref
-    currentOrientationRef.current = orientation;
-    
-    // Update board if initialized
-    if (hasInitializedRef.current && chessgroundRef.current) {
-      chessgroundRef.current.set({ orientation });
-    }
-  }, [orientation]);
+    return () => clearTimeout(timer);
+  }, [hasInitializedRef.current]);
   
   return (
     <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>
