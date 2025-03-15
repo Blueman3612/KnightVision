@@ -171,6 +171,9 @@ async def evaluate_position(request: EvaluationRequest):
     """
     Evaluate a chess position.
     
+    This endpoint uses a standard depth of 12 by default for consistency across all evaluations.
+    A custom depth can be provided, but it's recommended to use the standard depth in most cases.
+    
     Args:
         request: Evaluation request with FEN and options
         
@@ -217,6 +220,9 @@ async def annotate_game(
 ):
     """
     Analyze and annotate a specific chess game.
+    
+    All position evaluations use the standard depth of 12 for consistency,
+    ensuring reliable and comparable move classifications across games.
     
     Args:
         game_id: ID of the game to annotate
@@ -540,6 +546,8 @@ async def get_even_move(request: EvenMoveRequest):
     Get a move that attempts to restore the previous evaluation difference rather than maximizing advantage.
     This is ideal for beginner-friendly responses that don't immediately punish mistakes.
     
+    All position evaluations use the standard depth of 12 for consistency.
+    
     Args:
         request: Even move request with FEN, evaluation change, and options
         
@@ -579,10 +587,7 @@ async def get_even_move(request: EvenMoveRequest):
             temp_board.push(move)
             
             # Get evaluation after move
-            move_result = await stockfish_service.evaluate_position(
-                temp_board.fen(),
-                skill_level=request.skill_level
-            )
+            move_result = await stockfish_service.evaluate_position(temp_board.fen())
             
             # Get evaluation from engine's perspective and convert to our perspective
             # We need to negate here since evaluations flip between moves
