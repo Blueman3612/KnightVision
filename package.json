@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@types/chess.js": "^0.13.7"
+  },
+  "dependencies": {
+    "react-hot-toast": "^2.5.2"
   }
 }
