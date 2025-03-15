@@ -208,7 +208,7 @@ class StockfishService:
             await engine_from_pool.configure({"Skill Level": skill_level})
         
         # Step 2: Phase 1 - Quick shallow evaluation of all moves to find candidates
-        shallow_depth = 3  # Even faster evaluation
+        shallow_depth = 8  # Even faster evaluation
         candidates = []
         
         # Process moves in batches based on available engines
