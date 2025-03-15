@@ -131,6 +131,76 @@ The development follows a phased approach with early deployment:
 - UCI protocol implementation for Stockfish communication
 - Configuration for variable playing strength
 
+##### Stockfish Skill Level to ELO Rating Correlation
+| Skill Level | Approximate ELO Rating |
+|-------------|------------------------|
+| 0           | ~1320-1350             |
+| 1           | ~1470-1490             |
+| 2           | ~1600                  |
+| 3           | ~1740                  |
+| 4           | ~1920                  |
+| 5           | ~2200                  |
+| 6           | ~2360                  |
+| 7           | ~2500                  |
+| 8           | ~2600                  |
+| 9           | ~2700                  |
+| 10          | ~2790                  |
+| 11          | ~2855                  |
+| 12          | ~2920                  |
+| 13          | ~2970                  |
+| 14          | ~3025                  |
+| 15          | ~3070                  |
+| 16          | ~3110                  |
+| 17          | ~3140                  |
+| 18          | ~3170                  |
+| 19          | ~3190                  |
+| 20          | ~3200+                 |
+
+##### Adaptive Learning System
+A key feature of the Chess Tutor's learning approach is the adaptive engine response system, implemented through specialized endpoints:
+
+###### Even-Move Endpoint
+The `games/even-move` endpoint maintains relative position evaluation rather than maximizing advantage, making it ideal for beginners:
+
+- **Functionality**: When a player makes a move (potentially a blunder), this endpoint returns a move that attempts to restore the previous evaluation difference rather than maximizing the engine's advantage.
+
+- **Parameters**:
+  - `fen`: Current position in FEN notation after player's move
+  - `eval_change`: Evaluation change from the player's last move (e.g., -2.5 for a blunder that changed position from +0.5 to -2.0)
+
+- **Behavior**:
+  - If a player blunders (e.g., position changes from +0.5 to -2.0), the engine doesn't punish with the most crushing response
+  - Instead, it finds a move that restores the evaluation close to the previous relative advantage (+0.5)
+  - If multiple moves can achieve this, it selects the one with closest evaluation
+
+- **Example**:
+  ```
+  Initial position: +0.5 (player advantage)
+  Player moves, new position: -2.0 (player blundered, now at disadvantage)
+  eval_change: -2.5
+  
+  Engine analysis of available moves:
+  Move A: Results in +0.6 (exceeds target of +0.5)
+  Move B: Results in +0.4 (slightly below target of +0.5)
+  Move C: Results in +3.0 (far exceeds target)
+  
+  Engine will choose Move A as it's closest to restoring the original advantage.
+  ```
+
+- **Benefits**:
+  - Enables beginners to experience incremental improvement
+  - Provides opportunity to recognize and learn from mistakes without immediate punishment
+  - Delivers a more enjoyable learning experience while still maintaining challenge
+  - Collects valuable data on player blunders and missed tactics for analysis
+
+###### Standard Evaluation Depth
+For consistency in analysis and engine responses, a standardized search depth of 12 is used across all position evaluations in the application. This depth:
+
+- Provides sufficient tactical awareness for accurate evaluations
+- Balances computational cost with evaluation accuracy
+- Ensures consistent analysis quality across all app features
+- Maintains reasonable response times on the server
+
 #### 4.1.2 Game Analysis Engine
 - PGN parsing and validation
 - Move accuracy evaluation using Stockfish
