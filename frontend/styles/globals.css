@@ -325,4 +325,9 @@ textarea {
 
 .scrollbar-track-rounded-full::-webkit-scrollbar-track {
   border-radius: 9999px;
+}
+
+/* Add this custom CSS for the evaluation bar transitions */
+.transition-height {
+  transition-property: height;
 } 

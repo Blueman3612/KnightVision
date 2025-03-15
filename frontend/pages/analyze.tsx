@@ -5,6 +5,7 @@ import Head from 'next/head';
 import { Chess } from 'chess.js';
 import Chessboard from '../components/Chessboard';
 import { Button } from '../components/ui';
+import { gameApi } from '../lib/api';
 
 interface GameData {
   id: string;
@@ -29,8 +30,68 @@ const AnalyzePage = () => {
   const [moves, setMoves] = useState<string[]>([]);
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
   
+  // Evaluation state
+  const [evaluation, setEvaluation] = useState<number | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
+  
+  // Fetch evaluation whenever position changes
+  useEffect(() => {
+    const getEvaluation = async () => {
+      if (!currentFen) return;
+      
+      console.log('Evaluating FEN:', currentFen);
+      const turn = currentFen.split(' ')[1]; // 'w' for white, 'b' for black
+      console.log('Turn:', turn);
+      
+      setIsEvaluating(true);
+      try {
+        console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 12);
+        const response = await gameApi.evaluatePosition(currentFen, 12);
+        console.log('Raw evaluation response:', response);
+        
+        // Check if response has the expected format with numeric score
+        // The API returns 'evaluation' field, not 'score'
+        if (!response || response.evaluation === undefined || response.evaluation === null) {
+          console.error('Invalid response format or missing evaluation:', response);
+          setEvaluation(null);
+          return;
+        }
+        
+        // Parse score as number if it's a string
+        let scoreValue = response.evaluation;
+        if (typeof scoreValue === 'string') {
+          scoreValue = parseFloat(scoreValue);
+          console.log('Parsed string score to number:', scoreValue);
+        }
+        
+        // Validate that we have a valid number
+        if (isNaN(scoreValue)) {
+          console.error('Score is not a valid number:', response.evaluation);
+          setEvaluation(null);
+          return;
+        }
+        
+        console.log('Raw score from API:', scoreValue, 'typeof:', typeof scoreValue);
+        
+        // Stockfish returns score from perspective of side to move
+        // We normalize to white's perspective (positive = good for white)
+        const normalizedScore = turn === 'b' ? -scoreValue : scoreValue;
+        console.log('Normalized score (white perspective):', normalizedScore);
+        
+        setEvaluation(normalizedScore);
+      } catch (error) {
+        console.error('Error evaluating position:', error);
+        setEvaluation(null);
+      } finally {
+        setIsEvaluating(false);
+      }
+    };
+    
+    getEvaluation();
+  }, [currentFen]);
   
   // Fetch game data when component mounts or gameId changes
   useEffect(() => {
@@ -95,7 +156,7 @@ const AnalyzePage = () => {
     };
     
     fetchGame();
-  }, [router.query.gameId, session?.user?.id]);
+  }, [router.query.gameId, session?.user?.id, supabase]);
   
   // Navigation functions
   const goToMove = (index: number) => {
@@ -151,6 +212,54 @@ const AnalyzePage = () => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
   };
   
+  // Format evaluation for display
+  const formatEvaluation = (eval_score: number | null): string => {
+    console.log('Formatting evaluation:', eval_score, 'typeof:', typeof eval_score);
+    
+    if (eval_score === null || eval_score === undefined) return '0.0';
+    
+    // Ensure we're working with a number
+    const numericScore = Number(eval_score);
+    
+    // Check for NaN
+    if (isNaN(numericScore)) {
+      console.error('Invalid numeric value for eval_score:', eval_score);
+      return '0.0';
+    }
+    
+    // Handle mate scores (extremely large values)
+    if (numericScore > 100) return '+M' + Math.ceil((1000 - numericScore) / 100);
+    if (numericScore < -100) return '-M' + Math.ceil((1000 + numericScore) / 100);
+    
+    // Format to one decimal place with + sign for positive values
+    const formatted = (numericScore > 0 ? '+' : '') + numericScore.toFixed(1);
+    console.log('Formatted evaluation:', formatted);
+    return formatted;
+  };
+  
+  // Calculate evaluation bar height percentage
+  const calculateEvalBarHeight = (eval_score: number | null): number => {
+    if (eval_score === null || eval_score === undefined || isNaN(Number(eval_score))) {
+      console.log('Invalid eval_score in calculateEvalBarHeight:', eval_score);
+      return 50; // Even at 50%
+    }
+    
+    // Ensure we're working with a number
+    const numericScore = Number(eval_score);
+    
+    // Sigmoid-like function to map any evaluation to 0-100 range
+    // with center at 0 (50%)
+    const maxValue = 5; // At +5.0 or higher, bar will be nearly full
+    const normalized = Math.max(-maxValue, Math.min(maxValue, numericScore)) / maxValue;
+    
+    // Transform to percentage (0-100)
+    // Note: we subtract from 100 because in CSS, 0% is bottom of container
+    // and we want positive evals to show as white (top)
+    const heightPercent = 100 - (normalized * 50 + 50);
+    console.log(`Eval bar height: score=${numericScore}, height=${heightPercent}%`);
+    return heightPercent;
+  };
+  
   if (!session) {
     return null; // Will redirect to login
   }
@@ -178,7 +287,37 @@ const AnalyzePage = () => {
                 />
               </div>
               
-              {/* Chessboard wrapper with perfect square ratio */}
+              {/* Evaluation bar - now as absolute overlay that doesn't affect layout */}
+              <div className="absolute left-0 top-0 bottom-0 w-6 bg-gray-200 z-10 flex flex-col pointer-events-none">
+                {/* Black side (top) */}
+                <div 
+                  className="bg-gray-800 w-full transition-height duration-300 ease-out"
+                  style={{ 
+                    height: `${calculateEvalBarHeight(evaluation)}%`,
+                    borderBottom: '1px solid #666' 
+                  }}
+                ></div>
+                {/* White side (bottom) */}
+                <div className="bg-white flex-grow"></div>
+                
+                {/* Evaluation text */}
+                <div 
+                  className="absolute left-0 right-0 flex items-center justify-center text-xs font-bold"
+                  style={{
+                    top: `calc(${calculateEvalBarHeight(evaluation)}% - 10px)`,
+                    color: calculateEvalBarHeight(evaluation) < 50 ? 'white' : 'black',
+                    textShadow: '0px 0px 2px rgba(0,0,0,0.5)'
+                  }}
+                >
+                  {isEvaluating ? (
+                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  ) : (
+                    formatEvaluation(evaluation)
+                  )}
+                </div>
+              </div>
+              
+              {/* Chessboard wrapper with perfect square ratio - remove padding-left */}
               <div className="h-full w-full">
                 <Chessboard
                   fen={currentFen}
