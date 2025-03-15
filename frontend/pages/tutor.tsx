@@ -92,7 +92,7 @@ function TutorPage() {
         <title>Chess Tutor</title>
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
-        <div className="chessboard-container relative">
+        <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
           <div className="absolute top-3 right-3 z-10 flex space-x-2">
             <Button
               onClick={flipBoard}

@@ -329,8 +329,8 @@ function Chessboard({
   }, [orientation]);
   
   return (
-    <div className="w-full h-full relative border-8 border-solid border-[#3a2a1d] rounded-lg overflow-hidden">
-      <div ref={boardRef as any} className="w-full h-full" />
+    <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>
+      <div ref={boardRef as any} className="w-full h-full overflow-hidden" style={{ borderRadius: '8px' }} />
       {isProcessing && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
           <div className="text-white text-lg font-bold">Stockfish is thinking...</div>

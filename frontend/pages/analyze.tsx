@@ -156,143 +156,147 @@ const AnalyzePage = () => {
   }
   
   return (
-    <div className="w-full h-full max-w-7xl p-2 flex lg:flex-row gap-3">
-      {/* Left side - Chessboard */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center h-[calc(100vh-6rem)]">
-        <div className="relative mx-auto" style={{ width: 'min(100%, calc(100vh - 12rem))', height: 'min(100%, calc(100vh - 12rem))' }}>
-          {/* Board controls */}
-          <div className="absolute top-3 right-3 z-10 flex space-x-2">
-            <Button
-              onClick={flipBoard}
-              variant="ghost"
-              size="xs"
-              className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
-              aria-label="Flip Board"
-              leftIcon={
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-              }
-            />
+    <div className="w-full h-full flex justify-center">
+      <div className="max-w-7xl w-full p-4 flex justify-center">
+        <div className="flex flex-row items-center gap-4">
+          {/* Left side - Chessboard */}
+          <div className="flex flex-col items-center">
+            <div className="relative" style={{ width: 'min(680px, calc(100vh - 12rem))', height: 'min(680px, calc(100vh - 12rem))' }}>
+              {/* Board controls */}
+              <div className="absolute top-3 right-3 z-10 flex space-x-2">
+                <Button
+                  onClick={flipBoard}
+                  variant="ghost"
+                  size="xs"
+                  className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
+                  aria-label="Flip Board"
+                  leftIcon={
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                    </svg>
+                  }
+                />
+              </div>
+              
+              {/* Chessboard wrapper with perfect square ratio */}
+              <div className="h-full w-full">
+                <Chessboard
+                  fen={currentFen}
+                  orientation={orientation}
+                  viewOnly={true}
+                />
+              </div>
+            </div>
+            
+            {/* Navigation controls */}
+            <div className="mt-4 flex justify-center space-x-3">
+              <Button
+                onClick={goToStart}
+                disabled={moveIndex === -1}
+                variant="ghost"
+                size="sm"
+                leftIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  </svg>
+                }
+              >
+                Start
+              </Button>
+              <Button
+                onClick={goToPrevMove}
+                disabled={moveIndex === -1}
+                variant="ghost"
+                size="sm"
+                leftIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                }
+              >
+                Previous
+              </Button>
+              <Button
+                onClick={goToNextMove}
+                disabled={moveIndex === moves.length - 1}
+                variant="ghost"
+                size="sm"
+                leftIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                }
+              >
+                Next
+              </Button>
+              <Button
+                onClick={goToEnd}
+                disabled={moveIndex === moves.length - 1}
+                variant="ghost"
+                size="sm"
+                leftIcon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  </svg>
+                }
+              >
+                End
+              </Button>
+            </div>
           </div>
           
-          {/* Chessboard wrapper with perfect square ratio */}
-          <div className="h-full w-full">
-            <Chessboard
-              fen={currentFen}
-              orientation={orientation}
-              viewOnly={true}
-            />
-          </div>
-        </div>
-        
-        {/* Navigation controls */}
-        <div className="mt-4 flex justify-center space-x-3">
-          <Button
-            onClick={goToStart}
-            disabled={moveIndex === -1}
-            variant="ghost"
-            size="sm"
-            leftIcon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-              </svg>
-            }
-          >
-            Start
-          </Button>
-          <Button
-            onClick={goToPrevMove}
-            disabled={moveIndex === -1}
-            variant="ghost"
-            size="sm"
-            leftIcon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            }
-          >
-            Previous
-          </Button>
-          <Button
-            onClick={goToNextMove}
-            disabled={moveIndex === moves.length - 1}
-            variant="ghost"
-            size="sm"
-            leftIcon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            }
-          >
-            Next
-          </Button>
-          <Button
-            onClick={goToEnd}
-            disabled={moveIndex === moves.length - 1}
-            variant="ghost"
-            size="sm"
-            leftIcon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-            }
-          >
-            End
-          </Button>
-        </div>
-      </div>
-      
-      {/* Right side - Game info and moves */}
-      <div className="lg:w-80 flex flex-col h-[calc(100vh-6rem)]">
-        {/* Game information */}
-        <div className="bg-gray-800 rounded-lg p-3 mb-2">
-          <h2 className="text-base font-semibold text-white mb-1">Game Details</h2>
-          <div className="space-y-1 text-sm">
-            {gameData?.event && (
-              <div className="truncate">
-                <span className="text-gray-400">Event:</span>
-                <span className="text-gray-200 ml-2">{gameData.event}</span>
+          {/* Right side - Game info and moves */}
+          <div className="w-80 flex flex-col h-[calc(100vh-6rem)]">
+            {/* Game information */}
+            <div className="bg-gray-800 rounded-lg p-3 mb-2">
+              <h2 className="text-base font-semibold text-white mb-1">Game Details</h2>
+              <div className="space-y-1 text-sm">
+                {gameData?.event && (
+                  <div className="truncate">
+                    <span className="text-gray-400">Event:</span>
+                    <span className="text-gray-200 ml-2">{gameData.event}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-gray-400">Date:</span>
+                  <span className="text-gray-200 ml-2">
+                    {gameData?.game_date ? new Date(gameData.game_date).toLocaleDateString() : 'Unknown'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-400">White:</span>
+                  <span className="text-gray-200 ml-2">{gameData?.white_player || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Black:</span>
+                  <span className="text-gray-200 ml-2">{gameData?.black_player || 'Unknown'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Result:</span>
+                  <span className="text-gray-200 ml-2">{gameData?.result || 'Unknown'}</span>
+                </div>
               </div>
-            )}
-            <div>
-              <span className="text-gray-400">Date:</span>
-              <span className="text-gray-200 ml-2">
-                {gameData?.game_date ? new Date(gameData.game_date).toLocaleDateString() : 'Unknown'}
-              </span>
             </div>
-            <div>
-              <span className="text-gray-400">White:</span>
-              <span className="text-gray-200 ml-2">{gameData?.white_player || 'Unknown'}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Black:</span>
-              <span className="text-gray-200 ml-2">{gameData?.black_player || 'Unknown'}</span>
-            </div>
-            <div>
-              <span className="text-gray-400">Result:</span>
-              <span className="text-gray-200 ml-2">{gameData?.result || 'Unknown'}</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Moves list */}
-        <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-hidden">
-          <h2 className="text-base font-semibold text-white mb-1">Moves</h2>
-          <div className="h-[calc(100%-2rem)] overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-1">
-              {moves.map((move, index) => (
-                <Button
-                  key={index}
-                  variant={moveIndex === index ? 'secondary' : 'ghost'}
-                  size="xs"
-                  onClick={() => goToMove(index)}
-                  className={`text-left !py-1 !px-2 ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}`}
-                >
-                  <span className="text-gray-400 mr-1 text-xs">{formatMoveNumber(index)}</span>
-                  <span className="text-sm">{move}</span>
-                </Button>
-              ))}
+            
+            {/* Moves list */}
+            <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-hidden">
+              <h2 className="text-base font-semibold text-white mb-1">Moves</h2>
+              <div className="h-[calc(100%-2rem)] overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-1">
+                  {moves.map((move, index) => (
+                    <Button
+                      key={index}
+                      variant={moveIndex === index ? 'secondary' : 'ghost'}
+                      size="xs"
+                      onClick={() => goToMove(index)}
+                      className={`text-left !py-1 !px-2 ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}`}
+                    >
+                      <span className="text-gray-400 mr-1 text-xs">{formatMoveNumber(index)}</span>
+                      <span className="text-sm">{move}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
