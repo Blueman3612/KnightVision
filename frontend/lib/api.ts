@@ -17,6 +17,7 @@ declare const process: {
 // Determine if we're running in Docker/local development
 const isDocker = process.env.NEXT_PUBLIC_DOCKER === 'true';
 const isDevelopment = process.env.NODE_ENV === 'development';
+const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
 
 // Set API URL based on environment
 let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
@@ -25,7 +26,26 @@ let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 if (isDevelopment || isDocker) {
   apiUrl = 'http://localhost:80';
   console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
-}
+} 
+// // In production, use our Next.js API proxy to avoid mixed content issues
+// else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && 
+//          (apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
+//   // If we're in production with HTTPS, use our proxy endpoint
+//   console.log('🔄 Production with HTTPS detected: Using API proxy');
+//   apiUrl = '/api/proxy';
+// }
+// // Ensure we don't try to use HTTPS for our backend URLs
+// else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
+//   console.log('🌐 Using HTTP for API URL:', apiUrl);
+// }
+// // Ensure HTTPS for other production environments, especially on Vercel
+// else if (apiUrl.startsWith('http://') && !apiUrl.includes('localhost')) {
+//   apiUrl = apiUrl.replace('http://', 'https://');
+//   console.log('🔒 Converting API URL to HTTPS for security:', apiUrl);
+// }
+
+// Log the final API URL being used
+console.log('🌐 API URL:', apiUrl);
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -91,9 +111,12 @@ export const gameApi = {
 
   // Get best move from Stockfish
   getBestMove: async (fen: string, skillLevel: number = 20, moveTime: number = 1.0) => {
-    
     try {
-      const response = await api.post('/games/best-move', { fen, skill_level: skillLevel, move_time: moveTime });
+      const response = await api.post('/games/best-move', { 
+        fen, 
+        skill_level: skillLevel, 
+        move_time: moveTime 
+      });
       return response.data;
     } catch (error: any) {
       console.error('❌ Error getting best move:', error);
