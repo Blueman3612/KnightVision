@@ -48,8 +48,8 @@ const AnalyzePage = () => {
       
       setIsEvaluating(true);
       try {
-        console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 12);
-        const response = await gameApi.evaluatePosition(currentFen, 12);
+        console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 20);
+        const response = await gameApi.evaluatePosition(currentFen, 20);
         console.log('Raw evaluation response:', response);
         
         // Check if response has the expected format with numeric score
@@ -335,8 +335,8 @@ const AnalyzePage = () => {
                     minWidth: '36px',
                     paddingLeft: '8px',
                     paddingRight: '8px',
-                    background: 'white',
-                    color: '#333',
+                    background: evaluation !== null && evaluation < 0 ? '#333' : 'white',
+                    color: evaluation !== null && evaluation < 0 ? 'white' : '#333',
                     borderRadius: '9px',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
                     zIndex: 20
