@@ -156,10 +156,10 @@ const AnalyzePage = () => {
   }
   
   return (
-    <div className="w-full max-w-7xl p-4 flex lg:flex-row gap-4">
+    <div className="w-full h-full max-w-7xl p-2 flex lg:flex-row gap-3">
       {/* Left side - Chessboard */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        <div className="relative w-full max-w-[calc(min(80vh,800px))] aspect-square mx-auto">
+      <div className="flex-1 min-w-0 flex flex-col justify-center h-[calc(100vh-6rem)]">
+        <div className="relative mx-auto" style={{ width: 'min(100%, calc(100vh - 12rem))', height: 'min(100%, calc(100vh - 12rem))' }}>
           {/* Board controls */}
           <div className="absolute top-3 right-3 z-10 flex space-x-2">
             <Button
@@ -187,7 +187,7 @@ const AnalyzePage = () => {
         </div>
         
         {/* Navigation controls */}
-        <div className="mt-4 flex justify-center space-x-4">
+        <div className="mt-4 flex justify-center space-x-3">
           <Button
             onClick={goToStart}
             disabled={moveIndex === -1}
@@ -244,13 +244,13 @@ const AnalyzePage = () => {
       </div>
       
       {/* Right side - Game info and moves */}
-      <div className="lg:w-80 flex flex-col">
+      <div className="lg:w-80 flex flex-col h-[calc(100vh-6rem)]">
         {/* Game information */}
-        <div className="bg-gray-800 rounded-lg p-4 mb-4">
-          <h2 className="text-lg font-semibold text-white mb-3">Game Details</h2>
-          <div className="space-y-2 text-sm">
+        <div className="bg-gray-800 rounded-lg p-3 mb-2">
+          <h2 className="text-base font-semibold text-white mb-1">Game Details</h2>
+          <div className="space-y-1 text-sm">
             {gameData?.event && (
-              <div>
+              <div className="truncate">
                 <span className="text-gray-400">Event:</span>
                 <span className="text-gray-200 ml-2">{gameData.event}</span>
               </div>
@@ -277,20 +277,20 @@ const AnalyzePage = () => {
         </div>
         
         {/* Moves list */}
-        <div className="bg-gray-800 rounded-lg p-4 flex-grow overflow-hidden">
-          <h2 className="text-lg font-semibold text-white mb-3">Moves</h2>
-          <div className="h-[calc(100%-2rem)] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-2">
+        <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-hidden">
+          <h2 className="text-base font-semibold text-white mb-1">Moves</h2>
+          <div className="h-[calc(100%-2rem)] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-1">
               {moves.map((move, index) => (
                 <Button
                   key={index}
                   variant={moveIndex === index ? 'secondary' : 'ghost'}
-                  size="sm"
+                  size="xs"
                   onClick={() => goToMove(index)}
-                  className={`text-left ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}`}
+                  className={`text-left !py-1 !px-2 ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}`}
                 >
-                  <span className="text-gray-400 mr-2">{formatMoveNumber(index)}</span>
-                  {move}
+                  <span className="text-gray-400 mr-1 text-xs">{formatMoveNumber(index)}</span>
+                  <span className="text-sm">{move}</span>
                 </Button>
               ))}
             </div>
