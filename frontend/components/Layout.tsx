@@ -38,7 +38,7 @@ function Layout({ children, hideNav = false }: LayoutProps) {
 
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-800 via-gray-900 to-black font-sans">
         {shouldShowNav && (
-          <nav className="w-full py-4 px-6 bg-black bg-opacity-30">
+          <nav className="sticky top-0 w-full py-4 px-6 bg-black bg-opacity-30 z-10">
             <div className="container mx-auto flex justify-between items-center">
               <div className="flex items-center space-x-3">
                 {/* Chess Knight icon with gradient matching Vision text */}
@@ -89,6 +89,19 @@ function Layout({ children, hideNav = false }: LayoutProps) {
                   }
                 >
                   Games
+                </Button>
+                <Button 
+                  href="/analyze"
+                  variant="ghost"
+                  size="sm"
+                  className={router.pathname === '/analyze' ? 'nav-button-active' : 'text-gray-300 hover:text-white h-9 flex items-center'}
+                  leftIcon={
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  }
+                >
+                  Analyze
                 </Button>
                 <Button 
                   href="/profile"
