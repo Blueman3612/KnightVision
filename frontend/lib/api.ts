@@ -104,29 +104,40 @@ api.interceptors.request.use(async (config: AxiosConfig) => {
       
       // Fallback to localStorage methods
       // The token storage location has changed in newer Supabase versions
-      const tokenStr = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/^https?:\/\//, '') + '-auth-token');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/^https?:\/\//, '') || '';
+      const tokenStr = localStorage.getItem('sb-' + supabaseUrl + '-auth-token');
       
       if (tokenStr) {
-        const token = JSON.parse(tokenStr);
-        if (token?.access_token) {
-          config.headers = config.headers || {};
-          config.headers.Authorization = `Bearer ${token.access_token}`;
-          console.log('Using Supabase auth token from localStorage for API request');
+        try {
+          const token = JSON.parse(tokenStr);
+          if (token?.access_token) {
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${token.access_token}`;
+            console.log('Using Supabase auth token from localStorage for API request');
+            return config;
+          }
+        } catch (parseError) {
+          console.warn('Error parsing token from localStorage:', parseError);
         }
-      } else {
-        // Try fallback to older format
-        const oldToken = localStorage.getItem('supabase.auth.token');
-        if (oldToken) {
+      }
+      
+      // Try fallback to older format
+      const oldToken = localStorage.getItem('supabase.auth.token');
+      if (oldToken) {
+        try {
           const parsedToken = JSON.parse(oldToken);
           if (parsedToken?.access_token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${parsedToken.access_token}`;
             console.log('Using legacy Supabase auth token for API request');
+            return config;
           }
-        } else {
-          console.warn('No auth token found in localStorage');
+        } catch (parseError) {
+          console.warn('Error parsing legacy token from localStorage:', parseError);
         }
       }
+      
+      console.warn('No auth token found in localStorage');
     } catch (err) {
       console.error('Error setting auth token:', err);
     }

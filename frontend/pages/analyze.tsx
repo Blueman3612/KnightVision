@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
@@ -39,8 +39,9 @@ const AnalyzePage = () => {
   
   // Fetch evaluation whenever position changes
   useEffect(() => {
+    let isMounted = true;
     const getEvaluation = async () => {
-      if (!currentFen) return;
+      if (!currentFen || !isMounted) return;
       
       console.log('Evaluating FEN:', currentFen);
       const turn = currentFen.split(' ')[1]; // 'w' for white, 'b' for black
@@ -50,6 +51,10 @@ const AnalyzePage = () => {
       try {
         console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 20);
         const response = await gameApi.evaluatePosition(currentFen, 20);
+        
+        // Don't update state if component unmounted
+        if (!isMounted) return;
+        
         console.log('Raw evaluation response:', response);
         
         // Check if response has the expected format with numeric score
@@ -84,13 +89,16 @@ const AnalyzePage = () => {
         setEvaluation(normalizedScore);
       } catch (error) {
         console.error('Error evaluating position:', error);
-        setEvaluation(null);
+        if (isMounted) setEvaluation(null);
       } finally {
-        setIsEvaluating(false);
+        if (isMounted) setIsEvaluating(false);
       }
     };
     
     getEvaluation();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => { isMounted = false; };
   }, [currentFen]);
   
   // Fetch game data when component mounts or gameId changes
@@ -212,10 +220,29 @@ const AnalyzePage = () => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
   };
   
-  // Format evaluation for display
-  const formatEvaluation = (eval_score: number | null): string => {
-    console.log('Formatting evaluation:', eval_score, 'typeof:', typeof eval_score);
+  // Calculate evaluation bar height percentage
+  const calculateEvalBarHeight = useCallback((eval_score: number | null): number => {
+    if (eval_score === null || eval_score === undefined || isNaN(Number(eval_score))) {
+      return 50; // Even at 50%
+    }
     
+    // Ensure we're working with a number
+    const numericScore = Number(eval_score);
+    
+    // Sigmoid-like function to map any evaluation to 0-100 range
+    // with center at 0 (50%)
+    const maxValue = 5; // At +5.0 or higher, bar will be nearly full
+    const normalized = Math.max(-maxValue, Math.min(maxValue, numericScore)) / maxValue;
+    
+    // Transform to percentage (0-100)
+    // Note: we subtract from 100 because in CSS, 0% is bottom of container
+    // and we want positive evals to show as white (top)
+    const heightPercent = 100 - (normalized * 50 + 50);
+    return heightPercent;
+  }, []);
+  
+  // Format evaluation for display
+  const formatEvaluation = useCallback((eval_score: number | null): string => {
     if (eval_score === null || eval_score === undefined) return '0.0';
     
     // Ensure we're working with a number
@@ -233,32 +260,8 @@ const AnalyzePage = () => {
     
     // Format to one decimal place with + sign for positive values
     const formatted = (numericScore > 0 ? '+' : '') + numericScore.toFixed(1);
-    console.log('Formatted evaluation:', formatted);
     return formatted;
-  };
-  
-  // Calculate evaluation bar height percentage
-  const calculateEvalBarHeight = (eval_score: number | null): number => {
-    if (eval_score === null || eval_score === undefined || isNaN(Number(eval_score))) {
-      console.log('Invalid eval_score in calculateEvalBarHeight:', eval_score);
-      return 50; // Even at 50%
-    }
-    
-    // Ensure we're working with a number
-    const numericScore = Number(eval_score);
-    
-    // Sigmoid-like function to map any evaluation to 0-100 range
-    // with center at 0 (50%)
-    const maxValue = 5; // At +5.0 or higher, bar will be nearly full
-    const normalized = Math.max(-maxValue, Math.min(maxValue, numericScore)) / maxValue;
-    
-    // Transform to percentage (0-100)
-    // Note: we subtract from 100 because in CSS, 0% is bottom of container
-    // and we want positive evals to show as white (top)
-    const heightPercent = 100 - (normalized * 50 + 50);
-    console.log(`Eval bar height: score=${numericScore}, height=${heightPercent}%`);
-    return heightPercent;
-  };
+  }, []);
   
   if (!session) {
     return null; // Will redirect to login
