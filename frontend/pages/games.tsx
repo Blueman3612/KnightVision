@@ -362,14 +362,23 @@ const GamesPage = () => {
       // Call the processUnannotatedGames API after successful upload
       if (session?.user?.id) {
         try {
-          await gameApi.processUnannotatedGames(session.user.id);
-          console.log('✅ Triggered analysis of unannotated games');
+          // Get the session access token to use directly
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
           
-          // Add notification about background processing
-          setMessage({ 
-            text: `${successCount} games uploaded. Analysis has been started in the background.`,
-            type: 'success'
-          });
+          // Call the API with explicit access token
+          if (accessToken) {
+            await gameApi.processUnannotatedGames(session.user.id, accessToken);
+            console.log('✅ Triggered analysis of unannotated games');
+            
+            // Add notification about background processing
+            setMessage({ 
+              text: `${successCount} games uploaded. Analysis has been started in the background.`,
+              type: 'success'
+            });
+          } else {
+            throw new Error('No access token available');
+          }
         } catch (analysisError) {
           console.error('Error triggering game analysis:', analysisError);
           // Still show success for upload but mention analysis couldn't be started

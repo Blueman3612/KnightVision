@@ -1,4 +1,5 @@
 import axios from 'axios';
+import supabase from './supabase';
 
 // Typecasting to avoid TS errors
 type AxiosConfig = any;
@@ -11,6 +12,7 @@ declare const process: {
     NEXT_PUBLIC_API_URL?: string;
     NEXT_PUBLIC_DOCKER?: string;
     NODE_ENV?: string;
+    NEXT_PUBLIC_SUPABASE_URL?: string;
   };
 };
 
@@ -82,14 +84,51 @@ api.interceptors.response.use(
 );
 
 // Add auth token to requests if available
-api.interceptors.request.use((config: AxiosConfig) => {
+api.interceptors.request.use(async (config: AxiosConfig) => {
   // Only run on client side
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('supabase.auth.token');
-    if (token) {
-      const parsedToken = JSON.parse(token);
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${parsedToken.access_token}`;
+    try {
+      // Try to get the current session token directly from supabase
+      // This is the most reliable approach
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.access_token) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${sessionData.session.access_token}`;
+          console.log('Using active Supabase session token for API request');
+          return config;
+        }
+      } catch (sessionError) {
+        console.warn('Could not get Supabase session:', sessionError);
+      }
+      
+      // Fallback to localStorage methods
+      // The token storage location has changed in newer Supabase versions
+      const tokenStr = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/^https?:\/\//, '') + '-auth-token');
+      
+      if (tokenStr) {
+        const token = JSON.parse(tokenStr);
+        if (token?.access_token) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${token.access_token}`;
+          console.log('Using Supabase auth token from localStorage for API request');
+        }
+      } else {
+        // Try fallback to older format
+        const oldToken = localStorage.getItem('supabase.auth.token');
+        if (oldToken) {
+          const parsedToken = JSON.parse(oldToken);
+          if (parsedToken?.access_token) {
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${parsedToken.access_token}`;
+            console.log('Using legacy Supabase auth token for API request');
+          }
+        } else {
+          console.warn('No auth token found in localStorage');
+        }
+      }
+    } catch (err) {
+      console.error('Error setting auth token:', err);
     }
   }
   return config;
@@ -110,9 +149,21 @@ export const gameApi = {
   },
 
   // Process unannotated games 
-  processUnannotatedGames: async (userId: string) => {
+  processUnannotatedGames: async (userId: string, accessToken?: string) => {
     try {
-      const response = await api.post('/games/process-unannotated', { user_id: userId });
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      // Use provided access token if available
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+      
+      const response = await api.post('/games/process-unannotated', 
+        { user_id: userId },
+        { headers }
+      );
       return response.data;
     } catch (error: any) {
       console.error('❌ Error processing unannotated games:', error);
