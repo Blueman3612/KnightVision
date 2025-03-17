@@ -5,7 +5,8 @@ import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
 import Button from '../components/ui/Button';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
+import { gameApi } from '../lib/api';
 
 interface TutorPageProps {
   children?: ReactNode;
@@ -263,7 +264,12 @@ function TutorPage() {
     const chess = chessRef.current;
     chess.reset();
     
-    // Update all state variables at once to avoid race conditions
+    console.log(`Switching sides to play as ${newPlayerSide}`);
+    
+    // Close the menu first
+    setMenuOpen(false);
+    
+    // First update the state to reflect the new player side for both cases
     setPlayerSide(newPlayerSide);
     setOrientation(newPlayerSide);
     setFen(startingFen);
@@ -272,10 +278,19 @@ function TutorPage() {
     setIsGameOver(false);
     setGameStartTime(new Date());
     
-    // Close the menu
-    setMenuOpen(false);
-    
+    // Show toast notification
     toast.success(`You are now playing as ${newPlayerSide}`);
+    
+    // When playing as black, we need to make white's first move
+    if (newPlayerSide === 'black') {
+      // Let state updates complete, then allow the board component to handle the first move
+      // The Chessboard component will detect that it's white's turn but player is black
+      // and will automatically make the move using the API
+      setTimeout(() => {
+        // Force a refresh of the FEN to trigger the move in the component
+        setFen(startingFen);
+      }, 800);
+    }
   };
 
   const resignGame = () => {
@@ -355,6 +370,7 @@ function TutorPage() {
         <title>Chess Tutor</title>
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
+        <Toaster position="top-center" />
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
           <div className="absolute top-2 right-2 z-20">
             <div className="relative">
@@ -424,8 +440,8 @@ function TutorPage() {
           <div className="w-full h-full">
             {/* 
               The Chess Tutor's adaptive learning system:
-              - Uses the "even-move" endpoint for a more forgiving learning experience
-              - Tracks position evaluation before and after player moves
+              - For player as white: Engine uses regular getBestMove with skill level 0
+              - For player as black: Engine uses getEvenMove endpoint to respond to player's moves
               - When player makes a mistake, engine responds with a move that maintains
                 relative evaluation instead of maximizing advantage
               - This gives players opportunity to recover and learn from mistakes

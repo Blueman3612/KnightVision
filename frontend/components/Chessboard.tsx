@@ -46,9 +46,15 @@ function Chessboard({
   // Flag to track if the board has been initialized
   const hasInitializedRef = useRef(false);
   
+  // Flag to track if evaluation has been initialized
+  const hasInitializedEvaluationRef = useRef(false);
+  
   // Store current FEN and orientation in refs to track changes
   const currentFenRef = useRef(fen);
   const currentOrientationRef = useRef(orientation);
+  
+  // Keep track of the previous playerSide to detect changes
+  const previousPlayerSideRef = useRef(playerSide);
   
   // Track position evaluation before player's move
   const previousEvalRef = useRef<number | null>(null);
@@ -86,11 +92,22 @@ function Chessboard({
   // Function to calculate legal moves for the current position
   function calculateDests() {
     const dests = new Map();
+    
+    if (!chessRef.current) {
+      console.error("Chess instance is null in calculateDests");
+      return dests;
+    }
+    
     try {
       const chess = chessRef.current;
       
       // Get all possible moves
       const moves = chess.moves({ verbose: true });
+      
+      if (!moves) {
+        console.error("Unable to get moves from chess instance");
+        return dests;
+      }
       
       // Group moves by source square
       for (const move of moves) {
@@ -139,12 +156,40 @@ function Chessboard({
     
     try {
       setIsProcessing(true);
-      const chess = chessRef.current;
-      const currentFen = chess.fen();
       
-      // List of possible moves in the current position
-      const legalMoves = chess.moves({ verbose: true });
-      if (legalMoves.length === 0) {
+      // Ensure chess instance exists
+      if (!chessRef.current) {
+        console.error("Chess instance is null in makeStockfishMove");
+        setIsProcessing(false);
+        return;
+      }
+      
+      const chess = chessRef.current;
+      
+      // Safely get current FEN
+      let currentFen;
+      try {
+        currentFen = chess.fen();
+      } catch (error) {
+        console.error("Error getting FEN:", error);
+        setIsProcessing(false);
+        return;
+      }
+      
+      console.log(`Making Stockfish move with playerSide=${playerSide}, FEN=${currentFen}`);
+      
+      // Safely get legal moves
+      let legalMoves;
+      try {
+        legalMoves = chess.moves({ verbose: true });
+      } catch (error) {
+        console.error("Error getting legal moves:", error);
+        setIsProcessing(false);
+        return;
+      }
+      
+      if (!legalMoves || legalMoves.length === 0) {
+        console.log("No legal moves available");
         setIsProcessing(false);
         return;
       }
@@ -154,34 +199,66 @@ function Chessboard({
       let moveTo = '';
       let movePromotion = 'q'; // Default to queen promotion
       
-      // Special handling for the first move (e2-e4) when in starting position
-      const isStartingPosition = currentFen.includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
-      if (isStartingPosition) {
-        // Just make e4 as white's first move - simple and reliable
-        moveFrom = 'e2';
-        moveTo = 'e4';
-      } else {
-        // Try to get a move from the API with error handling
-        try {
-          const response = await gameApi.getBestMove(currentFen, skillLevel);
+      // Try to get a move from the API with error handling
+      try {
+        // Calculate evaluation change if player is playing as black
+        // This means the computer (white) should use even-move
+        let response;
+        const isStartingPosition = currentFen.includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
+        
+        if (playerSide === 'black') {
+          // Get the evaluation change from the previous position to current position
+          // This indicates how the player's move changed the evaluation
+          const evalChange = (previousEvalRef.current !== null && currentEvalRef.current !== null) 
+            ? currentEvalRef.current - previousEvalRef.current 
+            : 0;
           
-          if (response && response.move && response.move.length >= 4) {
-            moveFrom = response.move.substring(0, 2);
-            moveTo = response.move.substring(2, 4);
-            if (response.move.length > 4) {
-              movePromotion = response.move[4];
-            }
+          if (isStartingPosition) {
+            console.log("Using even-move API for white's first move with evalChange=0");
           } else {
-            throw new Error("Invalid response from API");
+            console.log(`Using even-move API with evalChange=${evalChange}`);
           }
-        } catch (apiError) {
-          console.error("API error, using random move:", apiError);
-          // Pick a random legal move as fallback
-          const randomIndex = Math.floor(Math.random() * legalMoves.length);
-          const randomMove = legalMoves[randomIndex];
-          moveFrom = randomMove.from;
-          moveTo = randomMove.to;
+          
+          // Store current evaluation as previous for next move
+          previousEvalRef.current = currentEvalRef.current;
+          
+          // Use the even-move endpoint for adaptive learning when player is black
+          // For first move as white, the evalChange will be 0
+          response = await gameApi.getEvenMove(currentFen, evalChange, skillLevel);
+        } else {
+          console.log(`Using regular getBestMove API with skillLevel=${skillLevel}`);
+          // Regular best move when player is white
+          response = await gameApi.getBestMove(currentFen, skillLevel);
         }
+        
+        console.log("API response:", response);
+        
+        if (response && response.move && response.move.length >= 4) {
+          moveFrom = response.move.substring(0, 2);
+          moveTo = response.move.substring(2, 4);
+          if (response.move.length > 4) {
+            movePromotion = response.move[4];
+          }
+          
+          console.log(`API suggested move: ${moveFrom}${moveTo}${movePromotion !== 'q' ? movePromotion : ''}`);
+          
+          // If using even-move, also update the evaluation
+          if (playerSide === 'black' && response.evaluation !== undefined) {
+            // Store this as the new evaluation for the next move comparison
+            console.log(`Updating evaluation to ${response.evaluation}`);
+            currentEvalRef.current = response.evaluation;
+          }
+        } else {
+          throw new Error("Invalid response from API");
+        }
+      } catch (apiError) {
+        console.error("API error, using random move:", apiError);
+        // Pick a random legal move as fallback
+        const randomIndex = Math.floor(Math.random() * legalMoves.length);
+        const randomMove = legalMoves[randomIndex];
+        moveFrom = randomMove.from;
+        moveTo = randomMove.to;
+        console.log(`Using random fallback move: ${moveFrom}${moveTo}`);
       }
       
       // Double-check the move is valid before attempting it
@@ -193,10 +270,12 @@ function Chessboard({
         const randomMove = legalMoves[randomIndex];
         moveFrom = randomMove.from;
         moveTo = randomMove.to;
+        console.log(`Using random replacement move: ${moveFrom}${moveTo}`);
       }
-          
+           
       // Make the move in chess.js
       try {
+        console.log(`Attempting to make move ${moveFrom} to ${moveTo} with promotion=${movePromotion}`);
         const result = chess.move({
           from: moveFrom,
           to: moveTo,
@@ -206,6 +285,8 @@ function Chessboard({
         if (!result) {
           throw new Error(`Invalid move: ${moveFrom} to ${moveTo}`);
         }
+        
+        console.log(`Successfully made move: ${result.san}`);
         
         // Get the updated FEN to pass to parent
         const updatedFen = chess.fen();
@@ -229,6 +310,7 @@ function Chessboard({
         
         // Call onMove callback with the computer's move to keep parent in sync
         if (onMove) {
+          console.log("Calling onMove callback to sync with parent");
           onMove(moveFrom, moveTo);
         }
       } catch (moveError) {
@@ -247,6 +329,11 @@ function Chessboard({
     try {
       // Store the evaluation before the player's move
       const chess = chessRef.current;
+      
+      // Store the current evaluation as the previous one before making the move
+      if (currentEvalRef.current !== null) {
+        previousEvalRef.current = currentEvalRef.current;
+      }
       
       // Try to make the move in chess.js
       const moveResult = chess.move({
@@ -309,17 +396,37 @@ function Chessboard({
   
   // Create or update chessground
   function updateChessground() {
-    if (!boardRef.current || !chessRef.current) return;
+    if (!boardRef.current || !chessRef.current) {
+      console.error("Cannot update chessground: boardRef or chessRef is null");
+      return;
+    }
     
     // Get the current FEN directly from the chess instance
     // This ensures we're using the most up-to-date state
-    const currentFen = chessRef.current.fen();
+    let currentFen;
+    try {
+      currentFen = chessRef.current.fen();
+    } catch (error) {
+      console.error("Error getting FEN in updateChessground:", error);
+      return;
+    }
     
     // Calculate legal moves for the current position
-    const dests = calculateDests();
+    let dests;
+    try {
+      dests = calculateDests();
+    } catch (error) {
+      console.error("Error calculating legal moves:", error);
+      dests = new Map(); // Empty map as fallback
+    }
     
     // Get the current turn from chess.js
-    const turnColor = chessRef.current.turn() === 'w' ? 'white' : 'black';
+    let turnColor: Color = 'white';
+    try {
+      turnColor = chessRef.current.turn() === 'w' ? 'white' : 'black';
+    } catch (error) {
+      console.error("Error getting turn color:", error);
+    }
     
     // Determine if the current player should be able to move
     // Only allow moves if it's the player's turn
@@ -432,25 +539,41 @@ function Chessboard({
       // Create or update the chessground instance
       updateChessground();
       
-      // Only evaluate turn and computer moves if the FEN actually changed
-      if (fen !== currentFenRef.current) {
-        // Determine whose turn it is now
-        const chess = chessRef.current;
-        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
-        const isPlayerTurn = turnColor === playerSide;
+      // Ensure chess instance exists before accessing its methods
+      if (!chessRef.current) {
+        console.error("Chess instance is null during board initialization");
+        return;
+      }
+      
+      // Determine whose turn it is and if we need to make a move
+      const chess = chessRef.current;
+      
+      // Safely get turn color, with fallback
+      let turnColor: Color = 'white';
+      try {
+        turnColor = chess.turn ? (chess.turn() === 'w' ? 'white' : 'black') : 'white';
+      } catch (error) {
+        console.error("Error getting turn:", error);
+      }
+      
+      const isComputerTurn = turnColor !== playerSide;
+      
+      // If it's the computer's turn, we should make a move
+      if (!viewOnly && isComputerTurn && chessgroundRef.current) {
+        const isStartingPosition = fen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
         
-        // If we're not in viewOnly mode and it's computer's turn, initiate a move
-        if (!viewOnly && !isPlayerTurn && chessgroundRef.current) {
-          // Make sure we don't make computer moves when switching sides
-          // and the player is controlling both sides
-          const isStartingPosition = fen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-          
-          // If it's not starting position and it's computer's turn, make a move
-          if (!isStartingPosition) {
-            setTimeout(() => {
-              makeStockfishMove();
-            }, 500);
-          }
+        if (isStartingPosition && playerSide === 'black') {
+          // For the starting position when playing as black, we need to make white's first move
+          console.log("Starting position with player as black - making white's first move via API");
+          setTimeout(() => {
+            makeStockfishMove();
+          }, 300);
+        } else if (!isStartingPosition) {
+          // For any other position where it's computer's turn
+          console.log(`Non-starting position with player as ${playerSide} and ${turnColor} to move - making computer's move`);
+          setTimeout(() => {
+            makeStockfishMove();
+          }, 500);
         }
       }
     } catch (error: any) {
@@ -469,18 +592,33 @@ function Chessboard({
   
   // Initialize the chess instance once only - must run before any other effects
   useEffect(() => {
-    if (!chessRef.current) {
-      // Create the chess instance
+    try {
+      // Always recreate the chess instance with the current FEN
       chessRef.current = new Chess(fen);
+      console.log("Created new Chess instance with FEN:", fen);
+    } catch (error) {
+      console.error("Error creating Chess instance:", error);
     }
-  }, []);
+  }, [fen, playerSide]); // Recreate when FEN or playerSide changes
   
-  // Initialize the evaluation when the board is first set up
+  // Initialize the evaluation when the board is first set up or player side changes
   useEffect(() => {
-    // Only run this if the board is initialized AND we have a chess instance
-    if (!hasInitializedRef.current && chessRef.current) {
-      updateChessground();
-      hasInitializedRef.current = true;
+    // Check if player side has changed
+    const hasPlayerSideChanged = previousPlayerSideRef.current !== playerSide;
+    if (hasPlayerSideChanged) {
+      // Update the previous player side
+      previousPlayerSideRef.current = playerSide;
+      // Reset the evaluation initialization flag when player side changes
+      hasInitializedEvaluationRef.current = false;
+      console.log(`Player side changed to ${playerSide}, will reinitialize evaluation`);
+    }
+    
+    // Only run this if we have a chess instance and haven't initialized evaluation for this playerSide yet
+    if (chessRef.current && !hasInitializedEvaluationRef.current) {
+      console.log(`Initializing evaluation for playerSide=${playerSide}`);
+      
+      // Update the flag to prevent duplicate initialization
+      hasInitializedEvaluationRef.current = true;
       
       // Initialize evaluation references
       const initEvaluation = async () => {
@@ -493,9 +631,24 @@ function Chessboard({
             return;
           }
           
+          console.log("Initializing position evaluation");
+          
           // Set both references to the same initial evaluation
           await updateEvaluation(chessRef.current.fen(), previousEvalRef);
           currentEvalRef.current = previousEvalRef.current;
+          
+          console.log(`Initial evaluation set to ${previousEvalRef.current}`);
+          
+          // If player is black and it's the starting position, we need to prepare
+          // for the first white move with proper evaluation
+          const isStartingPosition = chessRef.current.fen().includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
+          if (playerSide === 'black' && isStartingPosition) {
+            console.log("Player is black with starting position - initializing with zero evaluation change");
+            // When playing as black, the first white move should use even-move with 0 evaluation change
+            // This ensures we handle the switch sides scenario correctly
+            previousEvalRef.current = 0;
+            currentEvalRef.current = 0;
+          }
         } catch (error) {
           console.error("Error initializing evaluation:", error);
           // Set safe defaults
@@ -507,7 +660,7 @@ function Chessboard({
       initEvaluation();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [playerSide]);
   
   return (
     <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>
