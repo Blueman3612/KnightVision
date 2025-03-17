@@ -176,7 +176,10 @@ function Chessboard({
         return;
       }
       
-      console.log(`Making Stockfish move with playerSide=${playerSide}, FEN=${currentFen}`);
+      // Determine which color the computer is playing as (opposite of player)
+      const computerColor = playerSide === 'white' ? 'black' : 'white';
+      console.log(`Computer is playing as ${computerColor}, player is ${playerSide}`);
+      console.log(`Making Stockfish move with position FEN=${currentFen}`);
       
       // Safely get legal moves
       let legalMoves;
@@ -199,62 +202,62 @@ function Chessboard({
       let moveTo = '';
       let movePromotion = 'q'; // Default to queen promotion
       
-      // Try to get a move from the API with error handling
-      try {
-        // Calculate evaluation change if player is playing as black
-        // This means the computer (white) should use even-move
+        // Try to get a move from the API with error handling
+        try {
         let response;
         const isStartingPosition = currentFen.includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
         
-        // IMPORTANT: Use even-move API for all moves EXCEPT for the very first move as white when player is black
-        // This is a special case where the even-move API was giving errors
+        // IMPORTANT: We only use getBestMove for the very first move as white when player is black
         if (isStartingPosition && playerSide === 'black') {
-          // This is the very first move and player is black, so use regular getBestMove for white's first move
-          console.log("Using regular getBestMove API for white's first move");
+          console.log("Using regular getBestMove API for white's first move (starting position)");
           response = await gameApi.getBestMove(currentFen, skillLevel);
         } else {
-          // For all other moves, use the even-move endpoint for adaptive learning
-          // Get the evaluation change from the previous position to current position
-          const evalChange = (previousEvalRef.current !== null && currentEvalRef.current !== null) 
+          // Calculate the evaluation change from previous to current
+          let rawEvalChange = (previousEvalRef.current !== null && currentEvalRef.current !== null) 
             ? currentEvalRef.current - previousEvalRef.current 
             : 0;
           
-          console.log(`Using even-move API with evalChange=${evalChange}`);
+          // IMPORTANT: Flip the sign of eval_change when the player is black
+          // The API expects the eval_change from the computer's perspective
+          // Since evaluations are from white's perspective, we need to flip when player is black
+          const evalChange = playerSide === 'black' ? -rawEvalChange : rawEvalChange;
           
-          // Store current evaluation as previous for next move
+          console.log(`Raw eval change: ${rawEvalChange.toFixed(2)}`);
+          console.log(`Using even-move API with evalChange=${evalChange.toFixed(2)} (adjusted for ${computerColor})`);
+          
+          // Store current evaluation as previous for next move calculation
           previousEvalRef.current = currentEvalRef.current;
           
-          // Use the even-move endpoint for all non-first moves
+          // Use the even-move endpoint with the evaluation change
           response = await gameApi.getEvenMove(currentFen, evalChange, skillLevel);
         }
         
         console.log("API response:", response);
-        
-        if (response && response.move && response.move.length >= 4) {
-          moveFrom = response.move.substring(0, 2);
-          moveTo = response.move.substring(2, 4);
-          if (response.move.length > 4) {
-            movePromotion = response.move[4];
-          }
+          
+          if (response && response.move && response.move.length >= 4) {
+            moveFrom = response.move.substring(0, 2);
+            moveTo = response.move.substring(2, 4);
+            if (response.move.length > 4) {
+              movePromotion = response.move[4];
+            }
           
           console.log(`API suggested move: ${moveFrom}${moveTo}${movePromotion !== 'q' ? movePromotion : ''}`);
           
-          // If using even-move, also update the evaluation
+          // Update the evaluation with the one returned from the API
           if (response.evaluation !== undefined) {
-            // Store this as the new evaluation for the next move comparison
-            console.log(`Updating evaluation to ${response.evaluation}`);
+            console.log(`Updating evaluation to ${response.evaluation} after computer move`);
             currentEvalRef.current = response.evaluation;
           }
-        } else {
-          throw new Error("Invalid response from API");
-        }
-      } catch (apiError) {
-        console.error("API error, using random move:", apiError);
-        // Pick a random legal move as fallback
-        const randomIndex = Math.floor(Math.random() * legalMoves.length);
-        const randomMove = legalMoves[randomIndex];
-        moveFrom = randomMove.from;
-        moveTo = randomMove.to;
+          } else {
+            throw new Error("Invalid response from API");
+          }
+        } catch (apiError) {
+          console.error("API error, using random move:", apiError);
+          // Pick a random legal move as fallback
+          const randomIndex = Math.floor(Math.random() * legalMoves.length);
+          const randomMove = legalMoves[randomIndex];
+          moveFrom = randomMove.from;
+          moveTo = randomMove.to;
         console.log(`Using random fallback move: ${moveFrom}${moveTo}`);
       }
       
@@ -269,7 +272,7 @@ function Chessboard({
         moveTo = randomMove.to;
         console.log(`Using random replacement move: ${moveFrom}${moveTo}`);
       }
-           
+          
       // Make the move in chess.js
       try {
         console.log(`Attempting to make move ${moveFrom} to ${moveTo} with promotion=${movePromotion}`);
@@ -342,13 +345,22 @@ function Chessboard({
   // Function to handle a user move
   async function handleMove(from: Key, to: Key) {
     try {
-      // Store the evaluation before the player's move
+      // Make sure we have a chess instance
+      if (!chessRef.current) {
+        console.error("Chess instance is null in handleMove");
+        return false;
+      }
+      
       const chess = chessRef.current;
       
       // Store the current evaluation as the previous one before making the move
       if (currentEvalRef.current !== null) {
         previousEvalRef.current = currentEvalRef.current;
+        console.log(`Storing previous evaluation: ${previousEvalRef.current} before player move`);
       }
+      
+      // Get the pre-move FEN for logging
+      const preFen = chess.fen();
       
       // Try to make the move in chess.js
       const moveResult = chess.move({
@@ -362,12 +374,21 @@ function Chessboard({
         return false;
       }
       
+      console.log(`Player (${playerSide}) made move: ${moveResult.san}`);
+      
       // Get the updated FEN after the move for synchronization
       const updatedFen = chess.fen();
       
       // Evaluate the position after player's move - this will be compared to previousEvalRef
       // to determine how much the position changed due to player's move
-      await updateEvaluation(updatedFen, currentEvalRef);
+      const newEval = await updateEvaluation(updatedFen, currentEvalRef);
+      
+      // Calculate the evaluation change
+      const evalChange = previousEvalRef.current !== null 
+        ? newEval - previousEvalRef.current 
+        : 0;
+        
+      console.log(`Position evaluation changed by ${evalChange.toFixed(2)} after player's move`);
       
       // Call onMove callback if provided - pass along the updated FEN
       if (onMove) {
@@ -397,6 +418,7 @@ function Chessboard({
       
       // Make computer move if game not over and it's computer's turn
       if (!isGameOver && chess.turn() === (playerSide === 'white' ? 'b' : 'w')) {
+        // Give a small delay to make the move feel more natural
         setTimeout(() => {
           makeStockfishMove();
         }, 300);
@@ -439,8 +461,8 @@ function Chessboard({
     
     // Wait for DOM to be ready
     const initializeBoard = () => {
-      if (!boardRef.current || !chessRef.current) return;
-      
+    if (!boardRef.current || !chessRef.current) return;
+    
       try {
         // Ensure we have chess.js instance before proceeding
         const chess = chessRef.current;
@@ -450,41 +472,41 @@ function Chessboard({
         if (!hasInitializedRef.current) {
           const turnColor = chess.turn() === 'w' ? 'white' : 'black';
           const canPlayerMove = turnColor === playerSide;
-          const dests = calculateDests();
-          
-          const config: Config = {
+    const dests = calculateDests();
+    
+    const config: Config = {
             fen: currentFen,
             orientation: orientation,
-            viewOnly: false,
-            coordinates: true,
-            movable: {
-              free: false,
+      viewOnly: false,
+      coordinates: true,
+      movable: {
+        free: false,
               color: playerSide,
               dests: canPlayerMove ? dests : new Map(),
-              events: {
-                after: handleMove
-              }
-            },
-            animation: {
-              enabled: true,
-              duration: 200
-            },
-            draggable: {
+        events: {
+          after: handleMove
+        }
+      },
+      animation: {
+        enabled: true,
+        duration: 200
+      },
+      draggable: {
               enabled: !viewOnly && canPlayerMove,
-              showGhost: true
-            },
-            selectable: {
+        showGhost: true
+      },
+      selectable: {
               enabled: !viewOnly && canPlayerMove
-            },
-            highlight: {
-              lastMove: true,
-              check: true
-            },
-            premovable: {
-              enabled: false
-            }
-          };
-          
+      },
+      highlight: {
+        lastMove: true,
+        check: true
+      },
+      premovable: {
+        enabled: false
+      }
+    };
+    
           // Recreate the chessground from scratch
           if (chessgroundRef.current) {
             chessgroundRef.current.destroy();
@@ -507,11 +529,11 @@ function Chessboard({
               }, 500);
             } else if (!isStartingPosition) {
               console.log("Computer's turn - making move");
-              setTimeout(() => {
-                makeStockfishMove();
-              }, 500);
-            }
+            setTimeout(() => {
+              makeStockfishMove();
+            }, 500);
           }
+        }
         } else {
           // Just update existing chessground
           updateChessground();
@@ -637,23 +659,26 @@ function Chessboard({
             return;
           }
           
-          console.log("Initializing position evaluation");
+          console.log("Initializing position evaluation for adaptive learning");
+          
+          // Get the current FEN
+          const currentFen = chessRef.current.fen();
           
           // Set both references to the same initial evaluation
-          await updateEvaluation(chessRef.current.fen(), previousEvalRef);
-          currentEvalRef.current = previousEvalRef.current;
+          const initialEval = await evaluatePosition(currentFen);
+          previousEvalRef.current = initialEval;
+          currentEvalRef.current = initialEval;
           
-          console.log(`Initial evaluation set to ${previousEvalRef.current}`);
+          console.log(`Initial evaluation set to ${initialEval} for ${playerSide}`);
           
           // If player is black and it's the starting position, we need to prepare
           // for the first white move with proper evaluation
-          const isStartingPosition = chessRef.current.fen().includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
+          const isStartingPosition = currentFen.includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
           if (playerSide === 'black' && isStartingPosition) {
-            console.log("Player is black with starting position - initializing with zero evaluation change");
-            // When playing as black, the first white move should use even-move with 0 evaluation change
-            // This ensures we handle the switch sides scenario correctly
-            previousEvalRef.current = 0;
-            currentEvalRef.current = 0;
+            console.log("Player is black with starting position - the computer's first move will use getBestMove API");
+            console.log("Subsequent moves will use the even-move API for adaptive learning");
+          } else if (playerSide === 'white') {
+            console.log("Player is white - all computer moves will use the even-move API for adaptive learning");
           }
         } catch (error) {
           console.error("Error initializing evaluation:", error);
