@@ -253,7 +253,50 @@ function TutorPage() {
     toast.success('New game started!');
   };
   
+  const canSwitchSides = () => {
+    try {
+      // Use moveHistory length as our primary indicator
+      console.log(`Checking if can switch sides. moveHistory length: ${moveHistory.length}`);
+      
+      // If game is over, always allow switching
+      if (isGameOver) {
+        console.log("Game is over, can switch sides");
+        return true;
+      }
+      
+      // Check if no moves have been made yet (starting position)
+      if (moveHistory.length === 0) {
+        console.log("No moves made yet, can switch sides");
+        return true;
+      }
+      
+      // Allow switching if only one move has been made, regardless of who's playing
+      // This covers both:
+      // - When player is white and they just moved
+      // - When player is black and computer (white) just moved
+      if (moveHistory.length === 1) {
+        console.log(`Only one move made (${playerSide} playing) - can switch sides`);
+        return true;
+      }
+      
+      // In all other cases, don't allow switching (game has progressed too far)
+      console.log(`Game has progressed too far (${moveHistory.length} moves) - cannot switch sides`);
+      return false;
+    } catch (error) {
+      console.error("Error in canSwitchSides:", error);
+      return false; // Default to not allowing side switch on error
+    }
+  };
+
   const switchSides = () => {
+    // First check if we're allowed to switch sides
+    if (!canSwitchSides()) {
+      console.log("Cannot switch sides at this point in the game");
+      toast.error("Cannot switch sides at this point in the game");
+      setMenuOpen(false);
+      return;
+    }
+    
     // Switch the player's side
     const newPlayerSide = playerSide === 'white' ? 'black' : 'white';
     
@@ -304,55 +347,6 @@ function TutorPage() {
     setGameStatus(`${playerSide === 'white' ? 'White' : 'Black'} resigned`);
   };
   
-  // More reliable way to determine if Switch Sides button should be visible
-  const canSwitchSides = () => {
-    const chess = chessRef.current;
-    const chessAny = chess as any; // Using any to handle version differences in chess.js
-    
-    // Always get the CURRENT FEN directly from the chess instance
-    const currentFen = chess.fen();
-    
-    // The starting position FEN
-    const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    
-    // Check whose turn it is - if it's black's turn, a move has already been made
-    const isBlackTurn = currentFen.includes(' b ');
-    
-    // Check exact match with starting position
-    const isStartingPosition = currentFen === startingFen;
-    
-    // Additional checks for any move being made
-    // 1. Look at move history length
-    const moveHistoryLength = moveHistory.length;
-    
-    // 2. Check if we have history in the chess object
-    const chessHistoryLength = typeof chessAny.history === 'function' ? 
-                              chessAny.history().length : 0;
-    
-    // 3. Check halfmove clock in the FEN (should be 0 at start)
-    // FEN structure: [position] [turn] [castling] [en passant] [halfmove clock] [fullmove number]
-    const fenParts = currentFen.split(' ');
-    const halfMoveClock = fenParts.length >= 5 ? parseInt(fenParts[4], 10) : 0;
-    const fullMoveNumber = fenParts.length >= 6 ? parseInt(fenParts[5], 10) : 1;
-    
-    // A move has been made if:
-    // - We're not at the starting position, OR
-    // - It's black's turn, OR 
-    // - Move history shows moves, OR
-    // - Chess history shows moves, OR
-    // - Full move number is > 1, OR
-    // - Half move clock is > 0
-    const moveHasBeenMade = !isStartingPosition || 
-                           isBlackTurn || 
-                           moveHistoryLength > 0 || 
-                           chessHistoryLength > 0 ||
-                           fullMoveNumber > 1 ||
-                           halfMoveClock > 0;
-    
-    // Only allow switching at the very beginning (before any moves) or when game is over
-    return (!moveHasBeenMade) || isGameOver;
-  };
-
   const flipBoard = () => {
     // Simply toggle orientation
     setOrientation(orientation === 'white' ? 'black' : 'white');
