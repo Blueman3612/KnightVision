@@ -188,7 +188,7 @@ function TutorPage() {
         if (history.length > 0) {
           lastMoveSan = history[history.length - 1];
           console.log(`Got last move SAN: ${lastMoveSan}`);
-        } else {
+          } else {
           // Fallback if we can't get the move history
           lastMoveSan = `${from}-${to}`;
           console.log(`Using fallback move notation: ${lastMoveSan}`);
@@ -378,6 +378,13 @@ function TutorPage() {
     return (!moveHasBeenMade) || isGameOver;
   };
 
+  const flipBoard = () => {
+    console.log("Flipping board, current orientation:", orientation);
+    // Simply toggle orientation
+    setOrientation(orientation === 'white' ? 'black' : 'white');
+    // Don't call setFen() here to avoid resetting the game
+  }
+
   // If not logged in, show nothing (will redirect)
   if (!session) {
     return null;
@@ -410,16 +417,9 @@ function TutorPage() {
                   <div className="py-1">
                     <button 
                       onClick={() => {
-                        // Get the current position DIRECTLY from the chess instance
-                        const currentPosition = chessRef.current.fen();
-                        
+                        // IMPORTANT: Do NOT get the current position from the chess instance here
                         // Only change the visual orientation, not the player's side
-                        setOrientation(orientation === 'white' ? 'black' : 'white');
-                        
-                        // Update the FEN state with the current position
-                        // to maintain game state consistency
-                        setFen(currentPosition);
-                        
+                        flipBoard();
                         setMenuOpen(false);
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
@@ -431,18 +431,18 @@ function TutorPage() {
                     </button>
                     
                     {canSwitchSides() && (
-                      <button 
-                        onClick={() => {
+                    <button 
+                      onClick={() => {
                           switchSides();
-                          setMenuOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
+                      </svg>
                         Switch Sides
-                      </button>
+                    </button>
                     )}
                     
                     <button 
@@ -473,7 +473,7 @@ function TutorPage() {
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
-              key={`board-${playerSide}-${isGameOver ? 'over' : 'playing'}`} // Force remount when player side changes
+              key={`board-${playerSide}-${isGameOver ? 'over' : 'playing'}`} // Force remount ONLY when player side changes or game ends
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}

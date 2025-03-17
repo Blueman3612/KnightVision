@@ -201,8 +201,8 @@ function Chessboard({
         moveTo = randomMove.to;
         console.log("Selected move was invalid, using random move instead:", moveFrom, "to", moveTo);
       }
-      
-      // Make the move in chess.js
+          
+          // Make the move in chess.js
       try {
         const result = chess.move({
           from: moveFrom,
@@ -396,11 +396,6 @@ function Chessboard({
         hasInitializedRef.current = true;
       } else if (chessgroundRef.current) {
         // Update existing instance - avoid full reset if possible
-        // Only update the specific properties that need to change
-        if (currentOrientationRef.current !== chessgroundRef.current.state.orientation) {
-          chessgroundRef.current.set({ orientation: currentOrientationRef.current });
-        }
-        
         // Always update the position and legal moves
         const updatedMovable = {
           color: playerSide,
@@ -454,7 +449,7 @@ function Chessboard({
       console.log("Chessboard unmounting");
     };
   }, [fen, orientation, playerSide, viewOnly]);
-
+  
   // Initialize board when component mounts or FEN/orientation changes
   useEffect(() => {
     console.log("Board initialization effect triggered", {
@@ -466,52 +461,70 @@ function Chessboard({
     
     if (!boardRef.current) return;
     
-    // Ensure we have a chess instance
-    if (!chessRef.current) {
-      chessRef.current = new Chess(fen);
-      // In this case, we'll need a fresh initialization
-      hasInitializedRef.current = false;
-    } else {
-      // If we already have a chess instance, make sure it reflects the current FEN
-      if (chessRef.current.fen() !== fen) {
-        chessRef.current.load(fen);
-      }
-    }
-    
     // Store orientation in ref for easier access
     currentOrientationRef.current = orientation;
-    currentFenRef.current = fen;
+    
+    // IMPORTANT: Only update the chess instance if the FEN actually changed
+    // This prevents resetting the game when only orientation changes
+    if (fen !== currentFenRef.current) {
+      console.log("FEN changed, updating chess instance", { 
+        from: currentFenRef.current, 
+        to: fen 
+      });
+      
+      // Ensure we have a chess instance
+      if (!chessRef.current) {
+        chessRef.current = new Chess(fen);
+        // In this case, we'll need a fresh initialization
+        hasInitializedRef.current = false;
+      } else {
+        // If we already have a chess instance, make sure it reflects the current FEN
+        chessRef.current.load(fen);
+      }
+      
+      currentFenRef.current = fen;
+    } else if (orientation !== chessgroundRef.current?.state.orientation) {
+      console.log("Only orientation changed, not updating chess instance");
+      // Just update the orientation in chessground
+      if (chessgroundRef.current) {
+        chessgroundRef.current.set({ orientation });
+        return; // Skip the rest of the initialization
+      }
+    }
     
     try {
       // Create or update the chessground instance
       updateChessground();
       
-      // Determine whose turn it is now
-      const chess = chessRef.current;
-      const turnColor = chess.turn() === 'w' ? 'white' : 'black';
-      const isPlayerTurn = turnColor === playerSide;
-      
-      console.log("Board initialized with turn:", {
-        turnColor,
-        playerSide,
-        isPlayerTurn,
-        viewOnly
-      });
-      
-      // If we're not in viewOnly mode and it's computer's turn, initiate a move
-      if (!viewOnly && !isPlayerTurn && chessgroundRef.current) {
-        // Make sure we don't make computer moves when switching sides
-        // and the player is controlling both sides
-        const isStartingPosition = fen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      // Only evaluate turn and computer moves if the FEN actually changed
+      if (fen !== currentFenRef.current) {
+        // Determine whose turn it is now
+        const chess = chessRef.current;
+        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+        const isPlayerTurn = turnColor === playerSide;
         
-        // If it's not starting position and it's computer's turn, make a move
-        if (!isStartingPosition) {
-          console.log("Computer's turn to move");
-          setTimeout(() => {
-            makeStockfishMove();
-          }, 500);
-        } else {
-          console.log("Starting position - waiting for first player move");
+        console.log("Board initialized with turn:", {
+          turnColor,
+          playerSide,
+          isPlayerTurn,
+          viewOnly
+        });
+        
+        // If we're not in viewOnly mode and it's computer's turn, initiate a move
+        if (!viewOnly && !isPlayerTurn && chessgroundRef.current) {
+          // Make sure we don't make computer moves when switching sides
+          // and the player is controlling both sides
+          const isStartingPosition = fen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+          
+          // If it's not starting position and it's computer's turn, make a move
+          if (!isStartingPosition) {
+            console.log("Computer's turn to move");
+            setTimeout(() => {
+              makeStockfishMove();
+            }, 500);
+          } else {
+            console.log("Starting position - waiting for first player move");
+          }
         }
       }
     } catch (error: any) {
