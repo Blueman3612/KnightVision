@@ -22,6 +22,7 @@ function TutorPage() {
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [gameStartTime, setGameStartTime] = useState<Date>(new Date());
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -215,11 +216,6 @@ function TutorPage() {
     toast.success('New game started!');
   };
 
-  const flipBoard = () => {
-    console.log(`Flipping board to ${orientation === 'white' ? 'black' : 'white'}`);
-    setOrientation(orientation === 'white' ? 'black' : 'white');
-  };
-
   const resignGame = () => {
     const chess = chessRef.current;
     const chessAny = chess as any;
@@ -232,46 +228,6 @@ function TutorPage() {
     
     // This will trigger the saveGame effect
     console.log('Game resigned');
-  };
-
-  // State for menu toggle
-  const [menuOpen, setMenuOpen] = useState<boolean>(false);
-  
-  // Reference for the hamburger button
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  
-  // Handle click outside to close menu
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // Skip if click was on the button - this is handled by handleButtonClick
-      if (menuButtonRef.current && menuButtonRef.current.contains(event.target as Node)) {
-        return;
-      }
-      
-      // Close menu when clicking outside
-      if (menuOpen) {
-        setMenuOpen(false);
-      }
-    };
-    
-    // Add event listener
-    document.addEventListener('mousedown', handleClickOutside);
-    
-    // Clean up
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [menuOpen]);
-  
-  // Stop propagation on menu clicks to prevent closing when clicking inside
-  const handleMenuClick = (e: any) => {
-    e.stopPropagation();
-  };
-
-  // Handle button click
-  const handleButtonClick = (e: any) => {
-    e.stopPropagation();
-    setMenuOpen(!menuOpen);
   };
 
   // If not logged in, show nothing (will redirect)
@@ -287,11 +243,10 @@ function TutorPage() {
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
           <div className="absolute top-2 right-2 z-20">
-            <div className="relative" onClick={handleMenuClick}>
+            <div className="relative">
               <button 
-                ref={menuButtonRef}
-                onClick={handleButtonClick}
-                className="absolute right-1 cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -299,10 +254,14 @@ function TutorPage() {
               </button>
               
               {menuOpen && (
-                <div className="absolute top-8 right-1 top-full mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                <div className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
                   <div className="py-1">
                     <button 
-                      onClick={flipBoard}
+                      onClick={() => {
+                        console.log(`Direct menu flip in tutor: ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                        setOrientation(orientation === 'white' ? 'black' : 'white');
+                        setMenuOpen(false);
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -312,7 +271,10 @@ function TutorPage() {
                     </button>
                     
                     <button 
-                      onClick={resetGame}
+                      onClick={() => {
+                        resetGame();
+                        setMenuOpen(false);
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -322,7 +284,10 @@ function TutorPage() {
                     </button>
                     
                     <button 
-                      onClick={resignGame}
+                      onClick={() => {
+                        resignGame();
+                        setMenuOpen(false);
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">

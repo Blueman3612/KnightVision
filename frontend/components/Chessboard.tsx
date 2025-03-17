@@ -380,6 +380,8 @@ function Chessboard({
   useEffect(() => {
     if (!boardRef.current) return;
     
+    console.log('Chessboard component received orientation change:', orientation);
+    
     // Store current values in refs for easier access
     currentFenRef.current = fen;
     currentOrientationRef.current = orientation;

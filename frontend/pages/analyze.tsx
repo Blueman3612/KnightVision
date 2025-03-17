@@ -34,6 +34,10 @@ const AnalyzePage = () => {
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   
+  // Menu state
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
   
@@ -211,10 +215,6 @@ const AnalyzePage = () => {
   const goToNextMove = () => goToMove(moveIndex + 1);
   const goToEnd = () => goToMove(moves.length - 1);
   
-  const flipBoard = () => {
-    setOrientation(prev => prev === 'white' ? 'black' : 'white');
-  };
-  
   // Format move number (e.g., "1." for white's first move)
   const formatMoveNumber = (index: number) => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
@@ -263,6 +263,12 @@ const AnalyzePage = () => {
     return formatted;
   }, []);
   
+  // Add useEffect to respond to orientation changes
+  useEffect(() => {
+    console.log('Orientation changed (useEffect):', orientation);
+    // No other actions needed - just making sure React sees this dependency
+  }, [orientation]);
+  
   if (!session) {
     return null; // Will redirect to login
   }
@@ -275,19 +281,37 @@ const AnalyzePage = () => {
           <div className="flex flex-col items-center">
             <div className="relative" style={{ width: 'min(680px, calc(100vh - 12rem))', height: 'min(680px, calc(100vh - 12rem))' }}>
               {/* Board controls */}
-              <div className="absolute top-3 right-3 z-10 flex space-x-2">
-                <Button
-                  onClick={flipBoard}
-                  variant="ghost"
-                  size="xs"
-                  className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
-                  aria-label="Flip Board"
-                  leftIcon={
+              <div className="absolute top-2 right-2 z-20">
+                <div className="relative">
+                  <button 
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
-                  }
-                />
+                  </button>
+                  
+                  {menuOpen && (
+                    <div className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                      <div className="py-1">
+                        <button 
+                          onClick={() => {
+                            console.log(`Direct menu flip: ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                            setOrientation(orientation === 'white' ? 'black' : 'white');
+                            setMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                          </svg>
+                          Flip Board
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* Evaluation bar - now as absolute overlay with proper spacing */}
