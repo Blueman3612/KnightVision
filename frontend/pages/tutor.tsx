@@ -160,14 +160,11 @@ function TutorPage() {
       const chess = chessRef.current;
       const chessAny = chess as any;
       
-      console.log(`Parent component handling move from ${from} to ${to}`);
-      
       // IMPORTANT: First, load the current position from the Chessboard component
       // to ensure our chess instance is in sync
       try {
         // We need to ensure the parent's chess.js instance is in sync with the board
         const childFen = chessAny.fen();
-        console.log("Syncing parent chess instance with FEN:", childFen);
         
         if (typeof chessAny.load === 'function') {
           chessAny.load(childFen);
@@ -187,11 +184,9 @@ function TutorPage() {
         // Get the last move in SAN format
         if (history.length > 0) {
           lastMoveSan = history[history.length - 1];
-          console.log(`Got last move SAN: ${lastMoveSan}`);
-          } else {
+        } else {
           // Fallback if we can't get the move history
           lastMoveSan = `${from}-${to}`;
-          console.log(`Using fallback move notation: ${lastMoveSan}`);
         }
       } catch (historyError) {
         console.error('Error getting move history:', historyError);
@@ -202,7 +197,6 @@ function TutorPage() {
       if (lastMoveSan) {
         setMoveHistory(prev => {
           const newHistory = [...prev, lastMoveSan];
-          console.log(`Move history updated:`, newHistory);
           return newHistory;
         });
       }
@@ -210,14 +204,6 @@ function TutorPage() {
       // Update our FEN state
       const updatedPosition = chessAny.fen();
       setFen(updatedPosition);
-      
-      // For debugging
-      console.log("Game state updated:", {
-        currentPosition: updatedPosition,
-        turn: chessAny.turn(),
-        moveCount: typeof chessAny.history === 'function' ? 
-          chessAny.history().length : 0
-      });
       
       // Check game status
       const isCheckmate = typeof chessAny.in_checkmate === 'function' ? 
@@ -286,8 +272,6 @@ function TutorPage() {
     setIsGameOver(false);
     setGameStartTime(new Date());
     
-    console.log(`Switched sides to ${newPlayerSide}`);
-    
     // Close the menu
     setMenuOpen(false);
     
@@ -304,18 +288,6 @@ function TutorPage() {
     // Display resignation message
     setGameStatus(`${playerSide === 'white' ? 'White' : 'Black'} resigned`);
   };
-  
-  // Remove the automatic first move effect - user wants to control both sides
-  useEffect(() => {
-    console.log("Game state updated:", {
-      moveHistory: moveHistory,
-      playerSide: playerSide,
-      orientation: orientation,
-      isGameOver: isGameOver,
-      fen: fen,
-      canSwitchSides: moveHistory.length === 0 || isGameOver
-    });
-  }, [moveHistory, playerSide, orientation, isGameOver, fen]);
   
   // More reliable way to determine if Switch Sides button should be visible
   const canSwitchSides = () => {
@@ -362,24 +334,11 @@ function TutorPage() {
                            fullMoveNumber > 1 ||
                            halfMoveClock > 0;
     
-    console.log("Can switch sides check:", { 
-      isStartingPosition, 
-      isGameOver,
-      isBlackTurn,
-      currentFen,
-      moveHistoryLength,
-      chessHistoryLength,
-      halfMoveClock,
-      fullMoveNumber,
-      moveHasBeenMade
-    });
-    
     // Only allow switching at the very beginning (before any moves) or when game is over
     return (!moveHasBeenMade) || isGameOver;
   };
 
   const flipBoard = () => {
-    console.log("Flipping board, current orientation:", orientation);
     // Simply toggle orientation
     setOrientation(orientation === 'white' ? 'black' : 'white');
     // Don't call setFen() here to avoid resetting the game
@@ -486,25 +445,6 @@ function TutorPage() {
         {gameStatus && (
           <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
             <p className="text-center font-medium text-gray-800">{gameStatus}</p>
-          </div>
-        )}
-        
-        {moveHistory.length > 0 && (
-          <div className="mt-4 w-full max-w-md px-4 py-3 bg-white bg-opacity-90 backdrop-blur-sm rounded-lg shadow-lg">
-            <h3 className="text-center text-gray-700 font-medium mb-2">Move History</h3>
-            <div className="overflow-auto max-h-40 p-2">
-              <div className="grid grid-cols-2 gap-2">
-                {moveHistory.map((move, index) => (
-                  <div 
-                    key={index} 
-                    className={`text-sm ${index % 2 === 0 ? 'text-right pr-3 border-r border-gray-300' : 'text-left pl-3'}`}
-                  >
-                    {index % 2 === 0 && <span className="text-gray-500 mr-2">{Math.floor(index/2) + 1}.</span>}
-                    {move}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
       </div>

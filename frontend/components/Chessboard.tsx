@@ -142,12 +142,9 @@ function Chessboard({
       const chess = chessRef.current;
       const currentFen = chess.fen();
       
-      console.log("Computer attempting to make a move. Current FEN:", currentFen);
-      
       // List of possible moves in the current position
       const legalMoves = chess.moves({ verbose: true });
       if (legalMoves.length === 0) {
-        console.log("No legal moves available");
         setIsProcessing(false);
         return;
       }
@@ -163,7 +160,6 @@ function Chessboard({
         // Just make e4 as white's first move - simple and reliable
         moveFrom = 'e2';
         moveTo = 'e4';
-        console.log("Using standard opening e4");
       } else {
         // Try to get a move from the API with error handling
         try {
@@ -175,7 +171,6 @@ function Chessboard({
             if (response.move.length > 4) {
               movePromotion = response.move[4];
             }
-            console.log("API suggested move:", moveFrom, "to", moveTo);
           } else {
             throw new Error("Invalid response from API");
           }
@@ -186,7 +181,6 @@ function Chessboard({
           const randomMove = legalMoves[randomIndex];
           moveFrom = randomMove.from;
           moveTo = randomMove.to;
-          console.log("Using random fallback move:", moveFrom, "to", moveTo);
         }
       }
       
@@ -199,10 +193,9 @@ function Chessboard({
         const randomMove = legalMoves[randomIndex];
         moveFrom = randomMove.from;
         moveTo = randomMove.to;
-        console.log("Selected move was invalid, using random move instead:", moveFrom, "to", moveTo);
       }
           
-          // Make the move in chess.js
+      // Make the move in chess.js
       try {
         const result = chess.move({
           from: moveFrom,
@@ -255,12 +248,6 @@ function Chessboard({
       // Store the evaluation before the player's move
       const chess = chessRef.current;
       
-      // Log what's happening for debugging
-      console.log(`Player (${playerSide}) attempting move from ${from} to ${to}`);
-      
-      // IMPORTANT: previousEvalRef holds the evaluation BEFORE player's move
-      // It should not be updated here, as it's already set after computer's move
-      
       // Try to make the move in chess.js
       const moveResult = chess.move({
         from: from as string,
@@ -275,7 +262,6 @@ function Chessboard({
       
       // Get the updated FEN after the move for synchronization
       const updatedFen = chess.fen();
-      console.log(`Move successful: ${moveResult.san}, new position: ${updatedFen}`);
       
       // Evaluate the position after player's move - this will be compared to previousEvalRef
       // to determine how much the position changed due to player's move
@@ -309,12 +295,9 @@ function Chessboard({
       
       // Make computer move if game not over and it's computer's turn
       if (!isGameOver && chess.turn() === (playerSide === 'white' ? 'b' : 'w')) {
-        console.log("Player move complete, computer's turn next");
         setTimeout(() => {
           makeStockfishMove();
         }, 300);
-      } else {
-        console.log("Player move complete, waiting for next player move");
       }
       
       return true;
@@ -327,8 +310,6 @@ function Chessboard({
   // Create or update chessground
   function updateChessground() {
     if (!boardRef.current || !chessRef.current) return;
-    
-    console.log("Updating chessground with playerSide:", playerSide);
     
     // Get the current FEN directly from the chess instance
     // This ensures we're using the most up-to-date state
@@ -343,7 +324,6 @@ function Chessboard({
     // Determine if the current player should be able to move
     // Only allow moves if it's the player's turn
     const canMove = turnColor === playerSide;
-    console.log("Can player move:", canMove, "Turn:", turnColor, "PlayerSide:", playerSide);
     
     // Configuration for chessground
     const config: Config = {
@@ -382,15 +362,6 @@ function Chessboard({
     try {
       if (!hasInitializedRef.current) {
         // First-time initialization
-        console.log("Initializing new chessground with config:", {
-          fen: config.fen,
-          orientation: config.orientation,
-          playerSide: playerSide,
-          movableColor: config.movable?.color || playerSide,
-          canMove: canMove,
-          turnColor: turnColor
-        });
-        
         const cg = Chessground(boardRef.current, config);
         chessgroundRef.current = cg;
         hasInitializedRef.current = true;
@@ -401,14 +372,6 @@ function Chessboard({
           color: playerSide,
           dests: canMove ? dests : new Map(),
         };
-        
-        console.log("Updating existing chessground:", {
-          fen: currentFen,
-          turnColor: turnColor,
-          movable: updatedMovable,
-          playerSide: playerSide,
-          canMove: canMove
-        });
         
         chessgroundRef.current.set({ 
           fen: currentFen,
@@ -436,29 +399,8 @@ function Chessboard({
     }
   }
   
-  // Debug component mounting
-  useEffect(() => {
-    console.log("Chessboard mounted/updated with props:", {
-      fen,
-      orientation,
-      playerSide,
-      viewOnly,
-    });
-    
-    return () => {
-      console.log("Chessboard unmounting");
-    };
-  }, [fen, orientation, playerSide, viewOnly]);
-  
   // Initialize board when component mounts or FEN/orientation changes
   useEffect(() => {
-    console.log("Board initialization effect triggered", {
-      fen,
-      orientation,
-      playerSide,
-      viewOnly
-    });
-    
     if (!boardRef.current) return;
     
     // Store orientation in ref for easier access
@@ -467,11 +409,6 @@ function Chessboard({
     // IMPORTANT: Only update the chess instance if the FEN actually changed
     // This prevents resetting the game when only orientation changes
     if (fen !== currentFenRef.current) {
-      console.log("FEN changed, updating chess instance", { 
-        from: currentFenRef.current, 
-        to: fen 
-      });
-      
       // Ensure we have a chess instance
       if (!chessRef.current) {
         chessRef.current = new Chess(fen);
@@ -484,7 +421,6 @@ function Chessboard({
       
       currentFenRef.current = fen;
     } else if (orientation !== chessgroundRef.current?.state.orientation) {
-      console.log("Only orientation changed, not updating chess instance");
       // Just update the orientation in chessground
       if (chessgroundRef.current) {
         chessgroundRef.current.set({ orientation });
@@ -503,13 +439,6 @@ function Chessboard({
         const turnColor = chess.turn() === 'w' ? 'white' : 'black';
         const isPlayerTurn = turnColor === playerSide;
         
-        console.log("Board initialized with turn:", {
-          turnColor,
-          playerSide,
-          isPlayerTurn,
-          viewOnly
-        });
-        
         // If we're not in viewOnly mode and it's computer's turn, initiate a move
         if (!viewOnly && !isPlayerTurn && chessgroundRef.current) {
           // Make sure we don't make computer moves when switching sides
@@ -518,12 +447,9 @@ function Chessboard({
           
           // If it's not starting position and it's computer's turn, make a move
           if (!isStartingPosition) {
-            console.log("Computer's turn to move");
             setTimeout(() => {
               makeStockfishMove();
             }, 500);
-          } else {
-            console.log("Starting position - waiting for first player move");
           }
         }
       }
@@ -570,8 +496,6 @@ function Chessboard({
           // Set both references to the same initial evaluation
           await updateEvaluation(chessRef.current.fen(), previousEvalRef);
           currentEvalRef.current = previousEvalRef.current;
-          
-          console.log("Evaluation tracking initialized - both refs set to:", previousEvalRef.current);
         } catch (error) {
           console.error("Error initializing evaluation:", error);
           // Set safe defaults
