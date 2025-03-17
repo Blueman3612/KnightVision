@@ -5,7 +5,7 @@ import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
 import Button from '../components/ui/Button';
-import toast, { Toaster } from 'react-hot-toast';
+import { useToast } from '../components/ui';
 import { gameApi } from '../lib/api';
 
 interface TutorPageProps {
@@ -16,6 +16,7 @@ function TutorPage() {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
+  const toast = useToast();
   const chessRef = useRef(new Chess());
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
   const [playerSide, setPlayerSide] = useState<'white' | 'black'>('white');
@@ -81,70 +82,187 @@ function TutorPage() {
           const chess = chessRef.current;
           const chessAny = chess as any; // Using any type to handle version differences in chess.js
           
+          // Format date properly with dots instead of dashes
+          const today = new Date();
+          const formattedDate = today.toISOString().split('T')[0].replace(/-/g, '.');
+          
+          // Fetch the user's display_name from the public.users table
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('display_name')
+            .eq('id', session.user.id)
+            .single();
+            
+          // Use display_name from the users table or fall back to email
+          const userName = (userData?.display_name) ? userData.display_name : session.user.email;
+          console.log("Using display name from database:", userName);
+          
+          // Reset the chess game to initial position
+          if (typeof chessAny.reset === 'function') {
+            chessAny.reset();
+          } else {
+            // Fallback if reset is not available
+            chessAny.load('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+          }
+          
           // Set the headers for the PGN
           if (typeof chessAny.header === 'function') {
             chessAny.header(
               'Event', 'Chess Tutor Game',
-              'Site', 'Chess Tutor',
-              'Date', new Date().toISOString().split('T')[0],
-              'White', playerSide === 'white' ? session.user.email : 'Stockfish 0',
-              'Black', playerSide === 'black' ? session.user.email : 'Stockfish 0',
-              'WhiteElo', playerSide === 'white' ? '?' : '1350', // Approximate ELO for skill level 0
-              'BlackElo', playerSide === 'black' ? '?' : '1350',
+              'Site', 'KnightVision',
+              'Date', formattedDate,
+              'White', playerSide === 'white' ? userName : 'KnightVision',
+              'Black', playerSide === 'black' ? userName : 'KnightVision',
+              'WhiteElo', '?',
+              'BlackElo', '?',
               'TimeControl', '-',
               'Result', chessAny.in_checkmate?.() ? (chessAny.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2'
             );
           }
-
+          
+          // Apply all the moves from move history to the fresh chess game
+          // This ensures the PGN will contain all moves
+          for (const move of moveHistory) {
+            try {
+              if (typeof chessAny.move === 'function') {
+                chessAny.move(move);
+              }
+            } catch (moveError) {
+              console.error(`Error applying move ${move}:`, moveError);
+            }
+          }
+          
+          // Get the complete PGN with moves
           const pgn = typeof chessAny.pgn === 'function' ? chessAny.pgn() : '';
+          console.log("Generated PGN:", pgn); // Debug log to check if moves are included
+          
+          // Extract the moves-only part of the PGN (everything after the last header)
+          const lastHeaderIndex = pgn.lastIndexOf(']') + 1;
+          const movesOnly = pgn.substring(lastHeaderIndex).trim();
+          
           const inCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
+          const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
+          const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
+          const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
           const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
           
           const result = inCheckmate 
             ? (turn === 'w' ? '0-1' : '1-0') 
             : '1/2-1/2';
+            
+          // Determine termination reason
+          const termination = inCheckmate ? 'checkmate' : 
+                      isStalemate ? 'stalemate' : 
+                      isDraw ? 'draw' : 
+                      isThreefoldRepetition ? 'repetition' : 'normal';
           
-          // Generate a unique game ID
-          const uniqueGameId = `tutor_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+          // Convert date format from yyyy.mm.dd to yyyy-mm-dd for the database
+          const databaseDate = formattedDate.replace(/\./g, '-');
           
-          // Insert the game using the RPC function
-          const { data, error } = await supabase.rpc('insert_game', {
-            p_pgn: pgn,
-            p_result: result
-          });
+          // Generate a unique game ID that is consistent and can be used for duplicate detection
+          // Use components that will be unique for this game: player names, date, result, moves
+          const moveText = typeof chessAny.history === 'function' ? chessAny.history().join(' ') : moveHistory.join(' ');
+          const uniqueComponents = [
+            'KnightVision',
+            formattedDate,
+            playerSide === 'white' ? userName : 'KnightVision',
+            playerSide === 'black' ? userName : 'KnightVision',
+            result,
+            moveText.substring(0, 100) // Use first 100 chars of moves for uniqueness
+          ];
+          const uniqueGameId = uniqueComponents.join('_');
           
-          if (error) {
-            console.error('Error saving game:', error);
-            toast.error('Failed to save your game');
+          // Check if this game already exists in the database
+          const { data: existingGames, error: checkError } = await supabase
+            .from('games')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .eq('unique_game_id', uniqueGameId)
+            .limit(1);
+            
+          if (checkError) {
+            console.error('Error checking for duplicate games:', checkError);
+            // Continue trying to save the game anyway
+          } else if (existingGames && existingGames.length > 0) {
+            // Game already exists, don't save
+            console.log('Game already exists in database, not saving duplicate');
             return;
           }
           
-          // Update the game to set cpu = true and other metadata
-          const { error: updateError } = await supabase
+          // First, try direct insert with the proper UUID type
+          const { data: directData, error: directError } = await supabase
             .from('games')
-            .update({
+            .insert({
+              user_id: session.user.id, // Pass the UUID directly
+              pgn: pgn,
+              result: result,
+              analyzed: false,
               cpu: true,
-              white_player: playerSide === 'white' ? session.user.email : 'Stockfish 0',
-              black_player: playerSide === 'black' ? session.user.email : 'Stockfish 0',
+              white_player: playerSide === 'white' ? userName : 'KnightVision',
+              black_player: playerSide === 'black' ? userName : 'KnightVision',
               white_elo: playerSide === 'white' ? null : 1350,
               black_elo: playerSide === 'black' ? null : 1350,
-              platform: 'Chess Tutor',
+              platform: 'KnightVision',
               start_time: gameStartTime.toISOString(),
               end_time: new Date().toISOString(),
-              termination: inCheckmate ? 'checkmate' : 
-                          chessAny.in_stalemate?.() ? 'stalemate' : 
-                          chessAny.in_draw?.() ? 'draw' : 'normal',
+              termination: termination,
               unique_game_id: uniqueGameId,
-              user_color: playerSide
+              user_color: playerSide,
+              // Add missing columns
+              event: 'Chess Tutor Game',
+              site: 'KnightVision',
+              game_date: databaseDate,
+              moves_only: movesOnly
             })
-            .eq('id', data);
+            .select('id')
+            .single();
+          
+          if (directError) {
+            console.error('Error in direct insert:', directError);
             
-          if (updateError) {
-            console.error('Error updating game metadata:', updateError);
+            // Fallback to RPC method if direct insert fails
+            const { data: rpcData, error: rpcError } = await supabase.rpc('insert_game', {
+              p_pgn: pgn,
+              p_result: result
+            });
+            
+            if (rpcError) {
+              console.error('Error saving game with RPC:', rpcError);
+              toast.error('Failed to save your game');
+              return;
+            }
+            
+            // Update the game to set cpu = true and other metadata
+            const { error: updateError } = await supabase
+              .from('games')
+              .update({
+                cpu: true,
+                white_player: playerSide === 'white' ? userName : 'KnightVision',
+                black_player: playerSide === 'black' ? userName : 'KnightVision',
+                white_elo: playerSide === 'white' ? null : 1350,
+                black_elo: playerSide === 'black' ? null : 1350,
+                platform: 'KnightVision',
+                start_time: gameStartTime.toISOString(),
+                end_time: new Date().toISOString(),
+                termination: termination,
+                unique_game_id: uniqueGameId,
+                user_color: playerSide,
+                // Add missing columns
+                event: 'Chess Tutor Game',
+                site: 'KnightVision',
+                game_date: databaseDate,
+                moves_only: movesOnly
+              })
+              .eq('id', rpcData);
+              
+            if (updateError) {
+              console.error('Error updating game metadata:', updateError);
+            } else {
+              toast.success('Game saved successfully!');
+            }
           } else {
             toast.success('Game saved successfully!');
           }
-          
         } catch (error) {
           console.error('Error in game saving process:', error);
           toast.error('An error occurred while saving your game');
@@ -153,7 +271,7 @@ function TutorPage() {
     };
     
     saveGame();
-  }, [isGameOver, moveHistory, session, playerSide, supabase, gameStartTime]);
+  }, [isGameOver, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
 
   const handleMove = (from: string, to: string) => {
     try {
@@ -369,7 +487,6 @@ function TutorPage() {
         <title>Chess Tutor</title>
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
-        <Toaster position="top-center" />
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
           <div className="absolute top-2 right-2 z-20">
             <div className="relative">

@@ -5,6 +5,7 @@ import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
 import { SessionContextProvider, Session } from '@supabase/auth-helpers-react'
 import { QueryClient, QueryClientProvider } from 'react-query'
 import Layout from '@/components/Layout'
+import { ToastProvider } from '@/components/ui'
 
 // Configure hot reloading for Docker
 const isDockerEnvironment = process.env.NEXT_PUBLIC_DOCKER === 'true'
@@ -38,11 +39,13 @@ export default function App({
       supabaseClient={supabaseClient}
       initialSession={pageProps.initialSession}
     >
-      <QueryClientProvider client={queryClient}>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-      </QueryClientProvider>
+      <ToastProvider defaultPosition="bottom-right">
+        <QueryClientProvider client={queryClient}>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </QueryClientProvider>
+      </ToastProvider>
     </SessionContextProvider>
   )
 } 

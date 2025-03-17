@@ -45,11 +45,21 @@ module.exports = {
       },
       animation: {
         'ripple': 'ripple 0.6s linear forwards',
+        'fade-in': 'fadeIn 0.3s ease-in-out',
+        'fade-out': 'fadeOut 0.5s ease-in-out forwards',
       },
       keyframes: {
         ripple: {
           '0%': { transform: 'scale(0)', opacity: '0.5' },
           '100%': { transform: 'scale(2)', opacity: '0' },
+        },
+        fadeIn: {
+          '0%': { opacity: 0, transform: 'translateY(-10px)' },
+          '100%': { opacity: 1, transform: 'translateY(0)' },
+        },
+        fadeOut: {
+          '0%': { opacity: 1, transform: 'translateY(0)' },
+          '100%': { opacity: 0, transform: 'translateY(10px)' },
         },
       },
       backgroundImage: {
