@@ -223,6 +223,9 @@ For consistency in analysis and engine responses, a standardized search depth of
   - `black_control`: Number of black pieces attacking, defending, or controlling each square
   - `white_control_material`: Total material value of white pieces controlling each square
   - `black_control_material`: Total material value of black pieces controlling each square
+- **Legal Moves Tracking**:
+  - `white_legal_moves`: Dictionary tracking available legal moves for each white piece
+  - `black_legal_moves`: Dictionary tracking available legal moves for each black piece
 
 ##### Data Structure Implementation
 ```
@@ -240,6 +243,13 @@ white_control_material = [
 ]
 
 // Similar arrays for black_control and black_control_material
+
+// Legal moves tracking
+white_legal_moves = {
+    "e1": ["e2", "f2", "f1"],  // King at e1 can move to e2, f2, f1
+    "d1": ["d2", "d3", "a4"],  // Queen at d1 can move to d2, d3, a4
+    // ...entries for all pieces
+}
 ```
 
 ##### Material Values
@@ -309,7 +319,26 @@ Analysis:
 - Identified as a fork
 ```
 
-The tactical annotation system will highlight these detected forks in the game analysis, providing players with concrete examples of tactical opportunities they either capitalized on or missed during play.
+###### Pins and Skewers Detection
+Pins and skewers are tactical motifs where a piece is restricted in movement due to a threat along a line. Our detection algorithm follows these precise criteria:
+
+1. **Not Check**: The move should not result in a check.
+2. **Long-Range Piece**: Verify the moved piece is a bishop, rook, or queen.
+3. **Legal Moves Comparison**: Check if each NEWLY attacked piece has fewer legal moves than before the move.
+   - **Pin Identification**: If the newly attacked piece CANNOT TAKE the moved piece, this is classified as a PIN.
+   - **Skewer Identification**: If the newly attacked piece CAN TAKE the moved piece AND no longer has legal moves to squares NOT CONTROLLED by the moved piece, this is classified as a SKEWER.
+4. **Material Value Analysis**: If any legal move of a NEWLY attacked piece (piece A) would result in another piece (piece B) that wasn't previously attacked by the moved piece and is of GREATER MATERIAL VALUE being attacked by the moved piece, this implies either a pin or a skewer.
+   - **Material-Based Classification**: If piece A's material value is less than or equal to the moved piece, this is a PIN. If piece A's value is greater than the moved piece, this is a SKEWER.
+
+###### Discovered Check Detection
+A discovered check occurs when a piece moves away from a line, revealing an attack on the opponent's king. Our algorithm applies these specific rules:
+
+1. **Check Status**: The move must result in a check.
+2. **Control Change Detection**:
+   - If the opponent king square is controlled by the moved piece, control of this square should have increased by at least 2.
+   - If the opponent king square is not controlled by the moved piece, control should have increased by at least 1.
+
+The tactical annotation system will highlight these detected tactical motifs in the game analysis, providing players with concrete examples of opportunities they either capitalized on or missed during play.
 
 ### 4.2 Frontend Implementation
 
