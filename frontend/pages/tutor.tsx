@@ -256,17 +256,14 @@ function TutorPage() {
   const canSwitchSides = () => {
     try {
       // Use moveHistory length as our primary indicator
-      console.log(`Checking if can switch sides. moveHistory length: ${moveHistory.length}`);
       
       // If game is over, always allow switching
       if (isGameOver) {
-        console.log("Game is over, can switch sides");
         return true;
       }
       
       // Check if no moves have been made yet (starting position)
       if (moveHistory.length === 0) {
-        console.log("No moves made yet, can switch sides");
         return true;
       }
       
@@ -275,12 +272,10 @@ function TutorPage() {
       // - When player is white and they just moved
       // - When player is black and computer (white) just moved
       if (moveHistory.length === 1) {
-        console.log(`Only one move made (${playerSide} playing) - can switch sides`);
         return true;
       }
       
       // In all other cases, don't allow switching (game has progressed too far)
-      console.log(`Game has progressed too far (${moveHistory.length} moves) - cannot switch sides`);
       return false;
     } catch (error) {
       console.error("Error in canSwitchSides:", error);
@@ -291,7 +286,6 @@ function TutorPage() {
   const switchSides = () => {
     // First check if we're allowed to switch sides
     if (!canSwitchSides()) {
-      console.log("Cannot switch sides at this point in the game");
       toast.error("Cannot switch sides at this point in the game");
       setMenuOpen(false);
       return;
@@ -306,8 +300,6 @@ function TutorPage() {
     // Reset the chess instance
     const chess = chessRef.current;
     chess.reset();
-    
-    console.log(`Switching sides to play as ${newPlayerSide}`);
     
     // Close the menu first
     setMenuOpen(false);
@@ -348,9 +340,22 @@ function TutorPage() {
   };
   
   const flipBoard = () => {
-    // Simply toggle orientation
-    setOrientation(orientation === 'white' ? 'black' : 'white');
-    // Don't call setFen() here to avoid resetting the game
+    // Toggle orientation
+    const newOrientation = orientation === 'white' ? 'black' : 'white';
+    
+    // Set the new orientation
+    setOrientation(newOrientation);
+    setMenuOpen(false);
+    
+    // Force a proper refresh of legal moves by using the onMove handler
+    // The onMove handler will properly update the board state without remounting
+    setTimeout(() => {
+      // Small delay to ensure the orientation change has taken effect
+      // We don't need to change FEN, just ensure the board refreshes with the right permission
+      const chess = chessRef.current;
+      // Setting the same FEN again will force a refresh without changing the position
+      setFen(chess.fen());
+    }, 100);
   }
 
   // If not logged in, show nothing (will redirect)
