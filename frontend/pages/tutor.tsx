@@ -24,6 +24,8 @@ function TutorPage() {
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [gameStartTime, setGameStartTime] = useState<Date>(new Date());
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -31,6 +33,36 @@ function TutorPage() {
       router.push('/login');
     }
   }, [session, router]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If menu is not open, don't do anything
+      if (!menuOpen) return;
+      
+      // Check if the click was outside both the menu and the menu button
+      const menuElement = menuRef.current;
+      const buttonElement = menuButtonRef.current;
+      
+      const targetElement = event.target as Node;
+      
+      const isOutsideMenu = menuElement && !menuElement.contains(targetElement);
+      const isOutsideButton = buttonElement && !buttonElement.contains(targetElement);
+      
+      // If clicked outside both menu and button, close the menu
+      if (isOutsideMenu && isOutsideButton) {
+        setMenuOpen(false);
+      }
+    };
+    
+    // Add the event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
 
   // Reset game start time when a new game begins
   useEffect(() => {
@@ -126,13 +158,11 @@ function TutorPage() {
     try {
       console.log(`Move handled in tutor page: ${from} to ${to}`);
       
-      // The actual move has already been made in the Chessboard component
-      // We just need to sync our state with it
+      // The actual move is made in the Chessboard component
+      // We need to sync our state with it by getting the latest FEN
       const chess = chessRef.current;
       
       // Get the move in SAN format before updating FEN
-      // This might be redundant since the move was already made in Chessboard component,
-      // but included for safety
       let lastMoveSan = '';
       try {
         const chessAny = chess as any;
@@ -169,7 +199,11 @@ function TutorPage() {
         console.error('Error getting move history:', e);
       }
       
-      setFen(chess.fen());
+      // CRITICAL: Update our FEN state with the current board position
+      // This ensures the parent component stays in sync with the Chessboard
+      const currentPosition = chess.fen();
+      console.log('Updating parent FEN state to:', currentPosition);
+      setFen(currentPosition);
       
       // Check game status
       const chessAny = chess as any;
@@ -246,6 +280,7 @@ function TutorPage() {
           <div className="absolute top-2 right-2 z-20">
             <div className="relative">
               <button 
+                ref={menuButtonRef}
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
               >
@@ -255,13 +290,25 @@ function TutorPage() {
               </button>
               
               {menuOpen && (
-                <div className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                <div 
+                  ref={menuRef}
+                  className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20"
+                >
                   <div className="py-1">
                     <button 
                       onClick={() => {
+                        // Get the current position DIRECTLY from the chess instance
+                        const currentPosition = chessRef.current.fen();
                         console.log(`Flipping board visually from ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                        console.log(`Current position before flip: ${currentPosition}`);
+                        
                         // Only change the visual orientation, not the player's side
                         setOrientation(orientation === 'white' ? 'black' : 'white');
+                        
+                        // CRITICALLY IMPORTANT: Update the FEN state with the current position
+                        // to maintain game state consistency
+                        setFen(currentPosition);
+                        
                         setMenuOpen(false);
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"

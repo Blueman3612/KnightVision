@@ -37,7 +37,8 @@ function Chessboard({
   const chessgroundRef = useRef<Api | null>(null);
   
   // Store chess.js instance in a ref - using version 1.1.0
-  const chessRef = useRef<any>(new Chess(fen));
+  // Create a stable ref that won't change with renders
+  const chessRef = useRef<any>(null);
   
   // Track loading state for the thinking indicator
   const [isProcessing, setIsProcessing] = useState(false);
@@ -55,6 +56,12 @@ function Chessboard({
   
   // Utility to safely update evaluation references
   const updateEvaluation = async (fen: string, target: { current: number | null }) => {
+    if (!fen) {
+      console.error("Cannot update evaluation: FEN is null or empty");
+      target.current = 0;
+      return 0;
+    }
+    
     try {
       console.log(`Updating evaluation for position: ${fen}`);
       const eval_score = await evaluatePosition(fen);
@@ -309,16 +316,18 @@ function Chessboard({
   
   // Create or update chessground
   function updateChessground() {
-    if (!boardRef.current) return;
+    if (!boardRef.current || !chessRef.current) return;
     
-    const chess = chessRef.current;
+    // Get the current FEN directly from the chess instance
+    // This ensures we're using the most up-to-date state
+    const currentFen = chessRef.current.fen();
     
     // Calculate legal moves for the current position
     const dests = calculateDests();
     
     // Configuration for chessground
     const config: Config = {
-      fen: chess.fen(),
+      fen: currentFen, // Use the current FEN from chess instance, not the ref
       orientation: currentOrientationRef.current,
       viewOnly: false,
       coordinates: true,
@@ -353,12 +362,24 @@ function Chessboard({
     try {
       if (!hasInitializedRef.current) {
         // First-time initialization
+        console.log('First-time initialization of chessground');
         const cg = Chessground(boardRef.current, config);
         chessgroundRef.current = cg;
         hasInitializedRef.current = true;
       } else if (chessgroundRef.current) {
-        // Update existing instance
-        chessgroundRef.current.set(config);
+        // Update existing instance - avoid full reset if possible
+        // Only update the specific properties that need to change
+        if (currentOrientationRef.current !== chessgroundRef.current.state.orientation) {
+          console.log('Updating chessground orientation to:', currentOrientationRef.current);
+          chessgroundRef.current.set({ orientation: currentOrientationRef.current });
+        }
+        
+        // Always update the position and legal moves
+        chessgroundRef.current.set({ 
+          fen: currentFen,
+          turnColor: chessRef.current.turn() === 'w' ? 'white' : 'black',
+          movable: { dests }
+        });
       }
     } catch (err: any) {
       console.error("Error initializing/updating chessground:", err);
@@ -382,16 +403,33 @@ function Chessboard({
   useEffect(() => {
     if (!boardRef.current) return;
     
-    console.log('Chessboard component received orientation change:', orientation);
+    console.log('Chessboard component received update. Orientation:', orientation, 'FEN:', fen);
     
-    // Store current values in refs for easier access
-    currentFenRef.current = fen;
+    // Ensure we have a chess instance
+    if (!chessRef.current) {
+      console.log('Chess instance not initialized yet, creating with FEN:', fen);
+      chessRef.current = new Chess(fen);
+      // In this case, we'll need a fresh initialization
+      hasInitializedRef.current = false;
+    }
+    
+    // Store orientation in ref for easier access
     currentOrientationRef.current = orientation;
     
     try {
-      // Reset chess instance to the new FEN
-      const chess = chessRef.current;
-      chess.load(fen);
+      // Get the current position from our chess instance
+      const currentPosition = chessRef.current.fen();
+      
+      // Only update the FEN if it actually changed from what our chess instance has
+      // This prevents resetting the board when only the orientation changes
+      if (currentPosition !== fen && fen !== currentFenRef.current) {
+        console.log('Actual FEN changed, reloading chess instance');
+        currentFenRef.current = fen;
+        chessRef.current.load(fen);
+      } else if (orientation !== currentOrientationRef.current) {
+        console.log('Only orientation changed, preserving current game state');
+        currentFenRef.current = currentPosition; // Ensure ref is in sync with actual state
+      }
       
       // Create or update the chessground instance
       updateChessground();
@@ -399,7 +437,7 @@ function Chessboard({
       // If we're not in viewOnly mode, calculate whose turn it is and set up correctly
       if (!viewOnly) {
         const playerColor = playerSide; // Use playerSide instead of orientation
-        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+        const turnColor = chessRef.current.turn() === 'w' ? 'white' : 'black';
         
         // If it's the computer's turn, make a move after a short delay
         if (playerColor !== turnColor && chessgroundRef.current) {
@@ -420,17 +458,35 @@ function Chessboard({
         hasInitializedRef.current = false;
       }
     };
-  }, [fen, orientation, playerSide, viewOnly]); // Add playerSide to dependencies
+  }, [fen, orientation, playerSide, viewOnly]);
+  
+  // Initialize the chess instance once only - must run before any other effects
+  useEffect(() => {
+    if (!chessRef.current) {
+      console.log('Creating chess instance with FEN:', fen);
+      // Create the chess instance
+      chessRef.current = new Chess(fen);
+    }
+  }, []);
   
   // Initialize the evaluation when the board is first set up
   useEffect(() => {
-    if (!hasInitializedRef.current) {
+    // Only run this if the board is initialized AND we have a chess instance
+    if (!hasInitializedRef.current && chessRef.current) {
       updateChessground();
       hasInitializedRef.current = true;
       
       // Initialize evaluation references
       const initEvaluation = async () => {
         try {
+          // Make sure chess instance exists before trying to access fen
+          if (!chessRef.current) {
+            console.error("Chess instance is null during evaluation init");
+            previousEvalRef.current = 0;
+            currentEvalRef.current = 0;
+            return;
+          }
+          
           // Set both references to the same initial evaluation
           await updateEvaluation(chessRef.current.fen(), previousEvalRef);
           currentEvalRef.current = previousEvalRef.current;
@@ -446,6 +502,7 @@ function Chessboard({
       
       initEvaluation();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   return (

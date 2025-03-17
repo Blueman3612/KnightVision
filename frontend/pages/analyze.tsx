@@ -37,6 +37,7 @@ const AnalyzePage = () => {
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
@@ -269,6 +270,36 @@ const AnalyzePage = () => {
     // No other actions needed - just making sure React sees this dependency
   }, [orientation]);
   
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If menu is not open, don't do anything
+      if (!menuOpen) return;
+      
+      // Check if the click was outside both the menu and the menu button
+      const menuElement = menuRef.current;
+      const buttonElement = menuButtonRef.current;
+      
+      const targetElement = event.target as Node;
+      
+      const isOutsideMenu = menuElement && !menuElement.contains(targetElement);
+      const isOutsideButton = buttonElement && !buttonElement.contains(targetElement);
+      
+      // If clicked outside both menu and button, close the menu
+      if (isOutsideMenu && isOutsideButton) {
+        setMenuOpen(false);
+      }
+    };
+    
+    // Add the event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+  
   if (!session) {
     return null; // Will redirect to login
   }
@@ -284,6 +315,7 @@ const AnalyzePage = () => {
               <div className="absolute top-2 right-2 z-20">
                 <div className="relative">
                   <button 
+                    ref={menuButtonRef}
                     onClick={() => setMenuOpen(!menuOpen)}
                     className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
                   >
@@ -293,7 +325,10 @@ const AnalyzePage = () => {
                   </button>
                   
                   {menuOpen && (
-                    <div className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                    <div 
+                      ref={menuRef}
+                      className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20"
+                    >
                       <div className="py-1">
                         <button 
                           onClick={() => {
