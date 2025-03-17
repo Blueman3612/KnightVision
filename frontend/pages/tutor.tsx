@@ -86,10 +86,10 @@ function TutorPage() {
               'Event', 'Chess Tutor Game',
               'Site', 'Chess Tutor',
               'Date', new Date().toISOString().split('T')[0],
-              'White', orientation === 'white' ? session.user.email : 'Stockfish 0',
-              'Black', orientation === 'black' ? session.user.email : 'Stockfish 0',
-              'WhiteElo', orientation === 'white' ? '?' : '1350', // Approximate ELO for skill level 0
-              'BlackElo', orientation === 'black' ? '?' : '1350',
+              'White', playerSide === 'white' ? session.user.email : 'Stockfish 0',
+              'Black', playerSide === 'black' ? session.user.email : 'Stockfish 0',
+              'WhiteElo', playerSide === 'white' ? '?' : '1350', // Approximate ELO for skill level 0
+              'BlackElo', playerSide === 'black' ? '?' : '1350',
               'TimeControl', '-',
               'Result', chessAny.in_checkmate?.() ? (chessAny.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2'
             );
@@ -123,10 +123,10 @@ function TutorPage() {
             .from('games')
             .update({
               cpu: true,
-              white_player: orientation === 'white' ? session.user.email : 'Stockfish 0',
-              black_player: orientation === 'black' ? session.user.email : 'Stockfish 0',
-              white_elo: orientation === 'white' ? null : 1350,
-              black_elo: orientation === 'black' ? null : 1350,
+              white_player: playerSide === 'white' ? session.user.email : 'Stockfish 0',
+              black_player: playerSide === 'black' ? session.user.email : 'Stockfish 0',
+              white_elo: playerSide === 'white' ? null : 1350,
+              black_elo: playerSide === 'black' ? null : 1350,
               platform: 'Chess Tutor',
               start_time: gameStartTime.toISOString(),
               end_time: new Date().toISOString(),
@@ -134,7 +134,7 @@ function TutorPage() {
                           chessAny.in_stalemate?.() ? 'stalemate' : 
                           chessAny.in_draw?.() ? 'draw' : 'normal',
               unique_game_id: uniqueGameId,
-              user_color: orientation
+              user_color: playerSide
             })
             .eq('id', data);
             
@@ -152,64 +152,82 @@ function TutorPage() {
     };
     
     saveGame();
-  }, [isGameOver, moveHistory, session, orientation, supabase, gameStartTime]);
+  }, [isGameOver, moveHistory, session, playerSide, supabase, gameStartTime]);
 
   const handleMove = (from: string, to: string) => {
     try {
-      // The actual move is made in the Chessboard component
-      // We need to sync our state with it by getting the latest FEN
+      // Get reference to chess instance
       const chess = chessRef.current;
-      
-      // Get the move in SAN format before updating FEN
-      let lastMoveSan = '';
-      try {
-        const chessAny = chess as any;
-        let moves: any[] = [];
-        
-        // Different versions of chess.js have different history() implementations
-        if (typeof chessAny.history === 'function') {
-          // Newer versions of chess.js might require no parameters or different parameters
-          try {
-            moves = chessAny.history({ verbose: true }) || [];
-          } catch (e) {
-            // Fallback to non-verbose history if verbose fails
-            const moveStrings = chessAny.history() || [];
-            moves = moveStrings.map((m: string) => ({ san: m }));
-          }
-        }
-        
-        if (moves.length > 0) {
-          const lastMove = moves[moves.length - 1];
-          // Get the SAN notation directly from the move object or use the string
-          if (typeof lastMove === 'object' && lastMove.san) {
-            lastMoveSan = lastMove.san;
-          } else if (typeof lastMove === 'string') {
-            lastMoveSan = lastMove;
-          } else {
-            // If all else fails, create a simple representation
-            lastMoveSan = `Move ${moves.length}`;
-          }
-          
-          // Update move history
-          setMoveHistory(prev => [...prev, lastMoveSan]);
-        }
-      } catch (e) {
-        console.error('Error getting move history:', e);
-      }
-      
-      // Update our FEN state with the current board position
-      // This ensures the parent component stays in sync with the Chessboard
-      const currentPosition = chess.fen();
-      setFen(currentPosition);
-      
-      // Check game status
       const chessAny = chess as any;
       
-      // Check if the game is over using methods available in the chess.js version
-      const isCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
-      const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
-      const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
-      const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
+      console.log(`Parent component handling move from ${from} to ${to}`);
+      
+      // IMPORTANT: First, load the current position from the Chessboard component
+      // to ensure our chess instance is in sync
+      try {
+        // We need to ensure the parent's chess.js instance is in sync with the board
+        const childFen = chessAny.fen();
+        console.log("Syncing parent chess instance with FEN:", childFen);
+        
+        if (typeof chessAny.load === 'function') {
+          chessAny.load(childFen);
+        }
+      } catch (loadError) {
+        console.error('Error loading position:', loadError);
+      }
+      
+      // Now that our chess instance is in sync, we can extract the last move
+      let lastMoveSan = '';
+      
+      try {
+        // Get the history of moves
+        const history = typeof chessAny.history === 'function' ? 
+          (chessAny.history({ verbose: false }) || []) : [];
+        
+        // Get the last move in SAN format
+        if (history.length > 0) {
+          lastMoveSan = history[history.length - 1];
+          console.log(`Got last move SAN: ${lastMoveSan}`);
+        } else {
+          // Fallback if we can't get the move history
+          lastMoveSan = `${from}-${to}`;
+          console.log(`Using fallback move notation: ${lastMoveSan}`);
+        }
+      } catch (historyError) {
+        console.error('Error getting move history:', historyError);
+        lastMoveSan = `${from}-${to}`;
+      }
+      
+      // Update move history with the SAN notation
+      if (lastMoveSan) {
+        setMoveHistory(prev => {
+          const newHistory = [...prev, lastMoveSan];
+          console.log(`Move history updated:`, newHistory);
+          return newHistory;
+        });
+      }
+      
+      // Update our FEN state
+      const updatedPosition = chessAny.fen();
+      setFen(updatedPosition);
+      
+      // For debugging
+      console.log("Game state updated:", {
+        currentPosition: updatedPosition,
+        turn: chessAny.turn(),
+        moveCount: typeof chessAny.history === 'function' ? 
+          chessAny.history().length : 0
+      });
+      
+      // Check game status
+      const isCheckmate = typeof chessAny.in_checkmate === 'function' ? 
+        chessAny.in_checkmate() : false;
+      const isDraw = typeof chessAny.in_draw === 'function' ? 
+        chessAny.in_draw() : false;
+      const isStalemate = typeof chessAny.in_stalemate === 'function' ? 
+        chessAny.in_stalemate() : false;
+      const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? 
+        chessAny.in_threefold_repetition() : false;
       
       const gameOver = isCheckmate || isDraw || isStalemate || isThreefoldRepetition;
       setIsGameOver(gameOver);
@@ -223,10 +241,11 @@ function TutorPage() {
           setGameStatus('Stalemate!');
         } else if (isThreefoldRepetition) {
           setGameStatus('Draw by repetition!');
-        } else if (typeof chessAny.insufficient_material === 'function' ? chessAny.insufficient_material() : false) {
+        } else if (typeof chessAny.insufficient_material === 'function' ? 
+          chessAny.insufficient_material() : false) {
           setGameStatus('Draw by insufficient material!');
         }
-      } else if (typeof chess.in_check === 'function' && chess.in_check()) {
+      } else if (typeof chessAny.in_check === 'function' && chessAny.in_check()) {
         setGameStatus('Check!');
       } else {
         setGameStatus('');
@@ -246,6 +265,34 @@ function TutorPage() {
     setGameStartTime(new Date());
     toast.success('New game started!');
   };
+  
+  const switchSides = () => {
+    // Switch the player's side
+    const newPlayerSide = playerSide === 'white' ? 'black' : 'white';
+    
+    // Reset everything to a clean slate
+    const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    
+    // Reset the chess instance
+    const chess = chessRef.current;
+    chess.reset();
+    
+    // Update all state variables at once to avoid race conditions
+    setPlayerSide(newPlayerSide);
+    setOrientation(newPlayerSide);
+    setFen(startingFen);
+    setGameStatus('');
+    setMoveHistory([]);
+    setIsGameOver(false);
+    setGameStartTime(new Date());
+    
+    console.log(`Switched sides to ${newPlayerSide}`);
+    
+    // Close the menu
+    setMenuOpen(false);
+    
+    toast.success(`You are now playing as ${newPlayerSide}`);
+  };
 
   const resignGame = () => {
     const chess = chessRef.current;
@@ -255,7 +302,80 @@ function TutorPage() {
     setIsGameOver(true);
     
     // Display resignation message
-    setGameStatus(`${orientation === 'white' ? 'White' : 'Black'} resigned`);
+    setGameStatus(`${playerSide === 'white' ? 'White' : 'Black'} resigned`);
+  };
+  
+  // Remove the automatic first move effect - user wants to control both sides
+  useEffect(() => {
+    console.log("Game state updated:", {
+      moveHistory: moveHistory,
+      playerSide: playerSide,
+      orientation: orientation,
+      isGameOver: isGameOver,
+      fen: fen,
+      canSwitchSides: moveHistory.length === 0 || isGameOver
+    });
+  }, [moveHistory, playerSide, orientation, isGameOver, fen]);
+  
+  // More reliable way to determine if Switch Sides button should be visible
+  const canSwitchSides = () => {
+    const chess = chessRef.current;
+    const chessAny = chess as any; // Using any to handle version differences in chess.js
+    
+    // Always get the CURRENT FEN directly from the chess instance
+    const currentFen = chess.fen();
+    
+    // The starting position FEN
+    const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    
+    // Check whose turn it is - if it's black's turn, a move has already been made
+    const isBlackTurn = currentFen.includes(' b ');
+    
+    // Check exact match with starting position
+    const isStartingPosition = currentFen === startingFen;
+    
+    // Additional checks for any move being made
+    // 1. Look at move history length
+    const moveHistoryLength = moveHistory.length;
+    
+    // 2. Check if we have history in the chess object
+    const chessHistoryLength = typeof chessAny.history === 'function' ? 
+                              chessAny.history().length : 0;
+    
+    // 3. Check halfmove clock in the FEN (should be 0 at start)
+    // FEN structure: [position] [turn] [castling] [en passant] [halfmove clock] [fullmove number]
+    const fenParts = currentFen.split(' ');
+    const halfMoveClock = fenParts.length >= 5 ? parseInt(fenParts[4], 10) : 0;
+    const fullMoveNumber = fenParts.length >= 6 ? parseInt(fenParts[5], 10) : 1;
+    
+    // A move has been made if:
+    // - We're not at the starting position, OR
+    // - It's black's turn, OR 
+    // - Move history shows moves, OR
+    // - Chess history shows moves, OR
+    // - Full move number is > 1, OR
+    // - Half move clock is > 0
+    const moveHasBeenMade = !isStartingPosition || 
+                           isBlackTurn || 
+                           moveHistoryLength > 0 || 
+                           chessHistoryLength > 0 ||
+                           fullMoveNumber > 1 ||
+                           halfMoveClock > 0;
+    
+    console.log("Can switch sides check:", { 
+      isStartingPosition, 
+      isGameOver,
+      isBlackTurn,
+      currentFen,
+      moveHistoryLength,
+      chessHistoryLength,
+      halfMoveClock,
+      fullMoveNumber,
+      moveHasBeenMade
+    });
+    
+    // Only allow switching at the very beginning (before any moves) or when game is over
+    return (!moveHasBeenMade) || isGameOver;
   };
 
   // If not logged in, show nothing (will redirect)
@@ -310,18 +430,20 @@ function TutorPage() {
                       Flip Board
                     </button>
                     
-                    <button 
-                      onClick={() => {
-                        resetGame();
-                        setMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      New Game
-                    </button>
+                    {canSwitchSides() && (
+                      <button 
+                        onClick={() => {
+                          switchSides();
+                          setMenuOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        Switch Sides
+                      </button>
+                    )}
                     
                     <button 
                       onClick={() => {
@@ -351,6 +473,7 @@ function TutorPage() {
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
+              key={`board-${playerSide}-${isGameOver ? 'over' : 'playing'}`} // Force remount when player side changes
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
