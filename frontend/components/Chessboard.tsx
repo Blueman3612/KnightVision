@@ -14,6 +14,7 @@ declare module 'chessground' {
 interface ChessboardProps {
   fen?: string;
   orientation?: Color;
+  playerSide?: Color; // Side that the human player plays as
   viewOnly?: boolean;
   onMove?: (from: string, to: string) => void;
   highlightSquares?: string[];
@@ -23,6 +24,7 @@ interface ChessboardProps {
 function Chessboard({
   fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', // Default starting position
   orientation = 'white',
+  playerSide = 'white', // Default player side is white
   viewOnly = false,
   onMove,
   highlightSquares = [],
@@ -396,7 +398,7 @@ function Chessboard({
       
       // If we're not in viewOnly mode, calculate whose turn it is and set up correctly
       if (!viewOnly) {
-        const playerColor = orientation;
+        const playerColor = playerSide; // Use playerSide instead of orientation
         const turnColor = chess.turn() === 'w' ? 'white' : 'black';
         
         // If it's the computer's turn, make a move after a short delay
@@ -418,7 +420,7 @@ function Chessboard({
         hasInitializedRef.current = false;
       }
     };
-  }, [fen, orientation, viewOnly]);
+  }, [fen, orientation, playerSide, viewOnly]); // Add playerSide to dependencies
   
   // Initialize the evaluation when the board is first set up
   useEffect(() => {

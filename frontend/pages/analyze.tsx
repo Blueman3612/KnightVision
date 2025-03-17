@@ -382,6 +382,7 @@ const AnalyzePage = () => {
                 <Chessboard
                   fen={currentFen}
                   orientation={orientation}
+                  playerSide={orientation}
                   viewOnly={true}
                 />
               </div>

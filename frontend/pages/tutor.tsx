@@ -17,6 +17,7 @@ function TutorPage() {
   const supabase = useSupabaseClient();
   const chessRef = useRef(new Chess());
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
+  const [playerSide, setPlayerSide] = useState<'white' | 'black'>('white');
   const [gameStatus, setGameStatus] = useState<string>('');
   const [fen, setFen] = useState<string>(chessRef.current.fen());
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
@@ -258,7 +259,8 @@ function TutorPage() {
                   <div className="py-1">
                     <button 
                       onClick={() => {
-                        console.log(`Direct menu flip in tutor: ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                        console.log(`Flipping board visually from ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                        // Only change the visual orientation, not the player's side
                         setOrientation(orientation === 'white' ? 'black' : 'white');
                         setMenuOpen(false);
                       }}
@@ -314,6 +316,7 @@ function TutorPage() {
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
+              playerSide={playerSide}
               skillLevel={0} // Set Stockfish to skill level 0
             />
           </div>
