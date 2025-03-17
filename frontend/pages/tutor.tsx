@@ -156,8 +156,6 @@ function TutorPage() {
 
   const handleMove = (from: string, to: string) => {
     try {
-      console.log(`Move handled in tutor page: ${from} to ${to}`);
-      
       // The actual move is made in the Chessboard component
       // We need to sync our state with it by getting the latest FEN
       const chess = chessRef.current;
@@ -199,10 +197,9 @@ function TutorPage() {
         console.error('Error getting move history:', e);
       }
       
-      // CRITICAL: Update our FEN state with the current board position
+      // Update our FEN state with the current board position
       // This ensures the parent component stays in sync with the Chessboard
       const currentPosition = chess.fen();
-      console.log('Updating parent FEN state to:', currentPosition);
       setFen(currentPosition);
       
       // Check game status
@@ -240,7 +237,6 @@ function TutorPage() {
   };
 
   const resetGame = () => {
-    console.log('Resetting game');
     const chess = chessRef.current;
     chess.reset();
     setFen(chess.fen());
@@ -260,9 +256,6 @@ function TutorPage() {
     
     // Display resignation message
     setGameStatus(`${orientation === 'white' ? 'White' : 'Black'} resigned`);
-    
-    // This will trigger the saveGame effect
-    console.log('Game resigned');
   };
 
   // If not logged in, show nothing (will redirect)
@@ -299,13 +292,11 @@ function TutorPage() {
                       onClick={() => {
                         // Get the current position DIRECTLY from the chess instance
                         const currentPosition = chessRef.current.fen();
-                        console.log(`Flipping board visually from ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
-                        console.log(`Current position before flip: ${currentPosition}`);
                         
                         // Only change the visual orientation, not the player's side
                         setOrientation(orientation === 'white' ? 'black' : 'white');
                         
-                        // CRITICALLY IMPORTANT: Update the FEN state with the current position
+                        // Update the FEN state with the current position
                         // to maintain game state consistency
                         setFen(currentPosition);
                         

@@ -63,10 +63,7 @@ function Chessboard({
     }
     
     try {
-      console.log(`Updating evaluation for position: ${fen}`);
       const eval_score = await evaluatePosition(fen);
-      
-      console.log(`Received evaluation score: ${eval_score}`);
       
       if (eval_score !== null) {
         // Make sure we have a finite number
@@ -113,9 +110,6 @@ function Chessboard({
     try {
       const response = await gameApi.evaluatePosition(fen, 12); // Use standard depth of 12
       
-      // Log the full response to debug
-      console.log("Evaluation response:", response);
-      
       // The API returns 'evaluation', not 'score'
       const score = response.evaluation;
       
@@ -157,7 +151,6 @@ function Chessboard({
           // Verify we're not using stale data - previousEvalRef should represent the eval
           // after the computer's last move and before the player's move
           evalChange = currentEvalRef.current - previousEvalRef.current;
-          console.log(`Eval change: ${evalChange} (prev: ${previousEvalRef.current}, current: ${currentEvalRef.current})`);
           
           // Validate that evalChange is a proper number before proceeding
           if (isNaN(evalChange) || !isFinite(evalChange)) {
@@ -213,7 +206,6 @@ function Chessboard({
           // Get the evaluation after engine move - this will be the reference point
           // BEFORE the player's next move
           await updateEvaluation(chess.fen(), previousEvalRef);
-          console.log("Position evaluation after computer move:", previousEvalRef.current);
         }
       } catch (apiError) {
         console.error("Stockfish API error, using fallback:", apiError);
@@ -259,7 +251,6 @@ function Chessboard({
     try {
       // Store the evaluation before the player's move
       const chess = chessRef.current;
-      console.log("Player move:", from, "to", to);
       
       // IMPORTANT: previousEvalRef holds the evaluation BEFORE player's move
       // It should not be updated here, as it's already set after computer's move
@@ -279,7 +270,6 @@ function Chessboard({
       // Evaluate the position after player's move - this will be compared to previousEvalRef
       // to determine how much the position changed due to player's move
       await updateEvaluation(chess.fen(), currentEvalRef);
-      console.log("New evaluation after player move:", currentEvalRef.current);
       
       // Call onMove callback if provided
       if (onMove) {
@@ -362,7 +352,6 @@ function Chessboard({
     try {
       if (!hasInitializedRef.current) {
         // First-time initialization
-        console.log('First-time initialization of chessground');
         const cg = Chessground(boardRef.current, config);
         chessgroundRef.current = cg;
         hasInitializedRef.current = true;
@@ -370,7 +359,6 @@ function Chessboard({
         // Update existing instance - avoid full reset if possible
         // Only update the specific properties that need to change
         if (currentOrientationRef.current !== chessgroundRef.current.state.orientation) {
-          console.log('Updating chessground orientation to:', currentOrientationRef.current);
           chessgroundRef.current.set({ orientation: currentOrientationRef.current });
         }
         
@@ -403,11 +391,8 @@ function Chessboard({
   useEffect(() => {
     if (!boardRef.current) return;
     
-    console.log('Chessboard component received update. Orientation:', orientation, 'FEN:', fen);
-    
     // Ensure we have a chess instance
     if (!chessRef.current) {
-      console.log('Chess instance not initialized yet, creating with FEN:', fen);
       chessRef.current = new Chess(fen);
       // In this case, we'll need a fresh initialization
       hasInitializedRef.current = false;
@@ -423,11 +408,9 @@ function Chessboard({
       // Only update the FEN if it actually changed from what our chess instance has
       // This prevents resetting the board when only the orientation changes
       if (currentPosition !== fen && fen !== currentFenRef.current) {
-        console.log('Actual FEN changed, reloading chess instance');
         currentFenRef.current = fen;
         chessRef.current.load(fen);
       } else if (orientation !== currentOrientationRef.current) {
-        console.log('Only orientation changed, preserving current game state');
         currentFenRef.current = currentPosition; // Ensure ref is in sync with actual state
       }
       
@@ -463,7 +446,6 @@ function Chessboard({
   // Initialize the chess instance once only - must run before any other effects
   useEffect(() => {
     if (!chessRef.current) {
-      console.log('Creating chess instance with FEN:', fen);
       // Create the chess instance
       chessRef.current = new Chess(fen);
     }
