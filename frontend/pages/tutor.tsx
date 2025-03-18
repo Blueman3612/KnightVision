@@ -4,24 +4,37 @@ import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
-import Button from '../components/ui/Button';
-import toast from 'react-hot-toast';
+import { useToast } from '../components/ui';
 
 interface TutorPageProps {
   children?: ReactNode;
 }
 
+// Define game state types
+type GameState = 'playing' | 'saving' | 'resetting' | 'ready';
+
 function TutorPage() {
   const router = useRouter();
   const session = useSession();
   const supabase = useSupabaseClient();
+  const toast = useToast();
   const chessRef = useRef(new Chess());
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
-  const [gameStatus, setGameStatus] = useState<string>('');
+  const [playerSide, setPlayerSide] = useState<'white' | 'black'>('white');
   const [fen, setFen] = useState<string>(chessRef.current.fen());
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
-  const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [gameStartTime, setGameStartTime] = useState<Date>(new Date());
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const [boardKey, setBoardKey] = useState<number>(0);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  
+  // Replace reducer with individual state variables
+  const [gameStatus, setGameStatus] = useState<string>('');
+  const [isGameOver, setIsGameOver] = useState<boolean>(false);
+  const [disableBoard, setDisableBoard] = useState<boolean>(false);
+  const [gameState, setGameState] = useState<GameState>('playing');
+  const [needsReset, setNeedsReset] = useState<boolean>(false);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -30,12 +43,72 @@ function TutorPage() {
     }
   }, [session, router]);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If menu is not open, don't do anything
+      if (!menuOpen) return;
+      
+      // Check if the click was outside both the menu and the menu button
+      const menuElement = menuRef.current;
+      const buttonElement = menuButtonRef.current;
+      
+      const targetElement = event.target as Node;
+      
+      const isOutsideMenu = menuElement && !menuElement.contains(targetElement);
+      const isOutsideButton = buttonElement && !buttonElement.contains(targetElement);
+      
+      // If clicked outside both menu and button, close the menu
+      if (isOutsideMenu && isOutsideButton) {
+        setMenuOpen(false);
+      }
+    };
+    
+    // Add the event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
+
   // Reset game start time when a new game begins
   useEffect(() => {
     if (moveHistory.length === 0) {
       setGameStartTime(new Date());
     }
   }, [moveHistory]);
+
+  // Handle game reset after game state transitions
+  useEffect(() => {
+    // When state changes to resetting, perform the reset
+    if (gameState === 'resetting' && needsReset) {
+      const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      
+      // Reset board state
+      const chess = chessRef.current;
+      try {
+        if (chess) {
+          chess.reset();
+          setFen(startingFen);
+        }
+      } catch (error) {
+        console.error('Error resetting chess instance:', error);
+      }
+      
+      // Reset all state
+      setMoveHistory([]);
+      setBoardKey(prev => prev + 1);
+      
+      // Notify that reset is complete
+      setGameState('ready');
+      setGameStatus('');
+      setIsGameOver(false);
+      setDisableBoard(false);
+      setNeedsReset(false);
+    }
+  }, [gameState, needsReset]);
 
   // Save game when it ends
   useEffect(() => {
@@ -46,157 +119,331 @@ function TutorPage() {
           const chess = chessRef.current;
           const chessAny = chess as any; // Using any type to handle version differences in chess.js
           
+          // Format date properly with dots instead of dashes
+          const today = new Date();
+          const formattedDate = today.toISOString().split('T')[0].replace(/-/g, '.');
+          
+          // Fetch the user's display_name from the public.users table
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('display_name')
+            .eq('id', session.user.id)
+            .single();
+            
+          // Use display_name from the users table or fall back to email
+          const userName = (userData?.display_name) ? userData.display_name : session.user.email;
+          
+          // Reset the chess game to initial position
+          if (typeof chessAny.reset === 'function') {
+            chessAny.reset();
+          } else {
+            // Fallback if reset is not available
+            chessAny.load('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+          }
+          
+          // Get game ending status
+          const inCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
+          const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
+          const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
+          const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
+          const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
+          
+          // Determine accurate result and termination
+          // If gameStatus contains "resigned", it's a resignation
+          const isResignation = gameStatus.toLowerCase().includes('resign');
+          
+          let result = '1/2-1/2'; // Default
+          let terminationReason = 'normal';
+          let terminationText = '';
+          
+          if (inCheckmate) {
+            // Checkmate - the player whose turn it is has lost
+            result = turn === 'w' ? '0-1' : '1-0';
+            terminationReason = 'checkmate';
+            terminationText = turn === 'w' ? 'Black won by checkmate' : 'White won by checkmate';
+          } else if (isResignation) {
+            // Resignation - the player who resigned has lost
+            // The gameStatus will be set in the resignGame function
+            // "White resigned" or "Black resigned"
+            result = gameStatus.toLowerCase().includes('white') ? '0-1' : '1-0';
+            terminationReason = 'resignation';
+            terminationText = gameStatus;
+          } else if (isStalemate) {
+            // Stalemate is a draw
+            result = '1/2-1/2';
+            terminationReason = 'stalemate';
+            terminationText = 'Game drawn by stalemate';
+          } else if (isThreefoldRepetition) {
+            result = '1/2-1/2';
+            terminationReason = 'repetition';
+            terminationText = 'Game drawn by repetition';
+          } else if (isDraw) {
+            result = '1/2-1/2';
+            terminationReason = 'draw';
+            terminationText = 'Game drawn';
+          }
+          
+          // Use most descriptive termination for PGN header
+          const pgnTermination = terminationText || terminationReason;
+          
           // Set the headers for the PGN
           if (typeof chessAny.header === 'function') {
             chessAny.header(
               'Event', 'Chess Tutor Game',
-              'Site', 'Chess Tutor',
-              'Date', new Date().toISOString().split('T')[0],
-              'White', orientation === 'white' ? session.user.email : 'Stockfish 0',
-              'Black', orientation === 'black' ? session.user.email : 'Stockfish 0',
-              'WhiteElo', orientation === 'white' ? '?' : '1350', // Approximate ELO for skill level 0
-              'BlackElo', orientation === 'black' ? '?' : '1350',
+              'Site', 'KnightVision',
+              'Date', formattedDate,
+              'White', playerSide === 'white' ? userName : 'KnightVision',
+              'Black', playerSide === 'black' ? userName : 'KnightVision',
+              'WhiteElo', '?',
+              'BlackElo', '?',
               'TimeControl', '-',
-              'Result', chessAny.in_checkmate?.() ? (chessAny.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2'
+              'Result', result,
+              'Termination', pgnTermination
             );
           }
-
+          
+          // Apply all the moves from move history to the fresh chess game
+          // This ensures the PGN will contain all moves
+          for (const move of moveHistory) {
+            try {
+              if (typeof chessAny.move === 'function') {
+                chessAny.move(move);
+              }
+            } catch (moveError) {
+              console.error(`Error applying move ${move}:`, moveError);
+            }
+          }
+          
+          // Get the complete PGN with moves
           const pgn = typeof chessAny.pgn === 'function' ? chessAny.pgn() : '';
-          const inCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
-          const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
           
-          const result = inCheckmate 
-            ? (turn === 'w' ? '0-1' : '1-0') 
-            : '1/2-1/2';
+          // Extract the moves-only part of the PGN (everything after the last header)
+          const lastHeaderIndex = pgn.lastIndexOf(']') + 1;
+          const movesOnly = pgn.substring(lastHeaderIndex).trim();
           
-          // Generate a unique game ID
-          const uniqueGameId = `tutor_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+          // Convert date format from yyyy.mm.dd to yyyy-mm-dd for the database
+          const databaseDate = formattedDate.replace(/\./g, '-');
           
-          // Insert the game using the RPC function
-          const { data, error } = await supabase.rpc('insert_game', {
+          // Generate a unique game ID that is consistent and can be used for duplicate detection
+          // Use components that will be unique for this game: player names, date, result, moves
+          const moveText = typeof chessAny.history === 'function' ? chessAny.history().join(' ') : moveHistory.join(' ');
+          const uniqueComponents = [
+            'KnightVision',
+            formattedDate,
+            playerSide === 'white' ? userName : 'KnightVision',
+            playerSide === 'black' ? userName : 'KnightVision',
+            result,
+            moveText.substring(0, 100) // Use first 100 chars of moves for uniqueness
+          ];
+          const uniqueGameId = uniqueComponents.join('_');
+          
+          // Check if this game already exists in the database
+          const { data: existingGames, error: checkError } = await supabase
+            .from('games')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .eq('unique_game_id', uniqueGameId)
+            .limit(1);
+            
+          if (checkError) {
+            console.error('Error checking for duplicate games:', checkError);
+            // Continue trying to save the game anyway
+          } else if (existingGames && existingGames.length > 0) {
+            // Game already exists, don't save
+            setGameState('resetting');
+            setNeedsReset(true);
+            return;
+          }
+          
+          // First, try direct insert with the proper UUID type
+          const { data: directData, error: directError } = await supabase
+            .from('games')
+            .insert({
+              user_id: session.user.id, // Pass the UUID directly
+              pgn: pgn,
+              result: result,
+              analyzed: false,
+              cpu: true,
+              white_player: playerSide === 'white' ? userName : 'KnightVision',
+              black_player: playerSide === 'black' ? userName : 'KnightVision',
+              white_elo: playerSide === 'white' ? null : 1350,
+              black_elo: playerSide === 'black' ? null : 1350,
+              platform: 'KnightVision',
+              start_time: gameStartTime.toISOString(),
+              end_time: new Date().toISOString(),
+              termination: terminationReason,
+              unique_game_id: uniqueGameId,
+              user_color: playerSide,
+              // Add missing columns
+              event: 'Chess Tutor Game',
+              site: 'KnightVision',
+              game_date: databaseDate,
+              moves_only: movesOnly
+            })
+            .select('id')
+            .single();
+          
+          if (directError) {
+            console.error('Error in direct insert:', directError);
+            
+            // Fallback to RPC method if direct insert fails
+            const { data: rpcData, error: rpcError } = await supabase.rpc('insert_game', {
             p_pgn: pgn,
             p_result: result
           });
           
-          if (error) {
-            console.error('Error saving game:', error);
-            toast.error('Failed to save your game');
-            return;
-          }
+            if (rpcError) {
+              console.error('Error saving game with RPC:', rpcError);
+              toast.error('Failed to save your game');
+              setGameState('resetting');
+              setNeedsReset(true);
+              return;
+            }
           
           // Update the game to set cpu = true and other metadata
           const { error: updateError } = await supabase
             .from('games')
             .update({
               cpu: true,
-              white_player: orientation === 'white' ? session.user.email : 'Stockfish 0',
-              black_player: orientation === 'black' ? session.user.email : 'Stockfish 0',
-              white_elo: orientation === 'white' ? null : 1350,
-              black_elo: orientation === 'black' ? null : 1350,
-              platform: 'Chess Tutor',
+                white_player: playerSide === 'white' ? userName : 'KnightVision',
+                black_player: playerSide === 'black' ? userName : 'KnightVision',
+              white_elo: playerSide === 'white' ? null : 1350,
+              black_elo: playerSide === 'black' ? null : 1350,
+                platform: 'KnightVision',
               start_time: gameStartTime.toISOString(),
               end_time: new Date().toISOString(),
-              termination: inCheckmate ? 'checkmate' : 
-                          chessAny.in_stalemate?.() ? 'stalemate' : 
-                          chessAny.in_draw?.() ? 'draw' : 'normal',
+                termination: terminationReason,
               unique_game_id: uniqueGameId,
-              user_color: orientation
-            })
-            .eq('id', data);
+                user_color: playerSide,
+                // Add missing columns
+                event: 'Chess Tutor Game',
+                site: 'KnightVision',
+                game_date: databaseDate,
+                moves_only: movesOnly
+              })
+              .eq('id', rpcData);
             
           if (updateError) {
             console.error('Error updating game metadata:', updateError);
+            setGameState('resetting');
+            setNeedsReset(true);
           } else {
             toast.success('Game saved successfully!');
+            setGameState('resetting');
+            setNeedsReset(true);
           }
-          
+          } else {
+            toast.success('Game saved successfully!');
+            setGameState('resetting');
+            setNeedsReset(true);
+          }
         } catch (error) {
           console.error('Error in game saving process:', error);
           toast.error('An error occurred while saving your game');
+          // Even on error, we need to complete the save process
+          setGameState('resetting');
+          setNeedsReset(true);
         }
       }
     };
     
-    saveGame();
-  }, [isGameOver, moveHistory, session, orientation, supabase, gameStartTime]);
+    // Only call saveGame when state is 'saving'
+    if (gameState === 'saving') {
+      saveGame();
+    }
+  }, [gameState, isGameOver, gameStatus, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
 
   const handleMove = (from: string, to: string) => {
     try {
-      console.log(`Move handled in tutor page: ${from} to ${to}`);
-      
-      // The actual move has already been made in the Chessboard component
-      // We just need to sync our state with it
+      // Get reference to chess instance
       const chess = chessRef.current;
-      
-      // Get the move in SAN format before updating FEN
-      // This might be redundant since the move was already made in Chessboard component,
-      // but included for safety
-      let lastMoveSan = '';
-      try {
-        const chessAny = chess as any;
-        let moves: any[] = [];
-        
-        // Different versions of chess.js have different history() implementations
-        if (typeof chessAny.history === 'function') {
-          // Newer versions of chess.js might require no parameters or different parameters
-          try {
-            moves = chessAny.history({ verbose: true }) || [];
-          } catch (e) {
-            // Fallback to non-verbose history if verbose fails
-            const moveStrings = chessAny.history() || [];
-            moves = moveStrings.map((m: string) => ({ san: m }));
-          }
-        }
-        
-        if (moves.length > 0) {
-          const lastMove = moves[moves.length - 1];
-          // Get the SAN notation directly from the move object or use the string
-          if (typeof lastMove === 'object' && lastMove.san) {
-            lastMoveSan = lastMove.san;
-          } else if (typeof lastMove === 'string') {
-            lastMoveSan = lastMove;
-          } else {
-            // If all else fails, create a simple representation
-            lastMoveSan = `Move ${moves.length}`;
-          }
-          
-          // Update move history
-          setMoveHistory(prev => [...prev, lastMoveSan]);
-        }
-      } catch (e) {
-        console.error('Error getting move history:', e);
-      }
-      
-      setFen(chess.fen());
-      
-      // Check game status
       const chessAny = chess as any;
       
-      // Check if the game is over using methods available in the chess.js version
-      const isCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
-      const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
-      const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
-      const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
+      // IMPORTANT: First, load the current position from the Chessboard component
+      // to ensure our chess instance is in sync
+      try {
+        // We need to ensure the parent's chess.js instance is in sync with the board
+        const childFen = chessAny.fen();
+        
+        if (typeof chessAny.load === 'function') {
+          chessAny.load(childFen);
+        }
+      } catch (loadError) {
+        console.error('Error loading position:', loadError);
+      }
+      
+      // Now that our chess instance is in sync, we can extract the last move
+      let lastMoveSan = '';
+      
+      try {
+        // Get the history of moves
+        const history = typeof chessAny.history === 'function' ? 
+          (chessAny.history({ verbose: false }) || []) : [];
+        
+        // Get the last move in SAN format
+        if (history.length > 0) {
+          lastMoveSan = history[history.length - 1];
+        } else {
+          // Fallback if we can't get the move history
+          lastMoveSan = `${from}-${to}`;
+        }
+      } catch (historyError) {
+        console.error('Error getting move history:', historyError);
+        lastMoveSan = `${from}-${to}`;
+      }
+      
+      // Update move history with the SAN notation
+      if (lastMoveSan) {
+        setMoveHistory(prev => {
+          const newHistory = [...prev, lastMoveSan];
+          return newHistory;
+        });
+      }
+      
+      // Update our FEN state
+      const updatedPosition = chessAny.fen();
+      setFen(updatedPosition);
+      
+      // Check game status
+      const isCheckmate = typeof chessAny.in_checkmate === 'function' ? 
+        chessAny.in_checkmate() : false;
+      const isDraw = typeof chessAny.in_draw === 'function' ? 
+        chessAny.in_draw() : false;
+      const isStalemate = typeof chessAny.in_stalemate === 'function' ? 
+        chessAny.in_stalemate() : false;
+      const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? 
+        chessAny.in_threefold_repetition() : false;
       
       const gameOver = isCheckmate || isDraw || isStalemate || isThreefoldRepetition;
-      setIsGameOver(gameOver);
       
       if (gameOver) {
+        // Update game state
+        let status = '';
         if (isCheckmate) {
-          setGameStatus('Checkmate!');
+          status = 'Checkmate!';
         } else if (isDraw) {
-          setGameStatus('Draw!');
+          status = 'Draw!';
         } else if (isStalemate) {
-          setGameStatus('Stalemate!');
+          status = 'Stalemate!';
         } else if (isThreefoldRepetition) {
-          setGameStatus('Draw by repetition!');
-        } else if (typeof chessAny.insufficient_material === 'function' ? chessAny.insufficient_material() : false) {
-          setGameStatus('Draw by insufficient material!');
+          status = 'Draw by repetition!';
+        } else if (typeof chessAny.insufficient_material === 'function' ? 
+          chessAny.insufficient_material() : false) {
+          status = 'Draw by insufficient material!';
         }
-      } else if (typeof chess.in_check === 'function' && chess.in_check()) {
-        setGameStatus('Check!');
-      } else {
+        
+        // Update the state
+        setGameState('saving');
+        setGameStatus(status);
+        setIsGameOver(true);
+        setDisableBoard(true);
+      } else if (typeof chessAny.in_check === 'function' && chessAny.in_check()) {
+        // In check but game not over
+        setGameState('playing');
         setGameStatus('');
+        setIsGameOver(false);
+        setDisableBoard(false);
+        setNeedsReset(false);
       }
     } catch (e) {
       console.error('Error handling move:', e);
@@ -204,75 +451,132 @@ function TutorPage() {
   };
 
   const resetGame = () => {
-    console.log('Resetting game');
     const chess = chessRef.current;
     chess.reset();
     setFen(chess.fen());
-    setGameStatus('');
     setMoveHistory([]);
-    setIsGameOver(false);
     setGameStartTime(new Date());
+    setGameState('playing');
+    setGameStatus('');
+    setIsGameOver(false);
+    setDisableBoard(false);
+    setNeedsReset(false);
     toast.success('New game started!');
   };
-
-  const flipBoard = () => {
-    console.log(`Flipping board to ${orientation === 'white' ? 'black' : 'white'}`);
-    setOrientation(orientation === 'white' ? 'black' : 'white');
-  };
-
-  const resignGame = () => {
-    const chess = chessRef.current;
-    const chessAny = chess as any;
-    
-    // Set game as over
-    setIsGameOver(true);
-    
-    // Display resignation message
-    setGameStatus(`${orientation === 'white' ? 'White' : 'Black'} resigned`);
-    
-    // This will trigger the saveGame effect
-    console.log('Game resigned');
-  };
-
-  // State for menu toggle
-  const [menuOpen, setMenuOpen] = useState<boolean>(false);
   
-  // Reference for the hamburger button
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-  
-  // Handle click outside to close menu
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // Skip if click was on the button - this is handled by handleButtonClick
-      if (menuButtonRef.current && menuButtonRef.current.contains(event.target as Node)) {
-        return;
+  const canSwitchSides = () => {
+    try {
+      // Use moveHistory length as our primary indicator
+      
+      // If game is over, always allow switching
+      if (isGameOver) {
+        return true;
       }
       
-      // Close menu when clicking outside
-      if (menuOpen) {
-        setMenuOpen(false);
+      // Check if no moves have been made yet (starting position)
+      if (moveHistory.length === 0) {
+        return true;
       }
-    };
-    
-    // Add event listener
-    document.addEventListener('mousedown', handleClickOutside);
-    
-    // Clean up
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [menuOpen]);
-  
-  // Stop propagation on menu clicks to prevent closing when clicking inside
-  const handleMenuClick = (e: any) => {
-    e.stopPropagation();
+      
+      // Allow switching if only one move has been made, regardless of who's playing
+      // This covers both:
+      // - When player is white and they just moved
+      // - When player is black and computer (white) just moved
+      if (moveHistory.length === 1) {
+        return true;
+      }
+      
+      // In all other cases, don't allow switching (game has progressed too far)
+      return false;
+    } catch (error) {
+      console.error("Error in canSwitchSides:", error);
+      return false; // Default to not allowing side switch on error
+    }
   };
 
-  // Handle button click
-  const handleButtonClick = (e: any) => {
-    e.stopPropagation();
-    setMenuOpen(!menuOpen);
+  const switchSides = () => {
+    // First check if we're allowed to switch sides
+    if (!canSwitchSides()) {
+      toast.error("Cannot switch sides at this point in the game");
+      setMenuOpen(false);
+      return;
+    }
+    
+    // Switch the player's side
+    const newPlayerSide = playerSide === 'white' ? 'black' : 'white';
+    
+    // Reset everything to a clean slate
+    const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    
+    // Reset the chess instance
+    const chess = chessRef.current;
+    chess.reset();
+    
+    // Close the menu first
+    setMenuOpen(false);
+    
+    // First update the state to reflect the new player side for both cases
+    setPlayerSide(newPlayerSide);
+    setOrientation(newPlayerSide);
+    setFen(startingFen);
+    setMoveHistory([]);
+    setGameStartTime(new Date());
+    
+    // Reset game state 
+    setGameState('playing');
+    setGameStatus('');
+    setIsGameOver(false);
+    setDisableBoard(false);
+    setNeedsReset(false);
+    
+    // Show toast notification
+    toast.success(`You are now playing as ${newPlayerSide}`);
+    
+    // When playing as black, we need to make white's first move
+    if (newPlayerSide === 'black') {
+      // Let state updates complete, then allow the board component to handle the first move
+      // The Chessboard component will detect that it's white's turn but player is black
+      // and will automatically make the move using the API
+      setTimeout(() => {
+        // Force a refresh of the FEN to trigger the move in the component
+        setFen(startingFen);
+      }, 800);
+    }
   };
+
+  // Fix orientation bug when resigning as black
+  const resignGame = () => {
+    // Store the current player side 
+    const currentColor = playerSide;
+    
+    // Set game over state
+    setGameState('saving');
+    setGameStatus(`${currentColor === 'white' ? 'White' : 'Black'} resigned`);
+    setIsGameOver(true);
+    setDisableBoard(true);
+    
+    // Close menu
+    setMenuOpen(false);
+  };
+  
+  const flipBoard = () => {
+    // Toggle orientation
+    const newOrientation = orientation === 'white' ? 'black' : 'white';
+    
+    // Set the new orientation
+    setOrientation(newOrientation);
+    setMenuOpen(false);
+    
+    // Force a proper refresh of legal moves by using the onMove handler
+    // The onMove handler will properly update the board state without remounting
+    setTimeout(() => {
+      // Small delay to ensure the orientation change has taken effect
+      // We don't need to change FEN, just ensure the board refreshes with the right permission
+      const chess = chessRef.current;
+      // Setting the same FEN again will force a refresh without changing the position
+      setFen(chess.fen());
+    }, 100);
+  }
 
   // If not logged in, show nothing (will redirect)
   if (!session) {
@@ -287,11 +591,11 @@ function TutorPage() {
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
           <div className="absolute top-2 right-2 z-20">
-            <div className="relative" onClick={handleMenuClick}>
+            <div className="relative">
               <button 
                 ref={menuButtonRef}
-                onClick={handleButtonClick}
-                className="absolute right-1 cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -299,10 +603,18 @@ function TutorPage() {
               </button>
               
               {menuOpen && (
-                <div className="absolute top-8 right-1 top-full mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20">
+                <div 
+                  ref={menuRef}
+                  className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20"
+                >
                   <div className="py-1">
                     <button 
-                      onClick={flipBoard}
+                      onClick={() => {
+                        // IMPORTANT: Do NOT get the current position from the chess instance here
+                        // Only change the visual orientation, not the player's side
+                        flipBoard();
+                        setMenuOpen(false);
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -311,18 +623,23 @@ function TutorPage() {
                       Flip Board
                     </button>
                     
+                    {canSwitchSides() && (
                     <button 
-                      onClick={resetGame}
+                      onClick={() => {
+                          switchSides();
+                        setMenuOpen(false);
+                      }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                       </svg>
-                      New Game
+                        Switch Sides
                     </button>
+                    )}
                     
                     <button 
-                      onClick={resignGame}
+                      onClick={() => resignGame()}
                       className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -338,18 +655,21 @@ function TutorPage() {
           <div className="w-full h-full">
             {/* 
               The Chess Tutor's adaptive learning system:
-              - Uses the "even-move" endpoint for a more forgiving learning experience
-              - Tracks position evaluation before and after player moves
+              - For player as white: Engine uses regular getBestMove with skill level 0
+              - For player as black: Engine uses getEvenMove endpoint to respond to player's moves
               - When player makes a mistake, engine responds with a move that maintains
                 relative evaluation instead of maximizing advantage
               - This gives players opportunity to recover and learn from mistakes
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
+              key={`board-${playerSide}-${gameState}-${boardKey}`}
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
-              skillLevel={0} // Set Stockfish to skill level 0
+              playerSide={playerSide}
+              skillLevel={0}
+              viewOnly={disableBoard}
             />
           </div>
         </div>
@@ -357,25 +677,6 @@ function TutorPage() {
         {gameStatus && (
           <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
             <p className="text-center font-medium text-gray-800">{gameStatus}</p>
-          </div>
-        )}
-        
-        {moveHistory.length > 0 && (
-          <div className="mt-4 w-full max-w-md px-4 py-3 bg-white bg-opacity-90 backdrop-blur-sm rounded-lg shadow-lg">
-            <h3 className="text-center text-gray-700 font-medium mb-2">Move History</h3>
-            <div className="overflow-auto max-h-40 p-2">
-              <div className="grid grid-cols-2 gap-2">
-                {moveHistory.map((move, index) => (
-                  <div 
-                    key={index} 
-                    className={`text-sm ${index % 2 === 0 ? 'text-right pr-3 border-r border-gray-300' : 'text-left pl-3'}`}
-                  >
-                    {index % 2 === 0 && <span className="text-gray-500 mr-2">{Math.floor(index/2) + 1}.</span>}
-                    {move}
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
       </div>

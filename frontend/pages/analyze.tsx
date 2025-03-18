@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
@@ -34,13 +34,19 @@ const AnalyzePage = () => {
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   
+  // Menu state
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
   
   // Fetch evaluation whenever position changes
   useEffect(() => {
+    let isMounted = true;
     const getEvaluation = async () => {
-      if (!currentFen) return;
+      if (!currentFen || !isMounted) return;
       
       console.log('Evaluating FEN:', currentFen);
       const turn = currentFen.split(' ')[1]; // 'w' for white, 'b' for black
@@ -50,6 +56,10 @@ const AnalyzePage = () => {
       try {
         console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 20);
         const response = await gameApi.evaluatePosition(currentFen, 20);
+        
+        // Don't update state if component unmounted
+        if (!isMounted) return;
+        
         console.log('Raw evaluation response:', response);
         
         // Check if response has the expected format with numeric score
@@ -84,13 +94,16 @@ const AnalyzePage = () => {
         setEvaluation(normalizedScore);
       } catch (error) {
         console.error('Error evaluating position:', error);
-        setEvaluation(null);
+        if (isMounted) setEvaluation(null);
       } finally {
-        setIsEvaluating(false);
+        if (isMounted) setIsEvaluating(false);
       }
     };
     
     getEvaluation();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => { isMounted = false; };
   }, [currentFen]);
   
   // Fetch game data when component mounts or gameId changes
@@ -203,19 +216,34 @@ const AnalyzePage = () => {
   const goToNextMove = () => goToMove(moveIndex + 1);
   const goToEnd = () => goToMove(moves.length - 1);
   
-  const flipBoard = () => {
-    setOrientation(prev => prev === 'white' ? 'black' : 'white');
-  };
-  
   // Format move number (e.g., "1." for white's first move)
   const formatMoveNumber = (index: number) => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
   };
   
-  // Format evaluation for display
-  const formatEvaluation = (eval_score: number | null): string => {
-    console.log('Formatting evaluation:', eval_score, 'typeof:', typeof eval_score);
+  // Calculate evaluation bar height percentage
+  const calculateEvalBarHeight = useCallback((eval_score: number | null): number => {
+    if (eval_score === null || eval_score === undefined || isNaN(Number(eval_score))) {
+      return 50; // Even at 50%
+    }
     
+    // Ensure we're working with a number
+    const numericScore = Number(eval_score);
+    
+    // Sigmoid-like function to map any evaluation to 0-100 range
+    // with center at 0 (50%)
+    const maxValue = 5; // At +5.0 or higher, bar will be nearly full
+    const normalized = Math.max(-maxValue, Math.min(maxValue, numericScore)) / maxValue;
+    
+    // Transform to percentage (0-100)
+    // Note: we subtract from 100 because in CSS, 0% is bottom of container
+    // and we want positive evals to show as white (top)
+    const heightPercent = 100 - (normalized * 50 + 50);
+    return heightPercent;
+  }, []);
+  
+  // Format evaluation for display
+  const formatEvaluation = useCallback((eval_score: number | null): string => {
     if (eval_score === null || eval_score === undefined) return '0.0';
     
     // Ensure we're working with a number
@@ -233,32 +261,44 @@ const AnalyzePage = () => {
     
     // Format to one decimal place with + sign for positive values
     const formatted = (numericScore > 0 ? '+' : '') + numericScore.toFixed(1);
-    console.log('Formatted evaluation:', formatted);
     return formatted;
-  };
+  }, []);
   
-  // Calculate evaluation bar height percentage
-  const calculateEvalBarHeight = (eval_score: number | null): number => {
-    if (eval_score === null || eval_score === undefined || isNaN(Number(eval_score))) {
-      console.log('Invalid eval_score in calculateEvalBarHeight:', eval_score);
-      return 50; // Even at 50%
-    }
+  // Add useEffect to respond to orientation changes
+  useEffect(() => {
+    console.log('Orientation changed (useEffect):', orientation);
+    // No other actions needed - just making sure React sees this dependency
+  }, [orientation]);
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If menu is not open, don't do anything
+      if (!menuOpen) return;
+      
+      // Check if the click was outside both the menu and the menu button
+      const menuElement = menuRef.current;
+      const buttonElement = menuButtonRef.current;
+      
+      const targetElement = event.target as Node;
+      
+      const isOutsideMenu = menuElement && !menuElement.contains(targetElement);
+      const isOutsideButton = buttonElement && !buttonElement.contains(targetElement);
+      
+      // If clicked outside both menu and button, close the menu
+      if (isOutsideMenu && isOutsideButton) {
+        setMenuOpen(false);
+      }
+    };
     
-    // Ensure we're working with a number
-    const numericScore = Number(eval_score);
+    // Add the event listener
+    document.addEventListener('mousedown', handleClickOutside);
     
-    // Sigmoid-like function to map any evaluation to 0-100 range
-    // with center at 0 (50%)
-    const maxValue = 5; // At +5.0 or higher, bar will be nearly full
-    const normalized = Math.max(-maxValue, Math.min(maxValue, numericScore)) / maxValue;
-    
-    // Transform to percentage (0-100)
-    // Note: we subtract from 100 because in CSS, 0% is bottom of container
-    // and we want positive evals to show as white (top)
-    const heightPercent = 100 - (normalized * 50 + 50);
-    console.log(`Eval bar height: score=${numericScore}, height=${heightPercent}%`);
-    return heightPercent;
-  };
+    // Clean up
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuOpen]);
   
   if (!session) {
     return null; // Will redirect to login
@@ -272,19 +312,41 @@ const AnalyzePage = () => {
           <div className="flex flex-col items-center">
             <div className="relative" style={{ width: 'min(680px, calc(100vh - 12rem))', height: 'min(680px, calc(100vh - 12rem))' }}>
               {/* Board controls */}
-              <div className="absolute top-3 right-3 z-10 flex space-x-2">
-                <Button
-                  onClick={flipBoard}
-                  variant="ghost"
-                  size="xs"
-                  className="!bg-white !bg-opacity-80 hover:!bg-opacity-100 !text-gray-800 !p-2 !rounded-full"
-                  aria-label="Flip Board"
-                  leftIcon={
+              <div className="absolute top-2 right-2 z-20">
+                <div className="relative">
+                  <button 
+                    ref={menuButtonRef}
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
-                  }
-                />
+                  </button>
+                  
+                  {menuOpen && (
+                    <div 
+                      ref={menuRef}
+                      className="absolute top-full right-0 mt-1 w-36 bg-gray-800 rounded-md shadow-lg overflow-hidden z-20"
+                    >
+                      <div className="py-1">
+                        <button 
+                          onClick={() => {
+                            console.log(`Direct menu flip: ${orientation} to ${orientation === 'white' ? 'black' : 'white'}`);
+                            setOrientation(orientation === 'white' ? 'black' : 'white');
+                            setMenuOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                          </svg>
+                          Flip Board
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* Evaluation bar - now as absolute overlay with proper spacing */}
@@ -355,6 +417,7 @@ const AnalyzePage = () => {
                 <Chessboard
                   fen={currentFen}
                   orientation={orientation}
+                  playerSide={orientation}
                   viewOnly={true}
                 />
               </div>
