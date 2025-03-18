@@ -134,157 +134,197 @@ const GamesPage = () => {
     };
   }, [session, router]);
 
-  // Set up Supabase real-time subscription
+  // Set up Supabase real-time subscription with stronger guarantees
   const [subscription, setSubscription] = React.useState<any>(null);
+  const [subscriptionReady, setSubscriptionReady] = React.useState(false);
   
-  const setupRealtimeSubscription = () => {
+  // Add a ref to the latest activeAnalyzingGameId for callback closures
+  const activeGameIdRef = React.useRef<string | null>(null);
+  
+  // Better state management with a proper game status mapping
+  const [gameStatusMap, setGameStatusMap] = React.useState<Record<string, 'analyzing' | 'queued' | 'analyzed'>>({});
+  
+  // Update the ref when activeAnalyzingGameId changes
+  React.useEffect(() => {
+    activeGameIdRef.current = activeAnalyzingGameId;
+    
+    // Update gameStatusMap whenever active game changes
+    if (activeAnalyzingGameId) {
+      setGameStatusMap(prev => ({
+        ...prev,
+        [activeAnalyzingGameId]: 'analyzing'
+      }));
+    }
+  }, [activeAnalyzingGameId]);
+  
+  // Setup and prepare realtime subscriptions for different events
+  const setupRealtimeSubscription = async () => {
     if (!session?.user?.id) return;
     
+    // Clean up any existing subscription first
+    if (subscription) {
+      await supabase.removeChannel(subscription);
+    }
+    
+    console.log('Setting up real-time subscription for game updates...');
+    
     // Create a channel filtered to the current user's games
+    // Listen for ALL event types to maximize chance of catching updates
     const newSubscription = supabase
       .channel('game-updates')
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*', // Listen for all events: INSERT, UPDATE, DELETE
           schema: 'public',
           table: 'games',
           filter: `user_id=eq.${session.user.id}`,
         },
-        (payload) => {
-          // Process updates for analyzed games
-          if (payload.new && payload.old) {
-            // Check if analyzed status changed from false to true
-            if (!payload.old.analyzed && payload.new.analyzed) {
-              // If this is the active analyzing game, move to the next one
-              if (activeAnalyzingGameId === payload.new.id) {
-                // Find the next game to analyze from the remaining unanalyzed games
-                setActiveAnalyzingGameId(prevActiveId => {
-                  // Clone the set to avoid modification during iteration
-                  const remainingGames = new Set(analyzingGames);
-                  
-                  // Remove the completed game
-                  remainingGames.delete(payload.new.id);
-                  
-                  // If there are more games, pick the first one
-                  const nextGameId = remainingGames.size > 0 ? Array.from(remainingGames)[0] : null;
-                  
-                  return nextGameId;
-                });
-              }
+        async (payload) => {
+          console.log('Received realtime event:', payload.eventType, payload);
+          
+          // Handle game updates
+          if (payload.eventType === 'UPDATE') {
+            // Process updates where analyzed status changed
+            if (payload.new && payload.old && 
+                payload.new.analyzed !== payload.old.analyzed) {
               
-              // Update analyzingGames set
-              setAnalyzingGames(prev => {
-                const updatedSet = new Set(prev);
-                updatedSet.delete(payload.new.id);
-                return updatedSet;
-              });
+              console.log(`Game ${payload.new.id} analyzed status changed: ${payload.old.analyzed} -> ${payload.new.analyzed}`);
               
-              // Update the game in userGames state
-              setUserGames(prevGames => {
-                return prevGames.map(game => {
-                  if (game.id === payload.new.id) {
-                    return { ...game, analyzed: true };
-                  }
-                  return game;
-                });
-              });
-              
-              // If this was the last game being analyzed, update isAnnotationRunning
-              setTimeout(() => {
-                setAnalyzingGames(current => {
-                  if (current.size === 0) {
-                    setIsAnnotationRunning(false);
-                    setActiveAnalyzingGameId(null);
-                    
-                    // Force a complete refresh of game data
-                    forceRefreshGameData();
-                  }
-                  return current;
-                });
-              }, 100);
-              
-              // Force a re-render
-              setGameCardsVersion(v => v + 200);
-              
-              // Force browser to repaint
-              setTimeout(() => {
-                document.body.style.display = 'none';
-                document.body.offsetHeight; // Force a reflow
-                document.body.style.display = '';
-              }, 50);
+              // Get fresh status from all games to ensure we don't miss anything
+              checkAnnotationStatus();
             }
+          }
+          // Also handle INSERT events to refresh the list
+          else if (payload.eventType === 'INSERT') {
+            console.log('New game added, refreshing list');
+            checkAnnotationStatus();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Supabase subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          setSubscriptionReady(true);
+          // Get initial state
+          checkAnnotationStatus();
+        }
+      });
       
-    // Store the subscription for cleanup
     setSubscription(newSubscription);
   };
   
-  const cleanupRealtimeSubscription = () => {
-    if (subscription) {
-      supabase.removeChannel(subscription);
-      setSubscription(null);
+  // Use a dedicated polling mechanism for more reliable updates during analysis
+  // We'll use this as a backup to ensure UI stays in sync
+  React.useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    // Only start polling if analysis is running
+    if (isAnnotationRunning) {
+      console.log('Starting analysis progress polling');
+      
+      // Poll every 2 seconds during analysis
+      intervalId = setInterval(() => {
+        checkAnnotationStatus();
+      }, 2000);
     }
-  };
+    
+    // Clean up on unmount or when analysis stops
+    return () => {
+      if (intervalId) {
+        console.log('Stopping analysis progress polling');
+        clearInterval(intervalId);
+      }
+    };
+  }, [isAnnotationRunning]);
 
-  // Check if annotation process is currently running - updated to track active game
+  // Check if annotation process is currently running - with enhanced logging
   const checkAnnotationStatus = async () => {
     if (!session?.user?.id) return;
     
     try {
+      console.log('Checking annotation status...');
+      
       // Get games that are not yet analyzed
       const { data, error } = await supabase
         .from('games')
-        .select('id, analyzed')
-        .eq('user_id', session.user.id);
+        .select('id, analyzed, created_at')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
         
       if (error) {
         console.error('Error checking annotation status:', error);
-      } else if (data) {
-        // Build a fresh status map for ALL games
-        const statusMap: Record<string, boolean> = {};
-        data.forEach(game => {
-          statusMap[game.id] = game.analyzed;
-        });
+        return;
+      }
+      
+      if (!data) return;
+      
+      // Build status maps
+      const statusMap: Record<string, boolean> = {};
+      const newGameStatusMap: Record<string, 'analyzing' | 'queued' | 'analyzed'> = {};
+      
+      // Process all games
+      data.forEach(game => {
+        statusMap[game.id] = game.analyzed;
+        newGameStatusMap[game.id] = game.analyzed ? 'analyzed' : 'queued';
+      });
+      
+      // Find unanalyzed games
+      const unanalyzedGames = data.filter(game => !game.analyzed);
+      const isRunning = unanalyzedGames.length > 0;
+      
+      // Set first unanalyzed game as active if we have unanalyzed games
+      if (isRunning) {
+        const activeId = unanalyzedGames[0].id;
         
-        // Apply this status map immediately
-        setAnalyzedStatusMap(statusMap);
-        
-        // Filter to find unanalyzed games
-        const unanalyzedGames = data.filter(game => !game.analyzed);
-        
-        if (unanalyzedGames.length > 0) {
-          // Store IDs of unanalyzed games in a new Set
-          const unanalyzedGameIds = new Set(unanalyzedGames.map(game => game.id));
-          setAnalyzingGames(unanalyzedGameIds);
-          setIsAnnotationRunning(true);
-          
-          // Set the first unanalyzed game as the active one
-          setActiveAnalyzingGameId(unanalyzedGames[0].id);
-          
-          // Make sure all games in userGames have correct analyzed property
-          setUserGames(prev => {
-            const gameMap = new Map(data.map(game => [game.id, game.analyzed]));
-            
-            return prev.map(game => {
-              if (gameMap.has(game.id) && gameMap.get(game.id) !== game.analyzed) {
-                return { ...game, analyzed: gameMap.get(game.id) };
-              }
-              return game;
-            });
-          });
-        } else {
-          setAnalyzingGames(new Set());
-          setIsAnnotationRunning(false);
-          setActiveAnalyzingGameId(null);
+        // Check if the active game has changed
+        if (activeId !== activeAnalyzingGameId) {
+          console.log(`Active game changed: ${activeAnalyzingGameId} -> ${activeId}`);
+          setActiveAnalyzingGameId(activeId);
         }
         
-        // Force UI refresh
-        setGameCardsVersion(v => v + 1);
+        // Mark this game as analyzing in the status map
+        newGameStatusMap[activeId] = 'analyzing';
+      } else {
+        if (activeAnalyzingGameId) {
+          console.log('No more games to analyze, clearing active game');
+        }
+        setActiveAnalyzingGameId(null);
       }
+      
+      // Set annotation running state
+      setIsAnnotationRunning(isRunning);
+      
+      // Update the set of games being analyzed
+      const newAnalyzingGames = new Set(unanalyzedGames.map(game => game.id));
+      setAnalyzingGames(newAnalyzingGames);
+      
+      // Update analyzed status map
+      setAnalyzedStatusMap(statusMap);
+      
+      // Update game status map
+      setGameStatusMap(newGameStatusMap);
+      
+      // Log any changes to game statuses
+      const analyzedCount = data.filter(game => game.analyzed).length;
+      const queuedCount = data.length - analyzedCount - (isRunning ? 1 : 0);
+      console.log(`Game status: Analyzed=${analyzedCount}, Queued=${queuedCount}, Analyzing=${isRunning ? 1 : 0}`);
+      
+      // Update game objects efficiently
+      setUserGames(prev => {
+        // Create a new array only if there are changes
+        let hasChanges = false;
+        const updated = prev.map(game => {
+          const serverAnalyzed = statusMap[game.id];
+          if (serverAnalyzed !== undefined && serverAnalyzed !== game.analyzed) {
+            hasChanges = true;
+            return { ...game, analyzed: serverAnalyzed };
+          }
+          return game;
+        });
+        
+        return hasChanges ? updated : prev;
+      });
     } catch (err) {
       console.error('Error checking annotation status:', err);
     }
@@ -567,20 +607,22 @@ const GamesPage = () => {
           const { data: sessionData } = await supabase.auth.getSession();
           const accessToken = sessionData?.session?.access_token;
           
+          // Make sure subscription is active BEFORE starting analysis
+          if (!subscription || !subscriptionReady) {
+            await setupRealtimeSubscription();
+            // Wait a bit for subscription to initialize
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+          
           // Call the API with explicit access token
           if (accessToken) {
             setIsAnnotationRunning(true); // Set as running before API call
             await gameApi.processUnannotatedGames(session.user.id, accessToken);
             
-            // Ensure real-time subscription is active
-            if (!subscription) {
-              setupRealtimeSubscription();
-            }
-            
-            // Force initial state refresh
+            // Force initial state refresh after starting analysis
             setTimeout(() => {
               checkAnnotationStatus();
-            }, 500);
+            }, 300);
           } else {
             throw new Error('No access token available');
           }
@@ -1314,28 +1356,24 @@ const GamesPage = () => {
     }
   };
 
-  // Helper function to force refresh the game display completely
+  // Restore the cleanup function
+  const cleanupRealtimeSubscription = async () => {
+    if (subscription) {
+      await supabase.removeChannel(subscription);
+      setSubscription(null);
+      setSubscriptionReady(false);
+    }
+  };
+  
+  // Restore the force refresh function without DOM manipulation
   const forceRefreshGameData = async () => {
+    // Refresh all data
     await fetchGameCount();
     await fetchUserGames(1);
     await checkAnnotationStatus();
-    
-    // Force a React re-render with multiple state updates
-    setRefreshTrigger(prev => prev + 1);
-    setGameCardsVersion(v => v + 1);
-    
-    // Add a brute force DOM redraw after a small delay to ensure React updates
-    setTimeout(() => {
-      document.body.style.display = 'none';
-      document.body.offsetHeight; // Force a reflow
-      document.body.style.display = '';
-      
-      // Force another state update as backup
-      setGameCardsVersion(v => v + 50);
-    }, 100);
   };
 
-  // Before the component returns, generate game cards - Update to use activeAnalyzingGameId
+  // Before the component returns, generate game cards - Now more efficient with unique keys
   const generateGameCards = () => {
     return userGames.map((game) => {
       // Determine if the user played as white or black
@@ -1370,14 +1408,19 @@ const GamesPage = () => {
         blackPlayerClass += ' flex items-center';
       }
       
-      // Check if this game is the current active analyzing game
-      const isBeingAnalyzed = activeAnalyzingGameId === game.id;
+      // Get game status with more precise logging
+      const gameStatus = gameStatusMap[game.id] || (game.analyzed ? 'analyzed' : 'queued');
+      const isBeingAnalyzed = gameStatus === 'analyzing';
+      
+      // Unique key that includes both id and status to ensure rerendering when status changes
+      const cardKey = `${game.id}-${gameStatus}`;
       
       return (
         <div 
-          key={`${game.id}-${gameCardsVersion}-${isBeingAnalyzed ? 'analyzing' : 'analyzed'}`}
+          key={cardKey}
           className="game-card bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0 relative"
           data-analyzing={isBeingAnalyzed ? "true" : "false"}
+          data-status={gameStatus}
           style={{
             backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
           }}
@@ -1404,13 +1447,13 @@ const GamesPage = () => {
               {formattedDate}
             </div>
             
-            {/* Analysis status indicator - updated to use activeAnalyzingGameId */}
-            {isBeingAnalyzed ? (
+            {/* Analysis status indicator - updated to use gameStatus */}
+            {gameStatus === 'analyzing' ? (
               <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
                 <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
                 Analyzing
               </div>
-            ) : !game.analyzed ? (
+            ) : gameStatus === 'queued' ? (
               <div className="flex items-center bg-gray-800/70 text-gray-400 text-xs px-2 py-1 rounded-full">
                 <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
                 Queued
@@ -1467,30 +1510,15 @@ const GamesPage = () => {
         <div>Processing: {isProcessing ? 'True' : 'False'}</div>
         <div>Analyzing: {analyzingGames.size} games</div>
         <div>Active Game: {activeAnalyzingGameId || 'None'}</div>
-        <div>Refresh Trigger: {refreshTrigger}</div>
-        <div>Cards Version: {gameCardsVersion}</div>
         <button 
-          onClick={forceRefreshGameData}
+          onClick={checkAnnotationStatus}
           className="mt-2 px-2 py-1 bg-blue-700 rounded text-white text-xs hover:bg-blue-600"
         >
-          Force Refresh
+          Refresh Status
         </button>
       </div>
     );
   };
-
-  // Add this effect to monitor state changes and force UI updates
-  React.useEffect(() => {
-    const forceRefreshTimer = setTimeout(() => {
-      setRefreshTrigger(prev => prev + 1);
-      
-      // Also force a DOM refresh when states change
-      document.body.style.display = 'none';
-      document.body.offsetHeight; // Force a reflow
-      document.body.style.display = '';
-    }, 100);
-    return () => clearTimeout(forceRefreshTimer);
-  }, [analyzingGames, isAnnotationRunning]);
 
   if (!session) {
     return <div>Redirecting to login...</div>;
