@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
@@ -62,50 +62,56 @@ const GamesPage = () => {
   const router = useRouter();
   const session = useSession();
   
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [parsingMetrics, setParsingMetrics] = useState<{
+  const [loading, setLoading] = React.useState(false);
+  const [message, setMessage] = React.useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
+  const [parsingMetrics, setParsingMetrics] = React.useState<{
     totalGames: number;
     parsingTime: number;
     gamesPerSecond: number;
     fileSize: number;
   } | null>(null);
-  const [pgnText, setPgnText] = useState('');
-  const [gameCount, setGameCount] = useState<number | null>(null);
+  const [pgnText, setPgnText] = React.useState('');
+  const [gameCount, setGameCount] = React.useState<number | null>(null);
   
   // User aliases and player confirmation state
-  const [userAliases, setUserAliases] = useState<string[]>([]);
-  const [pendingGames, setPendingGames] = useState<ChessGame[]>([]);
-  const [currentGameIndex, setCurrentGameIndex] = useState<number>(-1);
-  const [showPlayerConfirmation, setShowPlayerConfirmation] = useState(false);
+  const [userAliases, setUserAliases] = React.useState<string[]>([]);
+  const [pendingGames, setPendingGames] = React.useState<ChessGame[]>([]);
+  const [currentGameIndex, setCurrentGameIndex] = React.useState<number>(-1);
+  const [showPlayerConfirmation, setShowPlayerConfirmation] = React.useState(false);
   
   // Add a ref for the file input with proper typing
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   
   // Add state for user's games
-  const [userGames, setUserGames] = useState<DBChessGame[]>([]);
-  const [gamesLoading, setGamesLoading] = useState(false);
-  const [gamesPage, setGamesPage] = useState(1);
-  const [hasMoreGames, setHasMoreGames] = useState(true);
+  const [userGames, setUserGames] = React.useState<DBChessGame[]>([]);
+  const [gamesLoading, setGamesLoading] = React.useState(false);
+  const [gamesPage, setGamesPage] = React.useState(1);
+  const [hasMoreGames, setHasMoreGames] = React.useState(true);
   
   // Add a new state for the confirmation timeout
-  const [confirmationTimeoutId, setConfirmationTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [confirmationTimeoutId, setConfirmationTimeoutId] = React.useState<NodeJS.Timeout | null>(null);
   
   // Add a processing flag to prevent duplicate uploads
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
   
   // Add a state to track which games are currently being analyzed
-  const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
+  const [analyzingGames, setAnalyzingGames] = React.useState<Set<string>>(new Set());
   
   // Add a state to track if annotation is currently running
-  const [isAnnotationRunning, setIsAnnotationRunning] = useState(false);
+  const [isAnnotationRunning, setIsAnnotationRunning] = React.useState(false);
+
+  // Add state for UI update trigger
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
   
-  // Replace channel reference with polling interval ID
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Add a key version for game cards
+  const [gameCardsVersion, setGameCardsVersion] = React.useState(0);
+  
+  // Add a map to separately track analyzed status
+  const [analyzedStatusMap, setAnalyzedStatusMap] = React.useState<Record<string, boolean>>({});
   
   // Redirect if not logged in
-  useEffect(() => {
+  React.useEffect(() => {
     if (!session) {
       router.push('/login');
     } else {
@@ -114,96 +120,103 @@ const GamesPage = () => {
       fetchUserGames();
       checkAnnotationStatus();
       
-      // Start polling for game analysis status
-      startAnalysisStatusPolling();
+      // Subscribe to real-time game updates instead of polling
+      setupRealtimeSubscription();
     }
     
-    // Cleanup polling and any loading states on unmount
+    // Cleanup subscription and any loading states on unmount
     return () => {
-      stopAnalysisStatusPolling();
+      cleanupRealtimeSubscription();
       setLoading(false); // Ensure loading state is reset on unmount
     };
   }, [session, router]);
 
-  // Start polling for analysis status
-  const startAnalysisStatusPolling = () => {
-    if (!session?.user?.id) return;
-
-    // Stop any existing polling
-    stopAnalysisStatusPolling();
-    
-    console.log('Starting analysis status polling');
-    
-    // Poll every 3 seconds for updates
-    pollingIntervalRef.current = setInterval(async () => {
-      if (isAnnotationRunning) {
-        await refreshAnalysisStatus();
-      }
-    }, 3000);
-  };
+  // Set up Supabase real-time subscription
+  const [subscription, setSubscription] = React.useState<any>(null);
   
-  // Stop polling for analysis status
-  const stopAnalysisStatusPolling = () => {
-    if (pollingIntervalRef.current) {
-      console.log('Stopping analysis status polling');
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  };
-  
-  // Refresh analysis status - checks for newly analyzed games
-  const refreshAnalysisStatus = async () => {
+  const setupRealtimeSubscription = () => {
     if (!session?.user?.id) return;
     
-    try {
-      // Only fetch if we have games being analyzed
-      if (analyzingGames.size > 0) {
-        console.log('Refreshing analysis status for', analyzingGames.size, 'games');
-        
-        // Get the IDs of games we're tracking as being analyzed
-        const gameIds = Array.from(analyzingGames);
-        
-        // Fetch current status of these games
-        const { data, error } = await supabase
-          .from('games')
-          .select('id, analyzed')
-          .in('id', gameIds)
-          .eq('analyzed', true); // Only fetch games that are now analyzed
-        
-        if (error) {
-          console.error('Error refreshing analysis status:', error);
-        } else if (data && data.length > 0) {
-          console.log('Found', data.length, 'newly analyzed games');
+    console.log('Setting up real-time subscription for game updates');
+    
+    // Create a channel filtered to the current user's games
+    const newSubscription = supabase
+      .channel('game-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
           
-          // Update analyzing games set
-          const updatedAnalyzingGames = new Set(analyzingGames);
-          data.forEach(game => {
-            updatedAnalyzingGames.delete(game.id);
-          });
-          
-          // Update local game data
-          setUserGames(prev => {
-            return prev.map(game => {
-              // If this game is in our newly analyzed data, mark it as analyzed
-              if (data.some(analyzedGame => analyzedGame.id === game.id)) {
-                return { ...game, analyzed: true };
-              }
-              return game;
-            });
-          });
-          
-          // Update analyzing games state
-          setAnalyzingGames(updatedAnalyzingGames);
-          
-          // If no more games are being analyzed, update annotation running state
-          if (updatedAnalyzingGames.size === 0) {
-            console.log('No more games being analyzed');
-            setIsAnnotationRunning(false);
+          // Process updates for analyzed games
+          if (payload.new && payload.old) {
+            // Check if analyzed status changed from false to true
+            if (!payload.old.analyzed && payload.new.analyzed) {
+              console.log(`Game ${payload.new.id} is now analyzed`);
+              
+              // Update analyzingGames set
+              setAnalyzingGames(prev => {
+                const updatedSet = new Set(prev);
+                updatedSet.delete(payload.new.id);
+                return updatedSet;
+              });
+              
+              // Update the game in userGames state
+              setUserGames(prevGames => {
+                return prevGames.map(game => {
+                  if (game.id === payload.new.id) {
+                    console.log(`Marking game ${game.id} as analyzed in UI from real-time update`);
+                    return { ...game, analyzed: true };
+                  }
+                  return game;
+                });
+              });
+              
+              // If this was the last game being analyzed, update isAnnotationRunning
+              setTimeout(() => {
+                setAnalyzingGames(current => {
+                  if (current.size === 0) {
+                    console.log('No more games being analyzed, setting isAnnotationRunning to false');
+                    setIsAnnotationRunning(false);
+                    
+                    // Force a complete refresh of game data
+                    forceRefreshGameData();
+                  }
+                  return current;
+                });
+              }, 100);
+              
+              // Force a re-render
+              setGameCardsVersion(v => v + 200);
+              
+              // Force browser to repaint
+              setTimeout(() => {
+                document.body.style.display = 'none';
+                document.body.offsetHeight; // Force a reflow
+                document.body.style.display = '';
+              }, 50);
+            }
           }
         }
-      }
-    } catch (err) {
-      console.error('Error in refreshAnalysisStatus:', err);
+      )
+      .subscribe((status) => {
+        console.log('Supabase real-time subscription status:', status);
+      });
+      
+    // Store the subscription for cleanup
+    setSubscription(newSubscription);
+  };
+  
+  const cleanupRealtimeSubscription = () => {
+    if (subscription) {
+      console.log('Cleaning up real-time subscription');
+      supabase.removeChannel(subscription);
+      setSubscription(null);
     }
   };
 
@@ -215,23 +228,52 @@ const GamesPage = () => {
       // Get games that are not yet analyzed
       const { data, error } = await supabase
         .from('games')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .eq('analyzed', false);
+        .select('id, analyzed')
+        .eq('user_id', session.user.id);
         
       if (error) {
         console.error('Error checking annotation status:', error);
-      } else if (data && data.length > 0) {
-        console.log('Found', data.length, 'unanalyzed games');
+      } else if (data) {
+        // Build a fresh status map for ALL games
+        const statusMap: Record<string, boolean> = {};
+        data.forEach(game => {
+          statusMap[game.id] = game.analyzed;
+        });
         
-        // Store IDs of unanalyzed games
-        const unanalyzedGameIds = new Set(data.map(game => game.id));
-        setAnalyzingGames(unanalyzedGameIds);
-        setIsAnnotationRunning(true);
-      } else {
-        console.log('No unanalyzed games found');
-        setAnalyzingGames(new Set());
-        setIsAnnotationRunning(false);
+        // Apply this status map immediately
+        setAnalyzedStatusMap(statusMap);
+        
+        // Filter to find unanalyzed games
+        const unanalyzedGames = data.filter(game => !game.analyzed);
+        
+        if (unanalyzedGames.length > 0) {
+          console.log('Found', unanalyzedGames.length, 'unanalyzed games');
+          
+          // Store IDs of unanalyzed games in a new Set to force rerender
+          const unanalyzedGameIds = new Set(unanalyzedGames.map(game => game.id));
+          console.log('Setting analyzingGames to', Array.from(unanalyzedGameIds));
+          setAnalyzingGames(unanalyzedGameIds);
+          setIsAnnotationRunning(true);
+          
+          // Make sure all games in userGames have correct analyzed property
+          setUserGames(prev => {
+            const gameMap = new Map(data.map(game => [game.id, game.analyzed]));
+            
+            return prev.map(game => {
+              if (gameMap.has(game.id) && gameMap.get(game.id) !== game.analyzed) {
+                return { ...game, analyzed: gameMap.get(game.id) };
+              }
+              return game;
+            });
+          });
+        } else {
+          console.log('No unanalyzed games found');
+          setAnalyzingGames(new Set());
+          setIsAnnotationRunning(false);
+        }
+        
+        // Force UI refresh
+        setGameCardsVersion(v => v + 1);
       }
     } catch (err) {
       console.error('Error checking annotation status:', err);
@@ -531,11 +573,18 @@ const GamesPage = () => {
           // Call the API with explicit access token
           if (accessToken) {
             setIsAnnotationRunning(true); // Set as running before API call
-            await gameApi.processUnannotatedGames(session.user.id, accessToken);
             console.log('✅ Triggered analysis of unannotated games');
+            await gameApi.processUnannotatedGames(session.user.id, accessToken);
             
-            // Ensure we start polling if not already
-            startAnalysisStatusPolling();
+            // Ensure real-time subscription is active
+            if (!subscription) {
+              setupRealtimeSubscription();
+            }
+            
+            // Force initial state refresh
+            setTimeout(() => {
+              checkAnnotationStatus();
+            }, 500);
           } else {
             throw new Error('No access token available');
           }
@@ -1225,7 +1274,7 @@ const GamesPage = () => {
   };
 
   // Add cleanup for the confirmation timeout
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
       // Clean up the timeout when the component unmounts
       if (confirmationTimeoutId) {
@@ -1282,20 +1331,183 @@ const GamesPage = () => {
     }
   };
 
-  // Add this simple debug component for development
+  // Helper function to force refresh the game display completely
+  const forceRefreshGameData = async () => {
+    console.log('Forcing complete data refresh');
+    await fetchGameCount();
+    await fetchUserGames(1);
+    await checkAnnotationStatus();
+    
+    // Force a React re-render with multiple state updates
+    setRefreshTrigger(prev => prev + 1);
+    setGameCardsVersion(v => v + 1);
+    
+    // Add a brute force DOM redraw after a small delay to ensure React updates
+    setTimeout(() => {
+      console.log('Forcing DOM update...');
+      // This forces a browser repaint
+      document.body.style.display = 'none';
+      document.body.offsetHeight; // Force a reflow
+      document.body.style.display = '';
+      
+      // Force another state update as backup
+      setGameCardsVersion(v => v + 50);
+    }, 100);
+  };
+
+  // Before the component returns, generate game cards
+  const generateGameCards = () => {
+    return userGames.map((game) => {
+      // Determine if the user played as white or black
+      const userPlayedAs = game.user_color || 'unknown';
+      
+      // Format the date
+      const formattedDate = game.game_date 
+        ? new Date(game.game_date).toLocaleDateString() 
+        : 'Unknown date';
+      
+      // Determine the winner for highlighting
+      let whitePlayerClass = 'text-gray-300';
+      let blackPlayerClass = 'text-gray-300';
+      
+      if (game.result === '1-0') {
+        // White won
+        whitePlayerClass = 'text-green-400 font-medium';
+      } else if (game.result === '0-1') {
+        // Black won
+        blackPlayerClass = 'text-green-400 font-medium';
+      } else if (game.result === '1/2-1/2') {
+        // Draw - highlight both
+        whitePlayerClass = 'text-yellow-400 font-medium';
+        blackPlayerClass = 'text-yellow-400 font-medium';
+      }
+      
+      // Add indicator for user's color
+      if (userPlayedAs === 'white') {
+        whitePlayerClass += ' flex items-center';
+      }
+      if (userPlayedAs === 'black') {
+        blackPlayerClass += ' flex items-center';
+      }
+      
+      // Extra simple and direct check for analysis state - MUST be fresh every time
+      // This approach eliminates STALE closures that might be causing the React issue
+      const isBeingAnalyzed = analyzingGames.has(game.id);
+      
+      return (
+        <div 
+          key={`${game.id}-${gameCardsVersion}-${isBeingAnalyzed ? 'analyzing' : 'analyzed'}`}
+          className="game-card bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0 relative"
+          data-analyzing={isBeingAnalyzed ? "true" : "false"}
+          style={{
+            backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
+          }}
+          onClick={() => router.push(`/analyze?gameId=${game.id}`)}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'scale(0.98)';
+            e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = '';
+            e.currentTarget.style.boxShadow = '';
+            e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
+          }}
+        >
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-base font-medium text-white">
+              {formattedDate}
+            </div>
+            
+            {/* Analysis status indicator - now aligned with date */}
+            {isBeingAnalyzed ? (
+              <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
+                <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
+                Analyzing
+              </div>
+            ) : (
+              <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Analyzed
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-2 space-y-2">
+            <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
+              <div className="flex items-center space-x-2">
+                {userPlayedAs === 'white' && (
+                  <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                )}
+                <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-center">
+              <div className="border-t border-gray-600 w-full"></div>
+              <div className="text-xs text-gray-400 font-medium px-2">vs</div>
+              <div className="border-t border-gray-600 w-full"></div>
+            </div>
+            
+            <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
+              <div className="flex items-center space-x-2">
+                {userPlayedAs === 'black' && (
+                  <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                )}
+                <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
+  
+  // Add a refresh button to the debug panel
   const DebugInfo = () => {
     // Only show in development
     if (process.env.NODE_ENV !== 'development') return null;
     
     return (
       <div className="fixed bottom-4 right-4 bg-gray-900 text-xs text-white p-2 rounded shadow z-50 opacity-70 hover:opacity-100">
-        <div>Polling: {pollingIntervalRef.current ? 'Active' : 'Inactive'}</div>
+        <div>Subscription: {subscription ? 'Active' : 'Inactive'}</div>
         <div>Loading: {loading ? 'True' : 'False'}</div>
         <div>Processing: {isProcessing ? 'True' : 'False'}</div>
         <div>Analyzing: {analyzingGames.size} games</div>
+        <div>Refresh Trigger: {refreshTrigger}</div>
+        <div>Cards Version: {gameCardsVersion}</div>
+        <button 
+          onClick={forceRefreshGameData}
+          className="mt-2 px-2 py-1 bg-blue-700 rounded text-white text-xs hover:bg-blue-600"
+        >
+          Force Refresh
+        </button>
       </div>
     );
   };
+
+  // Add this effect to monitor state changes and force UI updates
+  React.useEffect(() => {
+    console.log('State changed: analyzingGames =', analyzingGames.size, 'isAnnotationRunning =', isAnnotationRunning);
+    // This is a hack to force React to re-render when these states change
+    const forceRefreshTimer = setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+      
+      // Also force a DOM refresh when states change
+      document.body.style.display = 'none';
+      document.body.offsetHeight; // Force a reflow
+      document.body.style.display = '';
+    }, 100);
+    return () => clearTimeout(forceRefreshTimer);
+  }, [analyzingGames, isAnnotationRunning]);
 
   if (!session) {
     return <div>Redirecting to login...</div>;
@@ -1344,116 +1556,8 @@ const GamesPage = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-                {userGames.map((game) => {
-                  // Determine if the user played as white or black
-                  const userPlayedAs = game.user_color || 'unknown';
-                  
-                  // Format the date
-                  const formattedDate = game.game_date 
-                    ? new Date(game.game_date).toLocaleDateString() 
-                    : 'Unknown date';
-                  
-                  // Determine the winner for highlighting
-                  let whitePlayerClass = 'text-gray-300';
-                  let blackPlayerClass = 'text-gray-300';
-                  
-                  if (game.result === '1-0') {
-                    // White won
-                    whitePlayerClass = 'text-green-400 font-medium';
-                  } else if (game.result === '0-1') {
-                    // Black won
-                    blackPlayerClass = 'text-green-400 font-medium';
-                  } else if (game.result === '1/2-1/2') {
-                    // Draw - highlight both
-                    whitePlayerClass = 'text-yellow-400 font-medium';
-                    blackPlayerClass = 'text-yellow-400 font-medium';
-                  }
-                  
-                  // Add indicator for user's color
-                  if (userPlayedAs === 'white') {
-                    whitePlayerClass += ' flex items-center';
-                  }
-                  if (userPlayedAs === 'black') {
-                    blackPlayerClass += ' flex items-center';
-                  }
-                  
-                  // Check if this game is being analyzed
-                  const isBeingAnalyzed = !game.analyzed || analyzingGames.has(game.id);
-                  
-                  return (
-                    <div 
-                      key={game.id} 
-                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0 relative"
-                      style={{
-                        backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
-                      }}
-                      onClick={() => router.push(`/analyze?gameId=${game.id}`)}
-                      onMouseDown={(e) => {
-                        e.currentTarget.style.transform = 'scale(0.98)';
-                        e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
-                      }}
-                      onMouseUp={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-4px)';
-                        e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = '';
-                        e.currentTarget.style.boxShadow = '';
-                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
-                      }}
-                    >
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="text-base font-medium text-white">
-                          {formattedDate}
-                        </div>
-                        
-                        {/* Analysis status indicator - now aligned with date */}
-                        {isBeingAnalyzed ? (
-                          <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
-                            <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
-                            Analyzing
-                          </div>
-                        ) : (
-                          <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Analyzed
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="mt-2 space-y-2">
-                        <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
-                          <div className="flex items-center space-x-2">
-                            {userPlayedAs === 'white' && (
-                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
-                            )}
-                            <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-center">
-                          <div className="border-t border-gray-600 w-full"></div>
-                          <div className="text-xs text-gray-400 font-medium px-2">vs</div>
-                          <div className="border-t border-gray-600 w-full"></div>
-                        </div>
-                        
-                        <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
-                          <div className="flex items-center space-x-2">
-                            {userPlayedAs === 'black' && (
-                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
-                            )}
-                            <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Use the normal function call approach - refreshTrigger included to force re-renders */}
+                {refreshTrigger || true ? generateGameCards() : null}
               </div>
               
               {hasMoreGames && (
