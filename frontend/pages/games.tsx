@@ -95,6 +95,15 @@ const GamesPage = () => {
   // Add a processing flag to prevent duplicate uploads
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Add a state to track which games are currently being analyzed
+  const [analyzingGames, setAnalyzingGames] = useState<Set<string>>(new Set());
+  
+  // Add a state to track if annotation is currently running
+  const [isAnnotationRunning, setIsAnnotationRunning] = useState(false);
+  
+  // Replace channel reference with polling interval ID
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Redirect if not logged in
   useEffect(() => {
     if (!session) {
@@ -103,8 +112,131 @@ const GamesPage = () => {
       fetchGameCount();
       fetchUserAliases();
       fetchUserGames();
+      checkAnnotationStatus();
+      
+      // Start polling for game analysis status
+      startAnalysisStatusPolling();
     }
+    
+    // Cleanup polling and any loading states on unmount
+    return () => {
+      stopAnalysisStatusPolling();
+      setLoading(false); // Ensure loading state is reset on unmount
+    };
   }, [session, router]);
+
+  // Start polling for analysis status
+  const startAnalysisStatusPolling = () => {
+    if (!session?.user?.id) return;
+
+    // Stop any existing polling
+    stopAnalysisStatusPolling();
+    
+    console.log('Starting analysis status polling');
+    
+    // Poll every 3 seconds for updates
+    pollingIntervalRef.current = setInterval(async () => {
+      if (isAnnotationRunning) {
+        await refreshAnalysisStatus();
+      }
+    }, 3000);
+  };
+  
+  // Stop polling for analysis status
+  const stopAnalysisStatusPolling = () => {
+    if (pollingIntervalRef.current) {
+      console.log('Stopping analysis status polling');
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
+  
+  // Refresh analysis status - checks for newly analyzed games
+  const refreshAnalysisStatus = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // Only fetch if we have games being analyzed
+      if (analyzingGames.size > 0) {
+        console.log('Refreshing analysis status for', analyzingGames.size, 'games');
+        
+        // Get the IDs of games we're tracking as being analyzed
+        const gameIds = Array.from(analyzingGames);
+        
+        // Fetch current status of these games
+        const { data, error } = await supabase
+          .from('games')
+          .select('id, analyzed')
+          .in('id', gameIds)
+          .eq('analyzed', true); // Only fetch games that are now analyzed
+        
+        if (error) {
+          console.error('Error refreshing analysis status:', error);
+        } else if (data && data.length > 0) {
+          console.log('Found', data.length, 'newly analyzed games');
+          
+          // Update analyzing games set
+          const updatedAnalyzingGames = new Set(analyzingGames);
+          data.forEach(game => {
+            updatedAnalyzingGames.delete(game.id);
+          });
+          
+          // Update local game data
+          setUserGames(prev => {
+            return prev.map(game => {
+              // If this game is in our newly analyzed data, mark it as analyzed
+              if (data.some(analyzedGame => analyzedGame.id === game.id)) {
+                return { ...game, analyzed: true };
+              }
+              return game;
+            });
+          });
+          
+          // Update analyzing games state
+          setAnalyzingGames(updatedAnalyzingGames);
+          
+          // If no more games are being analyzed, update annotation running state
+          if (updatedAnalyzingGames.size === 0) {
+            console.log('No more games being analyzed');
+            setIsAnnotationRunning(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in refreshAnalysisStatus:', err);
+    }
+  };
+
+  // Check if annotation process is currently running - updated to set state properly
+  const checkAnnotationStatus = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // Get games that are not yet analyzed
+      const { data, error } = await supabase
+        .from('games')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('analyzed', false);
+        
+      if (error) {
+        console.error('Error checking annotation status:', error);
+      } else if (data && data.length > 0) {
+        console.log('Found', data.length, 'unanalyzed games');
+        
+        // Store IDs of unanalyzed games
+        const unanalyzedGameIds = new Set(data.map(game => game.id));
+        setAnalyzingGames(unanalyzedGameIds);
+        setIsAnnotationRunning(true);
+      } else {
+        console.log('No unanalyzed games found');
+        setAnalyzingGames(new Set());
+        setIsAnnotationRunning(false);
+      }
+    } catch (err) {
+      console.error('Error checking annotation status:', err);
+    }
+  };
 
   // Fetch user aliases from the database
   const fetchUserAliases = async () => {
@@ -289,7 +421,7 @@ const GamesPage = () => {
     return null; // No match found
   };
 
-  // Process games after confirmation
+  // Modified process confirmed games with better status updates
   const processConfirmedGames = async (gamesToProcess?: ChessGame[]) => {
     // Use provided games or fall back to state
     const games = gamesToProcess || pendingGames;
@@ -298,11 +430,12 @@ const GamesPage = () => {
     if (!session?.user?.id || games.length === 0) {
       console.log('Aborting processConfirmedGames: no session user or no pending games');
       setIsProcessing(false);
+      setLoading(false); // Make sure to reset loading
       return;
     }
     
     setLoading(true);
-    setMessage({ text: 'Uploading confirmed games...', type: 'info' });
+    setMessage({ text: 'Uploading games...', type: 'info' });
     console.log('Set loading state and updated message to uploading');
     
     try {
@@ -315,6 +448,7 @@ const GamesPage = () => {
       const batchSize = 50;
       let successCount = 0;
       let errorCount = 0;
+      let newGameIds: string[] = [];
       
       console.log('Starting batch uploads with batch size', batchSize);
       for (let i = 0; i < gamesToInsert.length; i += batchSize) {
@@ -322,16 +456,21 @@ const GamesPage = () => {
         console.log(`Processing batch ${Math.floor(i/batchSize) + 1} with ${batch.length} games`);
         
         try {
-          const { error: insertError } = await supabase
+          // Capture the IDs of the inserted games
+          const { data: insertedData, error: insertError } = await supabase
             .from('games')
-            .insert(batch);
+            .insert(batch)
+            .select('id');
             
           if (insertError) {
             errorCount += batch.length;
             console.error('Error inserting batch:', insertError);
-          } else {
-            successCount += batch.length;
+          } else if (insertedData) {
+            successCount += insertedData.length;
             console.log(`Successfully inserted batch, total success count: ${successCount}`);
+            
+            // Collect the new game IDs for the analyzing state
+            newGameIds = [...newGameIds, ...insertedData.map(game => game.id)];
           }
         } catch (batchError) {
           console.error('Exception during batch insert:', batchError);
@@ -343,24 +482,47 @@ const GamesPage = () => {
         console.log(`Upload progress: ${Math.round(((i + batch.length) / gamesToInsert.length) * 100)}%`);
       }
       
-      // Only show error message immediately if there were errors
-      if (errorCount > 0) {
-        setMessage({ 
-          text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors`,
-          type: 'error'
-        });
-      }
-      
-      // Reset state
+      // Reset pending games state
       setPendingGames([]);
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       
       // Update game count after successful upload
-      fetchGameCount();
+      await fetchGameCount();
       
-      // Call the processUnannotatedGames API after successful upload
-      if (session?.user?.id) {
+      // Refresh the games list to show the new games
+      await fetchUserGames(1);
+      
+      // Add the new games to the analyzing set
+      if (newGameIds.length > 0) {
+        setAnalyzingGames(prev => {
+          const newSet = new Set(prev);
+          newGameIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+        
+        // Make sure annotation running is set to true
+        setIsAnnotationRunning(true);
+      }
+      
+      // Show appropriate message
+      if (errorCount > 0) {
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors. Analysis started in background.`,
+          type: 'error'
+        });
+      } else {
+        setMessage({ 
+          text: `${successCount} games uploaded successfully. Analysis started in background.`,
+          type: 'success'
+        });
+      }
+      
+      // Immediately set loading to false after upload is complete
+      setLoading(false);
+      
+      // Call the processUnannotatedGames API after successful upload - only if games were uploaded
+      if (session?.user?.id && successCount > 0) {
         try {
           // Get the session access token to use directly
           const { data: sessionData } = await supabase.auth.getSession();
@@ -368,30 +530,25 @@ const GamesPage = () => {
           
           // Call the API with explicit access token
           if (accessToken) {
+            setIsAnnotationRunning(true); // Set as running before API call
             await gameApi.processUnannotatedGames(session.user.id, accessToken);
             console.log('✅ Triggered analysis of unannotated games');
             
-            // Add notification about background processing
-            setMessage({ 
-              text: `${successCount} games uploaded. Analysis has been started in the background.`,
-              type: 'success'
-            });
+            // Ensure we start polling if not already
+            startAnalysisStatusPolling();
           } else {
             throw new Error('No access token available');
           }
         } catch (analysisError) {
           console.error('Error triggering game analysis:', analysisError);
-          // Still show success for upload but mention analysis couldn't be started
-          setMessage({ 
-            text: `${successCount} games uploaded. Game analysis could not be started automatically.`,
-            type: 'success'
-          });
+          // Don't change the success message - analysis is separate now
         }
       }
     } catch (err) {
       setMessage({ text: 'Error uploading games: ' + (err as Error).message, type: 'error' });
+      setLoading(false); // Make sure loading is reset on error
     } finally {
-      setLoading(false);
+      setLoading(false); // Guarantee loading state is reset
       setIsProcessing(false);
     }
   };
@@ -611,15 +768,20 @@ const GamesPage = () => {
       return;
     }
 
-    setLoading(true);
-    setMessage({ text: 'Processing PGN file...', type: 'info' });
-    setUploadProgress(0);
-    setParsingMetrics(null);
-
     try {
+      setLoading(true);
+      setMessage({ text: 'Processing PGN file...', type: 'info' });
+      setUploadProgress(0);
+      setParsingMetrics(null);
+
       const file = files[0];
       const fileSize = file.size;
       const text = await file.text();
+      
+      // Always reset file input to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       
       // Start measuring parsing time
       const parsingStartTime = performance.now();
@@ -676,6 +838,10 @@ const GamesPage = () => {
         if (newGames.length === 0) {
           setMessage({ text: `All ${duplicateCount} games are duplicates. Nothing to upload.`, type: 'info' });
           setLoading(false);
+          // Reset file input to allow selecting the same file again
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
           return;
         }
         
@@ -732,6 +898,11 @@ const GamesPage = () => {
           gamesPerSecond: gamesPerSecond,
           fileSize: fileSize
         });
+        
+        // Reset file input to allow selecting the same file again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       } catch (fetchError) {
         console.error('Error during duplicate checking:', fetchError);
         setMessage({ 
@@ -739,10 +910,23 @@ const GamesPage = () => {
           type: 'error'
         });
         setLoading(false);
+        // Reset file input to allow selecting the same file again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     } catch (err) {
+      console.error('Error in handleFileUpload:', err);
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
-      setLoading(false);
+    } finally {
+      // Always reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      // Only reset loading state if we're not proceeding to another step
+      if (!pendingGames.length) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1098,6 +1282,21 @@ const GamesPage = () => {
     }
   };
 
+  // Add this simple debug component for development
+  const DebugInfo = () => {
+    // Only show in development
+    if (process.env.NODE_ENV !== 'development') return null;
+    
+    return (
+      <div className="fixed bottom-4 right-4 bg-gray-900 text-xs text-white p-2 rounded shadow z-50 opacity-70 hover:opacity-100">
+        <div>Polling: {pollingIntervalRef.current ? 'Active' : 'Inactive'}</div>
+        <div>Loading: {loading ? 'True' : 'False'}</div>
+        <div>Processing: {isProcessing ? 'True' : 'False'}</div>
+        <div>Analyzing: {analyzingGames.size} games</div>
+      </div>
+    );
+  };
+
   if (!session) {
     return <div>Redirecting to login...</div>;
   }
@@ -1108,6 +1307,9 @@ const GamesPage = () => {
         <title>Chess Tutor - My Games</title>
         <meta name="description" content="Upload and manage your chess games" />
       </Head>
+      
+      {/* Debug component */}
+      <DebugInfo />
       
       <div className="w-full max-w-4xl px-4 py-8">
         {/* Games List Section */}
@@ -1175,10 +1377,13 @@ const GamesPage = () => {
                     blackPlayerClass += ' flex items-center';
                   }
                   
+                  // Check if this game is being analyzed
+                  const isBeingAnalyzed = !game.analyzed || analyzingGames.has(game.id);
+                  
                   return (
                     <div 
                       key={game.id} 
-                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0"
+                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0 relative"
                       style={{
                         backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
                       }}
@@ -1200,8 +1405,25 @@ const GamesPage = () => {
                         e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
                       }}
                     >
-                      <div className="text-base font-medium text-white mb-3">
-                        {formattedDate}
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="text-base font-medium text-white">
+                          {formattedDate}
+                        </div>
+                        
+                        {/* Analysis status indicator - now aligned with date */}
+                        {isBeingAnalyzed ? (
+                          <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
+                            <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
+                            Analyzing
+                          </div>
+                        ) : (
+                          <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Analyzed
+                          </div>
+                        )}
                       </div>
                       
                       <div className="mt-2 space-y-2">
@@ -1324,6 +1546,16 @@ const GamesPage = () => {
               </Button>
             </div>
           </div>
+          
+          {/* Analysis status indicator */}
+          {isAnnotationRunning && (
+            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700/50 rounded-md">
+              <div className="flex items-center text-blue-300">
+                <div className="animate-pulse w-2.5 h-2.5 bg-blue-400 rounded-full mr-2"></div>
+                <span>Game analysis running in the background</span>
+              </div>
+            </div>
+          )}
           
           {parsingMetrics && (
             <div className="mb-4 p-4 bg-gray-700 rounded-md text-gray-200">
