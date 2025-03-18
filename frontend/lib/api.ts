@@ -134,7 +134,7 @@ export const gameApi = {
   },
 
   // Process unannotated games 
-  processUnannotatedGames: async (userId: string, accessToken?: string) => {
+  processUnannotatedGames: async (userId: string, accessToken?: string, forceRetry: boolean = false) => {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -146,7 +146,10 @@ export const gameApi = {
       }
       
       const response = await api.post('/games/process-unannotated', 
-        { user_id: userId },
+        { 
+          user_id: userId,
+          force_retry: forceRetry
+        },
         { headers }
       );
       return response.data;

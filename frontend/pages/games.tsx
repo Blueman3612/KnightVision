@@ -113,6 +113,13 @@ const GamesPage = () => {
   // Add a map to separately track analyzed status
   const [analyzedStatusMap, setAnalyzedStatusMap] = React.useState<Record<string, boolean>>({});
   
+  // Add a flag to track if we're stuck analyzing the same game
+  const [stuckGameId, setStuckGameId] = React.useState<string | null>(null);
+  const [stuckGameCount, setStuckGameCount] = React.useState(0);
+  
+  // Add a ref to track the previously analyzed games for completion detection
+  const previouslyAnalyzedRef = React.useRef<Set<string>>(new Set());
+  
   // Redirect if not logged in
   React.useEffect(() => {
     if (!session) {
@@ -236,7 +243,7 @@ const GamesPage = () => {
         .from('games')
         .select('id, analyzed, created_at')
         .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true }); // Use FIFO order: oldest first
         
       if (error) {
         console.error('Error checking annotation status:', error);
@@ -261,10 +268,37 @@ const GamesPage = () => {
       
       // Set first unanalyzed game as active if we have unanalyzed games
       if (isRunning) {
+        // Get the oldest unanalyzed game as the active one (FIFO order)
         const activeId = unanalyzedGames[0].id;
+        
+        // Check if we're stuck analyzing the same game
+        if (activeId === stuckGameId) {
+          // Increment the counter
+          const newCount = stuckGameCount + 1;
+          setStuckGameCount(newCount);
+          
+          // If stuck for too long (3+ status checks on same game), try to force progress
+          // Reduced from 5 to 3 for faster detection
+          if (newCount >= 3) {
+            console.log(`Detected stuck analysis on game ${activeId} for ${newCount} checks, attempting to force progress`);
+            
+            // Reset counter
+            setStuckGameCount(0);
+            
+            // Force a new API call to try to unstick the process
+            setTimeout(() => triggerGameAnalysis(true), 300);
+            
+            // For now, continue with normal processing
+          }
+        } else {
+          // Reset stuck counter for new game
+          setStuckGameId(activeId);
+          setStuckGameCount(0);
+        }
         
         // Check if the active game has changed
         if (activeId !== activeAnalyzingGameId) {
+          console.log(`Active analysis game changed from ${activeAnalyzingGameId || 'none'} to ${activeId}`);
           setActiveAnalyzingGameId(activeId);
         }
         
@@ -273,8 +307,15 @@ const GamesPage = () => {
         
         // Log the current analysis state for debugging
         console.log(`Analyzing game ${activeId}, ${unanalyzedGames.length - 1} games queued`);
+        
+        // If we have queued games, list their IDs for debugging
+        if (unanalyzedGames.length > 1) {
+          console.log('Queued games:', unanalyzedGames.slice(1).map(g => g.id).join(', '));
+        }
       } else {
         setActiveAnalyzingGameId(null);
+        setStuckGameId(null);
+        setStuckGameCount(0);
       }
       
       // Set annotation running state
@@ -292,6 +333,12 @@ const GamesPage = () => {
       
       // Update game objects efficiently
       setUserGames(prev => {
+        // Always refetch game list if we have unanalyzed games to ensure proper order
+        if (unanalyzedGames.length > 0) {
+          // Force a refresh of the game list on next render cycle
+          setTimeout(() => fetchUserGames(1), 0);
+        }
+        
         // Create a new array only if there are changes
         let hasChanges = false;
         const updated = prev.map(game => {
@@ -492,10 +539,18 @@ const GamesPage = () => {
   };
 
   // Add a new function to trigger analysis independently
-  const triggerGameAnalysis = async () => {
+  const triggerGameAnalysis = async (forceRetry = false) => {
     if (!session?.user?.id) return;
     
     try {
+      // Don't trigger again if analysis is already running - just update the UI
+      // Allow override with forceRetry for stuck detection
+      if (isAnnotationRunning && !forceRetry) {
+        console.log('Analysis already running, skipping API call but refreshing status');
+        setTimeout(() => checkAnnotationStatus(), 500);
+        return;
+      }
+      
       // Get the session access token to use directly
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
@@ -505,7 +560,7 @@ const GamesPage = () => {
         return;
       }
       
-      console.log('Triggering game analysis API call');
+      console.log(forceRetry ? 'Forcing analysis API call to retry' : 'Triggering game analysis API call');
       
       // Make sure subscription is active
       if (!subscription || !subscriptionReady) {
@@ -517,7 +572,7 @@ const GamesPage = () => {
       // Call the API
       try {
         setIsAnnotationRunning(true); // Set as running before API call
-        await gameApi.processUnannotatedGames(session.user.id, accessToken);
+        await gameApi.processUnannotatedGames(session.user.id, accessToken, forceRetry);
         console.log('Analysis API call successful');
       } catch (apiError) {
         console.error('Error calling analysis API:', apiError);
@@ -1445,6 +1500,30 @@ const GamesPage = () => {
 
   // Before the component returns, generate game cards - Now more efficient with unique keys
   const generateGameCards = () => {
+    // Pre-compute positions once for all games
+    const unanalyzedGames = userGames
+      .filter(g => !g.analyzed)
+      .sort((a, b) => {
+        // Sort by created_at to match backend processing order
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB; // Ascending = oldest first
+      });
+      
+    // Create a map of game ID to queue position
+    const queuePositionMap: Record<string, number> = {};
+    
+    // The first unanalyzed game is the one being analyzed, rest are queued
+    if (unanalyzedGames.length > 0) {
+      // First game is analyzing, not in queue
+      const analyzingId = unanalyzedGames[0].id;
+      
+      // Assign positions to all other games (1-based indexing for display)
+      for (let i = 1; i < unanalyzedGames.length; i++) {
+        queuePositionMap[unanalyzedGames[i].id] = i;
+      }
+    }
+      
     return userGames.map((game) => {
       // Determine if the user played as white or black
       const userPlayedAs = game.user_color || 'unknown';
@@ -1482,8 +1561,11 @@ const GamesPage = () => {
       const gameStatus = gameStatusMap[game.id] || (game.analyzed ? 'analyzed' : 'queued');
       const isBeingAnalyzed = gameStatus === 'analyzing';
       
+      // Get queue position directly from the map
+      const queuePosition = queuePositionMap[game.id] || -1;
+      
       // Unique key that includes both id and status to ensure rerendering when status changes
-      const cardKey = `${game.id}-${gameStatus}`;
+      const cardKey = `${game.id}-${gameStatus}-${queuePosition}`;
       
       return (
         <div 
@@ -1525,8 +1607,17 @@ const GamesPage = () => {
               </div>
             ) : gameStatus === 'queued' ? (
               <div className="flex items-center bg-gray-800/70 text-gray-400 text-xs px-2 py-1 rounded-full">
-                <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
-                Queued
+                {queuePosition > 0 ? (
+                  <>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
+                    Queue #{queuePosition}
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
+                    Queued
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
@@ -1580,14 +1671,62 @@ const GamesPage = () => {
         <div>Processing: {isProcessing ? 'True' : 'False'}</div>
         <div>Analyzing: {analyzingGames.size} games</div>
         <div>Active Game: {activeAnalyzingGameId || 'None'}</div>
-        <button 
-          onClick={checkAnnotationStatus}
-          className="mt-2 px-2 py-1 bg-blue-700 rounded text-white text-xs hover:bg-blue-600"
-        >
-          Refresh Status
-        </button>
+        <div>Stuck Count: {stuckGameCount}</div>
+        <div className="flex space-x-2 mt-2">
+          <button 
+            onClick={checkAnnotationStatus}
+            className="px-2 py-1 bg-blue-700 rounded text-white text-xs hover:bg-blue-600"
+          >
+            Refresh Status
+          </button>
+          <button 
+            onClick={continueAnalysis}
+            className="px-2 py-1 bg-green-700 rounded text-white text-xs hover:bg-green-600"
+          >
+            Continue Analysis
+          </button>
+        </div>
       </div>
     );
+  };
+
+  // Add effect to monitor for analyzed games and trigger next in queue
+  React.useEffect(() => {
+    // Check if a game has just completed analysis
+    const newlyCompleted = new Set<string>();
+    
+    // Get the currently analyzed games from state
+    const currentlyAnalyzed = new Set<string>();
+    Object.entries(analyzedStatusMap).forEach(([id, analyzed]) => {
+      if (analyzed) {
+        currentlyAnalyzed.add(id);
+        // If this game was not previously analyzed, it was just completed
+        if (!previouslyAnalyzedRef.current.has(id)) {
+          newlyCompleted.add(id);
+        }
+      }
+    });
+    
+    // If we detected newly completed games and there are still games in the queue
+    if (newlyCompleted.size > 0 && isAnnotationRunning) {
+      // Log for debugging
+      console.log('Detected newly completed analysis:', Array.from(newlyCompleted));
+      console.log('Continuing to next game in queue');
+      
+      // Trigger the next game in queue
+      setTimeout(() => {
+        triggerGameAnalysis(true);
+      }, 1000);
+    }
+    
+    // Update our ref with the current state
+    previouslyAnalyzedRef.current = currentlyAnalyzed;
+  }, [analyzedStatusMap, isAnnotationRunning]);
+
+  // Add a dedicated function to manually continue analysis 
+  const continueAnalysis = () => {
+    console.log('Manually continuing analysis');
+    triggerGameAnalysis(true);
   };
 
   if (!session) {
