@@ -1550,7 +1550,7 @@ const GamesPage = () => {
           }}
         >
           <div className="flex justify-between items-center mb-3">
-            <div className="text-base font-medium text-white">
+            <div className="text-sm font-medium text-white">
               {formattedDate}
             </div>
             
