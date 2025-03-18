@@ -270,6 +270,9 @@ const GamesPage = () => {
         
         // Mark this game as analyzing in the status map
         newGameStatusMap[activeId] = 'analyzing';
+        
+        // Log the current analysis state for debugging
+        console.log(`Analyzing game ${activeId}, ${unanalyzedGames.length - 1} games queued`);
       } else {
         setActiveAnalyzingGameId(null);
       }
@@ -299,6 +302,13 @@ const GamesPage = () => {
           }
           return game;
         });
+        
+        // Force the refresh trigger to update on any change
+        if (hasChanges) {
+          setRefreshTrigger(prev => prev + 1);
+          // Update game cards version to force re-rendering
+          setGameCardsVersion(prev => prev + 1);
+        }
         
         return hasChanges ? updated : prev;
       });
@@ -481,7 +491,49 @@ const GamesPage = () => {
     return null; // No match found
   };
 
-  // Modified process confirmed games with better status updates
+  // Add a new function to trigger analysis independently
+  const triggerGameAnalysis = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // Get the session access token to use directly
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        console.error('No access token available for analysis');
+        return;
+      }
+      
+      console.log('Triggering game analysis API call');
+      
+      // Make sure subscription is active
+      if (!subscription || !subscriptionReady) {
+        await setupRealtimeSubscription();
+        // Wait a bit for subscription to initialize
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // Call the API
+      try {
+        setIsAnnotationRunning(true); // Set as running before API call
+        await gameApi.processUnannotatedGames(session.user.id, accessToken);
+        console.log('Analysis API call successful');
+      } catch (apiError) {
+        console.error('Error calling analysis API:', apiError);
+      }
+      
+      // Force a status check
+      setTimeout(() => {
+        console.log('Refreshing game status after API call');
+        checkAnnotationStatus();
+      }, 500);
+    } catch (err) {
+      console.error('Error triggering game analysis:', err);
+    }
+  };
+
+  // Modified process confirmed games function
   const processConfirmedGames = async (gamesToProcess?: ChessGame[]) => {
     // Use provided games or fall back to state
     const games = gamesToProcess || pendingGames;
@@ -509,6 +561,8 @@ const GamesPage = () => {
         const batch = gamesToInsert.slice(i, i + batchSize);
         
         try {
+          console.log(`Inserting batch of ${batch.length} games into database (batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(gamesToInsert.length/batchSize)})`);
+          
           // Capture the IDs of the inserted games
           const { data: insertedData, error: insertError } = await supabase
             .from('games')
@@ -518,8 +572,17 @@ const GamesPage = () => {
           if (insertError) {
             errorCount += batch.length;
             console.error('Error inserting batch:', insertError);
+            
+            // Log details about the batch that failed
+            console.error('Failed batch details:', JSON.stringify(batch.map(g => ({
+              pgn_length: g.pgn?.length || 0,
+              user_id: g.user_id,
+              user_color: g.user_color,
+              unique_game_id: g.unique_game_id
+            }))));
           } else if (insertedData) {
             successCount += insertedData.length;
+            console.log(`Successfully inserted ${insertedData.length} games, IDs:`, insertedData.map(g => g.id).join(', '));
             
             // Collect the new game IDs for the analyzing state
             newGameIds = [...newGameIds, ...insertedData.map(game => game.id)];
@@ -568,45 +631,27 @@ const GamesPage = () => {
           type: 'error'
         });
       } else {
-        setMessage({ 
-          text: `${successCount} games uploaded successfully. Analysis started in background.`,
-          type: 'success'
-        });
+        // Change the message based on whether analysis is already running
+        if (isAnnotationRunning) {
+          setMessage({ 
+            text: `${successCount} games uploaded successfully. Added to analysis queue.`,
+            type: 'success'
+          });
+        } else {
+          setMessage({ 
+            text: `${successCount} games uploaded successfully. Analysis started in background.`,
+            type: 'success'
+          });
+        }
       }
       
       // Immediately set loading to false after upload is complete
       setLoading(false);
       
-      // Call the processUnannotatedGames API after successful upload - only if games were uploaded
-      if (session?.user?.id && successCount > 0) {
-        try {
-          // Get the session access token to use directly
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData?.session?.access_token;
-          
-          // Make sure subscription is active BEFORE starting analysis
-          if (!subscription || !subscriptionReady) {
-            await setupRealtimeSubscription();
-            // Wait a bit for subscription to initialize
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-          
-          // Call the API with explicit access token
-          if (accessToken) {
-            setIsAnnotationRunning(true); // Set as running before API call
-            await gameApi.processUnannotatedGames(session.user.id, accessToken);
-            
-            // Force initial state refresh after starting analysis
-            setTimeout(() => {
-              checkAnnotationStatus();
-            }, 300);
-          } else {
-            throw new Error('No access token available');
-          }
-        } catch (analysisError) {
-          console.error('Error triggering game analysis:', analysisError);
-          // Don't change the success message - analysis is separate now
-        }
+      // Always trigger game analysis if games were uploaded successfully
+      if (successCount > 0) {
+        // Call the analysis trigger function after a short delay
+        setTimeout(() => triggerGameAnalysis(), 300);
       }
     } catch (err) {
       setMessage({ text: 'Error uploading games: ' + (err as Error).message, type: 'error' });
@@ -621,6 +666,8 @@ const GamesPage = () => {
   const confirmPlayerColor = (color: 'white' | 'black') => {
     if (currentGameIndex < 0 || currentGameIndex >= pendingGames.length) return;
     
+    console.log(`Confirming user as ${color} for game ${currentGameIndex}`);
+    
     // Update the current game with the selected color
     const updatedGames = [...pendingGames];
     const currentGame = updatedGames[currentGameIndex];
@@ -629,6 +676,8 @@ const GamesPage = () => {
     // Add the player name to aliases
     const playerName = color === 'white' ? currentGame.whitePlayer : currentGame.blackPlayer;
     if (playerName) {
+      console.log(`Adding ${playerName} to user aliases`);
+      
       // Update local state immediately to use for reassessment
       const newAliases = [...userAliases, playerName];
       setUserAliases(newAliases);
@@ -647,13 +696,16 @@ const GamesPage = () => {
           // First check the new alias
           if ((game.whitePlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'white') {
             game.user_color = 'white';
+            console.log(`Auto-assigned white to game ${i} based on new alias`);
           } else if ((game.blackPlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'black') {
             game.user_color = 'black';
+            console.log(`Auto-assigned black to game ${i} based on new alias`);
           } else {
             // Try to match with any existing alias
             const computedColor = determineUserColor(game, newAliases);
             if (computedColor) {
               game.user_color = computedColor;
+              console.log(`Auto-assigned ${computedColor} to game ${i} based on existing aliases`);
             }
           }
         }
@@ -662,7 +714,7 @@ const GamesPage = () => {
     
     // Move to the next unconfirmed game
     setPendingGames(updatedGames);
-    findNextUnconfirmedGame(updatedGames, 0); // Start from beginning to ensure we don't miss any
+    findNextUnconfirmedGame(updatedGames, currentGameIndex + 1); // Continue from next index
   };
 
   // Modify the findNextUnconfirmedGame function to include a timeout
@@ -674,6 +726,8 @@ const GamesPage = () => {
         setConfirmationTimeoutId(null);
       }
       
+      console.log(`Finding next unconfirmed game starting at index ${startIndex}, total games: ${games.length}`);
+      
       let unconfirmedCount = 0;
       for (let i = 0; i < games.length; i++) {
         if (!games[i].user_color) {
@@ -681,8 +735,11 @@ const GamesPage = () => {
         }
       }
       
+      console.log(`Found ${unconfirmedCount} unconfirmed games out of ${games.length} total`);
+      
       // If no unconfirmed games found, just process all games
       if (unconfirmedCount === 0) {
+        console.log('No unconfirmed games found, processing all games');
         setCurrentGameIndex(-1);
         setShowPlayerConfirmation(false);
         handleAllGamesColored(games);
@@ -691,17 +748,20 @@ const GamesPage = () => {
       
       for (let i = startIndex; i < games.length; i++) {
         if (!games[i].user_color) {
+          console.log(`Found unconfirmed game at index ${i}: ${games[i].whitePlayer} vs ${games[i].blackPlayer}`);
           setCurrentGameIndex(i);
           setShowPlayerConfirmation(true);
           
           // Set a timeout to force proceed if the confirmation modal doesn't appear
           const timeoutId = setTimeout(() => {
+            console.log('Confirmation timeout reached, proceeding with defaults');
             // Force setting user colors to prevent getting stuck
             const updatedGames = [...games];
             for (let j = 0; j < updatedGames.length; j++) {
               if (!updatedGames[j].user_color) {
                 // Default to playing as white if we don't know
-                updatedGames[j].user_color = 'white';
+                console.log(`Auto-assigning user_color white to game ${j}`);
+                updatedGames[j].user_color = 'white' as 'white';
               }
             }
             setPendingGames(updatedGames);
@@ -716,10 +776,12 @@ const GamesPage = () => {
       }
       
       // No more games to confirm, process all games
+      console.log('No more unconfirmed games found, processing all');
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       handleAllGamesColored(games);
     } catch (error) {
+      console.error('Error in findNextUnconfirmedGame:', error);
       // If there's an error, try to continue with uploading anyway
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
@@ -1308,14 +1370,51 @@ const GamesPage = () => {
   // This function is causing issues, let's wrap it in a try-catch and add more logging
   const handleAllGamesColored = (gamesWithColor: ChessGame[]) => {
     if (isProcessing) {
+      console.log('Already processing games, ignoring call to handleAllGamesColored');
       return;
     }
     
     try {
-      setIsProcessing(true);
-      setTimeout(() => {
-        processConfirmedGames(gamesWithColor);
-      }, 50);
+      console.log(`Processing ${gamesWithColor.length} games with colors determined`);
+      
+      // Log some stats about the games
+      const colorStats = {
+        white: 0,
+        black: 0,
+        unknown: 0
+      };
+      
+      gamesWithColor.forEach(game => {
+        if (game.user_color === 'white') colorStats.white++;
+        else if (game.user_color === 'black') colorStats.black++;
+        else colorStats.unknown++;
+      });
+      
+      console.log(`Game color stats - White: ${colorStats.white}, Black: ${colorStats.black}, Unknown: ${colorStats.unknown}`);
+      
+      // Check if we have any games without colors
+      if (colorStats.unknown > 0) {
+        console.warn(`Warning: ${colorStats.unknown} games don't have user_color set`);
+        
+        // Try to fix by setting to white
+        const fixedGames = gamesWithColor.map(game => {
+          if (!game.user_color) {
+            console.log(`Fixing game without color: ${game.whitePlayer} vs ${game.blackPlayer}`);
+            return { ...game, user_color: 'white' as 'white' };
+          }
+          return game;
+        });
+        
+        setIsProcessing(true);
+        setTimeout(() => {
+          processConfirmedGames(fixedGames);
+        }, 50);
+      } else {
+        setIsProcessing(true);
+        setTimeout(() => {
+          processConfirmedGames(gamesWithColor);
+        }, 50);
+      }
     } catch (error) {
       console.error('Error in handleAllGamesColored:', error);
       setMessage({ 
