@@ -49,10 +49,6 @@ function Chessboard({
   // Flag to track if evaluation has been initialized
   const hasInitializedEvaluationRef = useRef(false);
   
-  // Store current FEN and orientation in refs to track changes
-  const currentFenRef = useRef(fen);
-  const currentOrientationRef = useRef(orientation);
-  
   // Keep track of the previous playerSide to detect changes
   const previousPlayerSideRef = useRef(playerSide);
   
@@ -548,7 +544,6 @@ function Chessboard({
     }
     
     if (!chessgroundRef.current || !hasInitializedRef.current) {
-      console.log("Chessground not initialized yet, will initialize from scratch");
       // Let the initialization effect handle this
       hasInitializedRef.current = false;
       return;
@@ -619,7 +614,7 @@ function Chessboard({
     
     // Only run this if we have a chess instance and haven't initialized evaluation for this playerSide yet
     if (chessRef.current && !hasInitializedEvaluationRef.current) {
-      console.log(`Initializing evaluation for playerSide=${playerSide}`);
+      // console.log(`Initializing evaluation for playerSide=${playerSide}`);
       
       // Update the flag to prevent duplicate initialization
       hasInitializedEvaluationRef.current = true;
@@ -635,7 +630,7 @@ function Chessboard({
             return;
           }
           
-          console.log("Initializing position evaluation for adaptive learning");
+          // console.log("Initializing position evaluation for adaptive learning");
           
           // Get the current FEN
           const currentFen = chessRef.current.fen();
@@ -644,16 +639,6 @@ function Chessboard({
           const initialEval = await evaluatePosition(currentFen);
           previousEvalRef.current = initialEval;
           currentEvalRef.current = initialEval;
-          
-          // If player is black and it's the starting position, we need to prepare
-          // for the first white move with proper evaluation
-          const isStartingPosition = currentFen.includes('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w');
-          if (playerSide === 'black' && isStartingPosition) {
-            console.log("Player is black with starting position - the computer's first move will use getBestMove API");
-            console.log("Subsequent moves will use the even-move API for adaptive learning");
-          } else if (playerSide === 'white') {
-            console.log("Player is white - all computer moves will use the even-move API for adaptive learning");
-          }
         } catch (error) {
           console.error("Error initializing evaluation:", error);
           // Set safe defaults

@@ -1,81 +1,17 @@
-import React, { ReactNode, useEffect, useState, useRef, useReducer } from 'react';
+import React, { ReactNode, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
-import Button from '../components/ui/Button';
 import { useToast } from '../components/ui';
-import { gameApi } from '../lib/api';
 
 interface TutorPageProps {
   children?: ReactNode;
 }
 
-// Define game state machine types
+// Define game state types
 type GameState = 'playing' | 'saving' | 'resetting' | 'ready';
-
-type GameAction = 
-  | { type: 'RESIGN'; color: string }
-  | { type: 'SAVE_COMPLETE' }
-  | { type: 'RESET_COMPLETE' }
-  | { type: 'NEW_GAME' };
-
-interface GameStateContext {
-  status: GameState;
-  gameStatus: string;
-  isGameOver: boolean;
-  disableBoard: boolean;
-  needsReset: boolean;
-}
-
-// Reducer for game state machine
-function gameStateReducer(state: GameStateContext, action: GameAction): GameStateContext {
-  switch (action.type) {
-    case 'RESIGN':
-      // Player has resigned, start save process
-      return {
-        ...state,
-        status: 'saving',
-        gameStatus: `${action.color} resigned`,
-        isGameOver: true,
-        disableBoard: true,
-        needsReset: false
-      };
-    
-    case 'SAVE_COMPLETE':
-      // Game is saved, now reset
-      return {
-        ...state,
-        status: 'resetting',
-        needsReset: true
-      };
-      
-    case 'RESET_COMPLETE':
-      // Reset is complete, ready for new game
-      return {
-        ...state,
-        status: 'ready',
-        gameStatus: '',
-        isGameOver: false,
-        disableBoard: false,
-        needsReset: false
-      };
-      
-    case 'NEW_GAME':
-      // Start a new game
-      return {
-        status: 'playing',
-        gameStatus: '',
-        isGameOver: false,
-        disableBoard: false,
-        needsReset: false
-      };
-      
-    default:
-      return state;
-  }
-}
 
 function TutorPage() {
   const router = useRouter();
@@ -93,14 +29,12 @@ function TutorPage() {
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   
-  // Initialize game state machine
-  const [gameStateContext, dispatchGameState] = useReducer(gameStateReducer, {
-    status: 'playing',
-    gameStatus: '',
-    isGameOver: false,
-    disableBoard: false,
-    needsReset: false
-  });
+  // Replace reducer with individual state variables
+  const [gameStatus, setGameStatus] = useState<string>('');
+  const [isGameOver, setIsGameOver] = useState<boolean>(false);
+  const [disableBoard, setDisableBoard] = useState<boolean>(false);
+  const [gameState, setGameState] = useState<GameState>('playing');
+  const [needsReset, setNeedsReset] = useState<boolean>(false);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -149,7 +83,7 @@ function TutorPage() {
   // Handle game reset after game state transitions
   useEffect(() => {
     // When state changes to resetting, perform the reset
-    if (gameStateContext.status === 'resetting' && gameStateContext.needsReset) {
+    if (gameState === 'resetting' && needsReset) {
       const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       
       // Reset board state
@@ -167,15 +101,19 @@ function TutorPage() {
       setMoveHistory([]);
       setBoardKey(prev => prev + 1);
       
-      // Notify state machine that reset is complete
-      dispatchGameState({ type: 'RESET_COMPLETE' });
+      // Notify that reset is complete
+      setGameState('ready');
+      setGameStatus('');
+      setIsGameOver(false);
+      setDisableBoard(false);
+      setNeedsReset(false);
     }
-  }, [gameStateContext.status, gameStateContext.needsReset]);
+  }, [gameState, needsReset]);
 
   // Save game when it ends
   useEffect(() => {
     const saveGame = async () => {
-      if (gameStateContext.isGameOver && moveHistory.length > 0 && session) {
+      if (isGameOver && moveHistory.length > 0 && session) {
         try {
           // Get the PGN from the chess instance
           const chess = chessRef.current;
@@ -194,7 +132,6 @@ function TutorPage() {
             
           // Use display_name from the users table or fall back to email
           const userName = (userData?.display_name) ? userData.display_name : session.user.email;
-          console.log("Using display name from database:", userName);
           
           // Reset the chess game to initial position
           if (typeof chessAny.reset === 'function') {
@@ -213,7 +150,7 @@ function TutorPage() {
           
           // Determine accurate result and termination
           // If gameStatus contains "resigned", it's a resignation
-          const isResignation = gameStateContext.gameStatus.toLowerCase().includes('resign');
+          const isResignation = gameStatus.toLowerCase().includes('resign');
           
           let result = '1/2-1/2'; // Default
           let terminationReason = 'normal';
@@ -228,9 +165,9 @@ function TutorPage() {
             // Resignation - the player who resigned has lost
             // The gameStatus will be set in the resignGame function
             // "White resigned" or "Black resigned"
-            result = gameStateContext.gameStatus.toLowerCase().includes('white') ? '0-1' : '1-0';
+            result = gameStatus.toLowerCase().includes('white') ? '0-1' : '1-0';
             terminationReason = 'resignation';
-            terminationText = gameStateContext.gameStatus;
+            terminationText = gameStatus;
           } else if (isStalemate) {
             // Stalemate is a draw
             result = '1/2-1/2';
@@ -279,7 +216,6 @@ function TutorPage() {
           
           // Get the complete PGN with moves
           const pgn = typeof chessAny.pgn === 'function' ? chessAny.pgn() : '';
-          console.log("Generated PGN:", pgn); // Debug log to check if moves are included
           
           // Extract the moves-only part of the PGN (everything after the last header)
           const lastHeaderIndex = pgn.lastIndexOf(']') + 1;
@@ -314,8 +250,8 @@ function TutorPage() {
             // Continue trying to save the game anyway
           } else if (existingGames && existingGames.length > 0) {
             // Game already exists, don't save
-            console.log('Game already exists in database, not saving duplicate');
-            dispatchGameState({ type: 'SAVE_COMPLETE' });
+            setGameState('resetting');
+            setNeedsReset(true);
             return;
           }
           
@@ -359,7 +295,8 @@ function TutorPage() {
             if (rpcError) {
               console.error('Error saving game with RPC:', rpcError);
               toast.error('Failed to save your game');
-              dispatchGameState({ type: 'SAVE_COMPLETE' });
+              setGameState('resetting');
+              setNeedsReset(true);
               return;
             }
           
@@ -388,29 +325,33 @@ function TutorPage() {
             
           if (updateError) {
             console.error('Error updating game metadata:', updateError);
-            dispatchGameState({ type: 'SAVE_COMPLETE' });
+            setGameState('resetting');
+            setNeedsReset(true);
           } else {
             toast.success('Game saved successfully!');
-            dispatchGameState({ type: 'SAVE_COMPLETE' });
+            setGameState('resetting');
+            setNeedsReset(true);
           }
           } else {
             toast.success('Game saved successfully!');
-            dispatchGameState({ type: 'SAVE_COMPLETE' });
+            setGameState('resetting');
+            setNeedsReset(true);
           }
         } catch (error) {
           console.error('Error in game saving process:', error);
           toast.error('An error occurred while saving your game');
           // Even on error, we need to complete the save process
-          dispatchGameState({ type: 'SAVE_COMPLETE' });
+          setGameState('resetting');
+          setNeedsReset(true);
         }
       }
     };
     
     // Only call saveGame when state is 'saving'
-    if (gameStateContext.status === 'saving') {
+    if (gameState === 'saving') {
       saveGame();
     }
-  }, [gameStateContext.status, gameStateContext.isGameOver, gameStateContext.gameStatus, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
+  }, [gameState, isGameOver, gameStatus, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
 
   const handleMove = (from: string, to: string) => {
     try {
@@ -476,29 +417,33 @@ function TutorPage() {
       const gameOver = isCheckmate || isDraw || isStalemate || isThreefoldRepetition;
       
       if (gameOver) {
-        // Update game state through state machine
-        let gameStatus = '';
+        // Update game state
+        let status = '';
         if (isCheckmate) {
-          gameStatus = 'Checkmate!';
+          status = 'Checkmate!';
         } else if (isDraw) {
-          gameStatus = 'Draw!';
+          status = 'Draw!';
         } else if (isStalemate) {
-          gameStatus = 'Stalemate!';
+          status = 'Stalemate!';
         } else if (isThreefoldRepetition) {
-          gameStatus = 'Draw by repetition!';
+          status = 'Draw by repetition!';
         } else if (typeof chessAny.insufficient_material === 'function' ? 
           chessAny.insufficient_material() : false) {
-          gameStatus = 'Draw by insufficient material!';
+          status = 'Draw by insufficient material!';
         }
         
-        // Manually update the state context
-        dispatchGameState({ 
-          type: 'RESIGN', 
-          color: gameStatus 
-        });
+        // Update the state
+        setGameState('saving');
+        setGameStatus(status);
+        setIsGameOver(true);
+        setDisableBoard(true);
       } else if (typeof chessAny.in_check === 'function' && chessAny.in_check()) {
         // In check but game not over
-        dispatchGameState({ type: 'NEW_GAME' }); // Reset to playing state
+        setGameState('playing');
+        setGameStatus('');
+        setIsGameOver(false);
+        setDisableBoard(false);
+        setNeedsReset(false);
       }
     } catch (e) {
       console.error('Error handling move:', e);
@@ -511,7 +456,11 @@ function TutorPage() {
     setFen(chess.fen());
     setMoveHistory([]);
     setGameStartTime(new Date());
-    dispatchGameState({ type: 'NEW_GAME' });
+    setGameState('playing');
+    setGameStatus('');
+    setIsGameOver(false);
+    setDisableBoard(false);
+    setNeedsReset(false);
     toast.success('New game started!');
   };
   
@@ -520,7 +469,7 @@ function TutorPage() {
       // Use moveHistory length as our primary indicator
       
       // If game is over, always allow switching
-      if (gameStateContext.isGameOver) {
+      if (isGameOver) {
         return true;
       }
       
@@ -574,7 +523,11 @@ function TutorPage() {
     setGameStartTime(new Date());
     
     // Reset game state 
-    dispatchGameState({ type: 'NEW_GAME' });
+    setGameState('playing');
+    setGameStatus('');
+    setIsGameOver(false);
+    setDisableBoard(false);
+    setNeedsReset(false);
     
     // Show toast notification
     toast.success(`You are now playing as ${newPlayerSide}`);
@@ -591,10 +544,18 @@ function TutorPage() {
     }
   };
 
+  // Fix orientation bug when resigning as black
   const resignGame = () => {
-    // Trigger the resignation through state machine
-    const resignedColor = playerSide === 'white' ? 'White' : 'Black';
-    dispatchGameState({ type: 'RESIGN', color: `${resignedColor} resigned` });
+    // Store the current player side 
+    const currentColor = playerSide;
+    
+    // Set game over state
+    setGameState('saving');
+    setGameStatus(`${currentColor === 'white' ? 'White' : 'Black'} resigned`);
+    setIsGameOver(true);
+    setDisableBoard(true);
+    
+    // Close menu
     setMenuOpen(false);
   };
   
@@ -702,20 +663,20 @@ function TutorPage() {
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
-              key={`board-${playerSide}-${gameStateContext.status}-${boardKey}`}
+              key={`board-${playerSide}-${gameState}-${boardKey}`}
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
               playerSide={playerSide}
               skillLevel={0}
-              viewOnly={gameStateContext.disableBoard}
+              viewOnly={disableBoard}
             />
           </div>
         </div>
         
-        {gameStateContext.gameStatus && (
+        {gameStatus && (
           <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
-            <p className="text-center font-medium text-gray-800">{gameStateContext.gameStatus}</p>
+            <p className="text-center font-medium text-gray-800">{gameStatus}</p>
           </div>
         )}
       </div>
