@@ -166,8 +166,6 @@ const GamesPage = () => {
       await supabase.removeChannel(subscription);
     }
     
-    console.log('Setting up real-time subscription for game updates...');
-    
     // Create a channel filtered to the current user's games
     // Listen for ALL event types to maximize chance of catching updates
     const newSubscription = supabase
@@ -181,29 +179,22 @@ const GamesPage = () => {
           filter: `user_id=eq.${session.user.id}`,
         },
         async (payload) => {
-          console.log('Received realtime event:', payload.eventType, payload);
-          
           // Handle game updates
           if (payload.eventType === 'UPDATE') {
             // Process updates where analyzed status changed
             if (payload.new && payload.old && 
                 payload.new.analyzed !== payload.old.analyzed) {
-              
-              console.log(`Game ${payload.new.id} analyzed status changed: ${payload.old.analyzed} -> ${payload.new.analyzed}`);
-              
               // Get fresh status from all games to ensure we don't miss anything
               checkAnnotationStatus();
             }
           }
           // Also handle INSERT events to refresh the list
           else if (payload.eventType === 'INSERT') {
-            console.log('New game added, refreshing list');
             checkAnnotationStatus();
           }
         }
       )
       .subscribe((status) => {
-        console.log('Supabase subscription status:', status);
         if (status === 'SUBSCRIBED') {
           setSubscriptionReady(true);
           // Get initial state
@@ -221,18 +212,15 @@ const GamesPage = () => {
     
     // Only start polling if analysis is running
     if (isAnnotationRunning) {
-      console.log('Starting analysis progress polling');
-      
-      // Poll every 2 seconds during analysis
+      // Poll every 5 seconds during analysis (changed from 2 seconds)
       intervalId = setInterval(() => {
         checkAnnotationStatus();
-      }, 2000);
+      }, 5000);
     }
     
     // Clean up on unmount or when analysis stops
     return () => {
       if (intervalId) {
-        console.log('Stopping analysis progress polling');
         clearInterval(intervalId);
       }
     };
@@ -243,8 +231,6 @@ const GamesPage = () => {
     if (!session?.user?.id) return;
     
     try {
-      console.log('Checking annotation status...');
-      
       // Get games that are not yet analyzed
       const { data, error } = await supabase
         .from('games')
@@ -279,16 +265,12 @@ const GamesPage = () => {
         
         // Check if the active game has changed
         if (activeId !== activeAnalyzingGameId) {
-          console.log(`Active game changed: ${activeAnalyzingGameId} -> ${activeId}`);
           setActiveAnalyzingGameId(activeId);
         }
         
         // Mark this game as analyzing in the status map
         newGameStatusMap[activeId] = 'analyzing';
       } else {
-        if (activeAnalyzingGameId) {
-          console.log('No more games to analyze, clearing active game');
-        }
         setActiveAnalyzingGameId(null);
       }
       
@@ -304,11 +286,6 @@ const GamesPage = () => {
       
       // Update game status map
       setGameStatusMap(newGameStatusMap);
-      
-      // Log any changes to game statuses
-      const analyzedCount = data.filter(game => game.analyzed).length;
-      const queuedCount = data.length - analyzedCount - (isRunning ? 1 : 0);
-      console.log(`Game status: Analyzed=${analyzedCount}, Queued=${queuedCount}, Analyzing=${isRunning ? 1 : 0}`);
       
       // Update game objects efficiently
       setUserGames(prev => {
@@ -944,14 +921,12 @@ const GamesPage = () => {
           
           // If we have no aliases at all, we need to ask for at least one
           if (userAliases.length === 0) {
-            console.log('No aliases configured yet, proceeding to confirmation');
             setMessage({ 
               text: `Please confirm which player you are in the games.`,
               type: 'info'
             });
             findNextUnconfirmedGame(gamesWithColor, 0);
           } else {
-            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
             setMessage({ 
               text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
               type: 'info'
@@ -960,7 +935,6 @@ const GamesPage = () => {
           }
         } else {
           // All games have user_color determined, proceed with upload
-          console.log('All games have user color determined automatically, proceeding to upload');
           handleAllGamesColored(gamesWithColor);
         }
         
@@ -1254,14 +1228,12 @@ const GamesPage = () => {
           
           // If we have no aliases at all, we need to ask for at least one
           if (userAliases.length === 0) {
-            console.log('No aliases configured yet, proceeding to confirmation');
             setMessage({ 
               text: `Please confirm which player you are in the games.`,
               type: 'info'
             });
             findNextUnconfirmedGame(gamesWithColor, 0);
           } else {
-            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
             setMessage({ 
               text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
               type: 'info'
@@ -1270,7 +1242,6 @@ const GamesPage = () => {
           }
         } else {
           // All games have user_color determined, proceed with upload
-          console.log('All games have user color determined automatically, proceeding to upload');
           handleAllGamesColored(gamesWithColor);
         }
         
