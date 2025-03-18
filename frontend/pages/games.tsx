@@ -137,8 +137,6 @@ const GamesPage = () => {
   const setupRealtimeSubscription = () => {
     if (!session?.user?.id) return;
     
-    console.log('Setting up real-time subscription for game updates');
-    
     // Create a channel filtered to the current user's games
     const newSubscription = supabase
       .channel('game-updates')
@@ -151,14 +149,10 @@ const GamesPage = () => {
           filter: `user_id=eq.${session.user.id}`,
         },
         (payload) => {
-          console.log('Real-time update received:', payload);
-          
           // Process updates for analyzed games
           if (payload.new && payload.old) {
             // Check if analyzed status changed from false to true
             if (!payload.old.analyzed && payload.new.analyzed) {
-              console.log(`Game ${payload.new.id} is now analyzed`);
-              
               // Update analyzingGames set
               setAnalyzingGames(prev => {
                 const updatedSet = new Set(prev);
@@ -170,7 +164,6 @@ const GamesPage = () => {
               setUserGames(prevGames => {
                 return prevGames.map(game => {
                   if (game.id === payload.new.id) {
-                    console.log(`Marking game ${game.id} as analyzed in UI from real-time update`);
                     return { ...game, analyzed: true };
                   }
                   return game;
@@ -181,7 +174,6 @@ const GamesPage = () => {
               setTimeout(() => {
                 setAnalyzingGames(current => {
                   if (current.size === 0) {
-                    console.log('No more games being analyzed, setting isAnnotationRunning to false');
                     setIsAnnotationRunning(false);
                     
                     // Force a complete refresh of game data
@@ -204,9 +196,7 @@ const GamesPage = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Supabase real-time subscription status:', status);
-      });
+      .subscribe();
       
     // Store the subscription for cleanup
     setSubscription(newSubscription);
@@ -214,7 +204,6 @@ const GamesPage = () => {
   
   const cleanupRealtimeSubscription = () => {
     if (subscription) {
-      console.log('Cleaning up real-time subscription');
       supabase.removeChannel(subscription);
       setSubscription(null);
     }
@@ -247,11 +236,8 @@ const GamesPage = () => {
         const unanalyzedGames = data.filter(game => !game.analyzed);
         
         if (unanalyzedGames.length > 0) {
-          console.log('Found', unanalyzedGames.length, 'unanalyzed games');
-          
           // Store IDs of unanalyzed games in a new Set to force rerender
           const unanalyzedGameIds = new Set(unanalyzedGames.map(game => game.id));
-          console.log('Setting analyzingGames to', Array.from(unanalyzedGameIds));
           setAnalyzingGames(unanalyzedGameIds);
           setIsAnnotationRunning(true);
           
@@ -267,7 +253,6 @@ const GamesPage = () => {
             });
           });
         } else {
-          console.log('No unanalyzed games found');
           setAnalyzingGames(new Set());
           setIsAnnotationRunning(false);
         }
@@ -440,26 +425,17 @@ const GamesPage = () => {
     // Use provided aliases or fall back to state
     const aliases = aliasesOverride || userAliases;
     
-    console.log('Determining color for game:', {
-      whitePlayer: game.whitePlayer,
-      blackPlayer: game.blackPlayer,
-      aliases: aliases
-    });
-    
     // Check if either player matches any alias - use lowercase comparison for case insensitive matching
     if (game.whitePlayer && aliases.some(alias => 
       game.whitePlayer!.toLowerCase() === alias.toLowerCase())) {
-      console.log(`✅ Match found: ${game.whitePlayer} matches an alias, user played as white`);
       return 'white';
     }
     
     if (game.blackPlayer && aliases.some(alias => 
       game.blackPlayer!.toLowerCase() === alias.toLowerCase())) {
-      console.log(`✅ Match found: ${game.blackPlayer} matches an alias, user played as black`);
       return 'black';
     }
     
-    console.log('❌ No match found for either player');
     return null; // No match found
   };
 
@@ -467,10 +443,8 @@ const GamesPage = () => {
   const processConfirmedGames = async (gamesToProcess?: ChessGame[]) => {
     // Use provided games or fall back to state
     const games = gamesToProcess || pendingGames;
-    console.log('processConfirmedGames called with', games.length, 'games');
     
     if (!session?.user?.id || games.length === 0) {
-      console.log('Aborting processConfirmedGames: no session user or no pending games');
       setIsProcessing(false);
       setLoading(false); // Make sure to reset loading
       return;
@@ -478,13 +452,10 @@ const GamesPage = () => {
     
     setLoading(true);
     setMessage({ text: 'Uploading games...', type: 'info' });
-    console.log('Set loading state and updated message to uploading');
     
     try {
       // Prepare games for insertion
-      console.log('Preparing games for insertion...');
       const gamesToInsert = games.map(game => prepareGameForInsert(game, session.user.id));
-      console.log('Prepared', gamesToInsert.length, 'games for insertion');
       
       // Process in batches of 50 to stay within limits
       const batchSize = 50;
@@ -492,10 +463,8 @@ const GamesPage = () => {
       let errorCount = 0;
       let newGameIds: string[] = [];
       
-      console.log('Starting batch uploads with batch size', batchSize);
       for (let i = 0; i < gamesToInsert.length; i += batchSize) {
         const batch = gamesToInsert.slice(i, i + batchSize);
-        console.log(`Processing batch ${Math.floor(i/batchSize) + 1} with ${batch.length} games`);
         
         try {
           // Capture the IDs of the inserted games
@@ -509,7 +478,6 @@ const GamesPage = () => {
             console.error('Error inserting batch:', insertError);
           } else if (insertedData) {
             successCount += insertedData.length;
-            console.log(`Successfully inserted batch, total success count: ${successCount}`);
             
             // Collect the new game IDs for the analyzing state
             newGameIds = [...newGameIds, ...insertedData.map(game => game.id)];
@@ -521,7 +489,6 @@ const GamesPage = () => {
         
         // Update progress
         setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
-        console.log(`Upload progress: ${Math.round(((i + batch.length) / gamesToInsert.length) * 100)}%`);
       }
       
       // Reset pending games state
@@ -573,7 +540,6 @@ const GamesPage = () => {
           // Call the API with explicit access token
           if (accessToken) {
             setIsAnnotationRunning(true); // Set as running before API call
-            console.log('✅ Triggered analysis of unannotated games');
             await gameApi.processUnannotatedGames(session.user.id, accessToken);
             
             // Ensure real-time subscription is active
@@ -653,25 +619,15 @@ const GamesPage = () => {
   // Modify the findNextUnconfirmedGame function to include a timeout
   const findNextUnconfirmedGame = (games: ChessGame[], startIndex: number) => {
     try {
-      console.log(`Finding next unconfirmed game starting from index ${startIndex} out of ${games.length} games`);
-      
-      // Clear any existing timeout
-      if (confirmationTimeoutId) {
-        clearTimeout(confirmationTimeoutId);
-        setConfirmationTimeoutId(null);
-      }
-      
       let unconfirmedCount = 0;
       for (let i = 0; i < games.length; i++) {
         if (!games[i].user_color) {
           unconfirmedCount++;
         }
       }
-      console.log(`Total unconfirmed games: ${unconfirmedCount}`);
       
       // If no unconfirmed games found, just process all games
       if (unconfirmedCount === 0) {
-        console.log('No unconfirmed games found in findNextUnconfirmedGame, proceeding to upload');
         setCurrentGameIndex(-1);
         setShowPlayerConfirmation(false);
         handleAllGamesColored(games);
@@ -680,13 +636,11 @@ const GamesPage = () => {
       
       for (let i = startIndex; i < games.length; i++) {
         if (!games[i].user_color) {
-          console.log(`Found unconfirmed game at index ${i}: Event: ${games[i].event}, White: ${games[i].whitePlayer}, Black: ${games[i].blackPlayer}`);
           setCurrentGameIndex(i);
           setShowPlayerConfirmation(true);
           
           // Set a timeout to force proceed if the confirmation modal doesn't appear
           const timeoutId = setTimeout(() => {
-            console.log('⚠️ Player confirmation timeout - forcing upload');
             // Force setting user colors to prevent getting stuck
             const updatedGames = [...games];
             for (let j = 0; j < updatedGames.length; j++) {
@@ -707,12 +661,10 @@ const GamesPage = () => {
       }
       
       // No more games to confirm, process all games
-      console.log('No more unconfirmed games found, proceeding to upload');
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       handleAllGamesColored(games);
     } catch (error) {
-      console.error('Error in findNextUnconfirmedGame:', error);
       // If there's an error, try to continue with uploading anyway
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
@@ -1306,18 +1258,13 @@ const GamesPage = () => {
 
   // This function is causing issues, let's wrap it in a try-catch and add more logging
   const handleAllGamesColored = (gamesWithColor: ChessGame[]) => {
-    console.log('handleAllGamesColored called with', gamesWithColor.length, 'games');
-    
     if (isProcessing) {
-      console.log('Upload already in progress, ignoring duplicate call');
       return;
     }
     
     try {
       setIsProcessing(true);
-      console.log('All games have user color determined automatically, proceeding to upload');
       setTimeout(() => {
-        console.log('Starting processConfirmedGames after delay');
         processConfirmedGames(gamesWithColor);
       }, 50);
     } catch (error) {
@@ -1333,7 +1280,6 @@ const GamesPage = () => {
 
   // Helper function to force refresh the game display completely
   const forceRefreshGameData = async () => {
-    console.log('Forcing complete data refresh');
     await fetchGameCount();
     await fetchUserGames(1);
     await checkAnnotationStatus();
@@ -1344,8 +1290,6 @@ const GamesPage = () => {
     
     // Add a brute force DOM redraw after a small delay to ensure React updates
     setTimeout(() => {
-      console.log('Forcing DOM update...');
-      // This forces a browser repaint
       document.body.style.display = 'none';
       document.body.offsetHeight; // Force a reflow
       document.body.style.display = '';
@@ -1496,8 +1440,6 @@ const GamesPage = () => {
 
   // Add this effect to monitor state changes and force UI updates
   React.useEffect(() => {
-    console.log('State changed: analyzingGames =', analyzingGames.size, 'isAnnotationRunning =', isAnnotationRunning);
-    // This is a hack to force React to re-render when these states change
     const forceRefreshTimer = setTimeout(() => {
       setRefreshTrigger(prev => prev + 1);
       
