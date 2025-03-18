@@ -98,6 +98,9 @@ const GamesPage = () => {
   // Add a state to track which games are currently being analyzed
   const [analyzingGames, setAnalyzingGames] = React.useState<Set<string>>(new Set());
   
+  // Add a state to track the CURRENTLY ACTIVE game being analyzed
+  const [activeAnalyzingGameId, setActiveAnalyzingGameId] = React.useState<string | null>(null);
+  
   // Add a state to track if annotation is currently running
   const [isAnnotationRunning, setIsAnnotationRunning] = React.useState(false);
 
@@ -153,6 +156,23 @@ const GamesPage = () => {
           if (payload.new && payload.old) {
             // Check if analyzed status changed from false to true
             if (!payload.old.analyzed && payload.new.analyzed) {
+              // If this is the active analyzing game, move to the next one
+              if (activeAnalyzingGameId === payload.new.id) {
+                // Find the next game to analyze from the remaining unanalyzed games
+                setActiveAnalyzingGameId(prevActiveId => {
+                  // Clone the set to avoid modification during iteration
+                  const remainingGames = new Set(analyzingGames);
+                  
+                  // Remove the completed game
+                  remainingGames.delete(payload.new.id);
+                  
+                  // If there are more games, pick the first one
+                  const nextGameId = remainingGames.size > 0 ? Array.from(remainingGames)[0] : null;
+                  
+                  return nextGameId;
+                });
+              }
+              
               // Update analyzingGames set
               setAnalyzingGames(prev => {
                 const updatedSet = new Set(prev);
@@ -175,6 +195,7 @@ const GamesPage = () => {
                 setAnalyzingGames(current => {
                   if (current.size === 0) {
                     setIsAnnotationRunning(false);
+                    setActiveAnalyzingGameId(null);
                     
                     // Force a complete refresh of game data
                     forceRefreshGameData();
@@ -209,7 +230,7 @@ const GamesPage = () => {
     }
   };
 
-  // Check if annotation process is currently running - updated to set state properly
+  // Check if annotation process is currently running - updated to track active game
   const checkAnnotationStatus = async () => {
     if (!session?.user?.id) return;
     
@@ -236,10 +257,13 @@ const GamesPage = () => {
         const unanalyzedGames = data.filter(game => !game.analyzed);
         
         if (unanalyzedGames.length > 0) {
-          // Store IDs of unanalyzed games in a new Set to force rerender
+          // Store IDs of unanalyzed games in a new Set
           const unanalyzedGameIds = new Set(unanalyzedGames.map(game => game.id));
           setAnalyzingGames(unanalyzedGameIds);
           setIsAnnotationRunning(true);
+          
+          // Set the first unanalyzed game as the active one
+          setActiveAnalyzingGameId(unanalyzedGames[0].id);
           
           // Make sure all games in userGames have correct analyzed property
           setUserGames(prev => {
@@ -255,6 +279,7 @@ const GamesPage = () => {
         } else {
           setAnalyzingGames(new Set());
           setIsAnnotationRunning(false);
+          setActiveAnalyzingGameId(null);
         }
         
         // Force UI refresh
@@ -510,6 +535,11 @@ const GamesPage = () => {
           return newSet;
         });
         
+        // Set the first new game as the active one if no active game
+        if (!activeAnalyzingGameId) {
+          setActiveAnalyzingGameId(newGameIds[0]);
+        }
+        
         // Make sure annotation running is set to true
         setIsAnnotationRunning(true);
       }
@@ -619,6 +649,12 @@ const GamesPage = () => {
   // Modify the findNextUnconfirmedGame function to include a timeout
   const findNextUnconfirmedGame = (games: ChessGame[], startIndex: number) => {
     try {
+      // Clear any existing timeout
+      if (confirmationTimeoutId) {
+        clearTimeout(confirmationTimeoutId);
+        setConfirmationTimeoutId(null);
+      }
+      
       let unconfirmedCount = 0;
       for (let i = 0; i < games.length; i++) {
         if (!games[i].user_color) {
@@ -1299,7 +1335,7 @@ const GamesPage = () => {
     }, 100);
   };
 
-  // Before the component returns, generate game cards
+  // Before the component returns, generate game cards - Update to use activeAnalyzingGameId
   const generateGameCards = () => {
     return userGames.map((game) => {
       // Determine if the user played as white or black
@@ -1334,9 +1370,8 @@ const GamesPage = () => {
         blackPlayerClass += ' flex items-center';
       }
       
-      // Extra simple and direct check for analysis state - MUST be fresh every time
-      // This approach eliminates STALE closures that might be causing the React issue
-      const isBeingAnalyzed = analyzingGames.has(game.id);
+      // Check if this game is the current active analyzing game
+      const isBeingAnalyzed = activeAnalyzingGameId === game.id;
       
       return (
         <div 
@@ -1369,11 +1404,16 @@ const GamesPage = () => {
               {formattedDate}
             </div>
             
-            {/* Analysis status indicator - now aligned with date */}
+            {/* Analysis status indicator - updated to use activeAnalyzingGameId */}
             {isBeingAnalyzed ? (
               <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
                 <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
                 Analyzing
+              </div>
+            ) : !game.analyzed ? (
+              <div className="flex items-center bg-gray-800/70 text-gray-400 text-xs px-2 py-1 rounded-full">
+                <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
+                Queued
               </div>
             ) : (
               <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
@@ -1426,6 +1466,7 @@ const GamesPage = () => {
         <div>Loading: {loading ? 'True' : 'False'}</div>
         <div>Processing: {isProcessing ? 'True' : 'False'}</div>
         <div>Analyzing: {analyzingGames.size} games</div>
+        <div>Active Game: {activeAnalyzingGameId || 'None'}</div>
         <div>Refresh Trigger: {refreshTrigger}</div>
         <div>Cards Version: {gameCardsVersion}</div>
         <button 
