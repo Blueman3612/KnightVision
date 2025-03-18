@@ -27,27 +27,7 @@ let apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 // Force local URL if we're in development/Docker
 if (isDevelopment || isDocker || !apiUrl) {
   apiUrl = 'http://localhost:80';
-  console.log('⚠️ Development environment detected: Using local API URL:', apiUrl);
-} 
-// // In production, use our Next.js API proxy to avoid mixed content issues
-// else if (typeof window !== 'undefined' && window.location.protocol === 'https:' && 
-//          (apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
-//   // If we're in production with HTTPS, use our proxy endpoint
-//   console.log('🔄 Production with HTTPS detected: Using API proxy');
-//   apiUrl = '/api/proxy';
-// }
-// // Ensure we don't try to use HTTPS for our backend URLs
-// else if (apiUrl.startsWith('http://') && (apiUrl.includes('api.knightvision.app') || apiUrl.includes('ec2-') || apiUrl.includes('compute-1.amazonaws.com'))) {
-//   console.log('🌐 Using HTTP for API URL:', apiUrl);
-// }
-// // Ensure HTTPS for other production environments, especially on Vercel
-// else if (apiUrl.startsWith('http://') && !apiUrl.includes('localhost')) {
-//   apiUrl = apiUrl.replace('http://', 'https://');
-//   console.log('🔒 Converting API URL to HTTPS for security:', apiUrl);
-// }
-
-// Log the final API URL being used
-console.log('🌐 API URL:', apiUrl);
+}
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -59,7 +39,6 @@ const api = axios.create({
 
 // Add request logging and error handling
 api.interceptors.request.use((config: AxiosConfig) => {
-  const fullUrl = `${config.baseURL || ''}${config.url || ''}`;
   return config;
 });
 
@@ -95,7 +74,6 @@ api.interceptors.request.use(async (config: AxiosConfig) => {
         if (sessionData?.session?.access_token) {
           config.headers = config.headers || {};
           config.headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-          console.log('Using active Supabase session token for API request');
           return config;
         }
       } catch (sessionError) {
@@ -113,7 +91,6 @@ api.interceptors.request.use(async (config: AxiosConfig) => {
           if (token?.access_token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token.access_token}`;
-            console.log('Using Supabase auth token from localStorage for API request');
             return config;
           }
         } catch (parseError) {
@@ -129,15 +106,12 @@ api.interceptors.request.use(async (config: AxiosConfig) => {
           if (parsedToken?.access_token) {
             config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${parsedToken.access_token}`;
-            console.log('Using legacy Supabase auth token for API request');
             return config;
           }
         } catch (parseError) {
           console.warn('Error parsing legacy token from localStorage:', parseError);
         }
       }
-      
-      console.warn('No auth token found in localStorage');
     } catch (err) {
       console.error('Error setting auth token:', err);
     }
@@ -160,7 +134,7 @@ export const gameApi = {
   },
 
   // Process unannotated games 
-  processUnannotatedGames: async (userId: string, accessToken?: string) => {
+  processUnannotatedGames: async (userId: string, accessToken?: string, forceRetry: boolean = false) => {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -172,7 +146,10 @@ export const gameApi = {
       }
       
       const response = await api.post('/games/process-unannotated', 
-        { user_id: userId },
+        { 
+          user_id: userId,
+          force_retry: forceRetry
+        },
         { headers }
       );
       return response.data;
@@ -253,9 +230,6 @@ export const gameApi = {
       }
       
       const response = await api.post('/games/evaluate', { fen, depth });
-      
-      // Log the response for debugging
-      console.log('Evaluation API response:', response.data);
       
       if (!response.data || response.data.evaluation === undefined) {
         console.error('❌ Invalid evaluation response format:', response.data);

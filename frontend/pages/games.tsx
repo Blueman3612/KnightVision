@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Head from 'next/head';
@@ -62,49 +62,301 @@ const GamesPage = () => {
   const router = useRouter();
   const session = useSession();
   
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [parsingMetrics, setParsingMetrics] = useState<{
+  const [loading, setLoading] = React.useState(false);
+  const [message, setMessage] = React.useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
+  const [parsingMetrics, setParsingMetrics] = React.useState<{
     totalGames: number;
     parsingTime: number;
     gamesPerSecond: number;
     fileSize: number;
   } | null>(null);
-  const [pgnText, setPgnText] = useState('');
-  const [gameCount, setGameCount] = useState<number | null>(null);
+  const [pgnText, setPgnText] = React.useState('');
+  const [gameCount, setGameCount] = React.useState<number | null>(null);
   
   // User aliases and player confirmation state
-  const [userAliases, setUserAliases] = useState<string[]>([]);
-  const [pendingGames, setPendingGames] = useState<ChessGame[]>([]);
-  const [currentGameIndex, setCurrentGameIndex] = useState<number>(-1);
-  const [showPlayerConfirmation, setShowPlayerConfirmation] = useState(false);
+  const [userAliases, setUserAliases] = React.useState<string[]>([]);
+  const [pendingGames, setPendingGames] = React.useState<ChessGame[]>([]);
+  const [currentGameIndex, setCurrentGameIndex] = React.useState<number>(-1);
+  const [showPlayerConfirmation, setShowPlayerConfirmation] = React.useState(false);
   
   // Add a ref for the file input with proper typing
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   
   // Add state for user's games
-  const [userGames, setUserGames] = useState<DBChessGame[]>([]);
-  const [gamesLoading, setGamesLoading] = useState(false);
-  const [gamesPage, setGamesPage] = useState(1);
-  const [hasMoreGames, setHasMoreGames] = useState(true);
+  const [userGames, setUserGames] = React.useState<DBChessGame[]>([]);
+  const [gamesLoading, setGamesLoading] = React.useState(false);
+  const [gamesPage, setGamesPage] = React.useState(1);
+  const [hasMoreGames, setHasMoreGames] = React.useState(true);
   
   // Add a new state for the confirmation timeout
-  const [confirmationTimeoutId, setConfirmationTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [confirmationTimeoutId, setConfirmationTimeoutId] = React.useState<NodeJS.Timeout | null>(null);
   
   // Add a processing flag to prevent duplicate uploads
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  
+  // Add a state to track which games are currently being analyzed
+  const [analyzingGames, setAnalyzingGames] = React.useState<Set<string>>(new Set());
+  
+  // Add a state to track the CURRENTLY ACTIVE game being analyzed
+  const [activeAnalyzingGameId, setActiveAnalyzingGameId] = React.useState<string | null>(null);
+  
+  // Add a state to track if annotation is currently running
+  const [isAnnotationRunning, setIsAnnotationRunning] = React.useState(false);
+
+  // Add state for UI update trigger
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+  
+  // Add a key version for game cards
+  const [gameCardsVersion, setGameCardsVersion] = React.useState(0);
+  
+  // Add a map to separately track analyzed status
+  const [analyzedStatusMap, setAnalyzedStatusMap] = React.useState<Record<string, boolean>>({});
+  
+  // Add a flag to track if we're stuck analyzing the same game
+  const [stuckGameId, setStuckGameId] = React.useState<string | null>(null);
+  const [stuckGameCount, setStuckGameCount] = React.useState(0);
+  
+  // Add a ref to track the previously analyzed games for completion detection
+  const previouslyAnalyzedRef = React.useRef<Set<string>>(new Set());
   
   // Redirect if not logged in
-  useEffect(() => {
+  React.useEffect(() => {
     if (!session) {
       router.push('/login');
     } else {
       fetchGameCount();
       fetchUserAliases();
       fetchUserGames();
+      checkAnnotationStatus();
+      
+      // Subscribe to real-time game updates instead of polling
+      setupRealtimeSubscription();
     }
+    
+    // Cleanup subscription and any loading states on unmount
+    return () => {
+      cleanupRealtimeSubscription();
+      setLoading(false); // Ensure loading state is reset on unmount
+    };
   }, [session, router]);
+
+  // Set up Supabase real-time subscription with stronger guarantees
+  const [subscription, setSubscription] = React.useState<any>(null);
+  const [subscriptionReady, setSubscriptionReady] = React.useState(false);
+  
+  // Add a ref to the latest activeAnalyzingGameId for callback closures
+  const activeGameIdRef = React.useRef<string | null>(null);
+  
+  // Better state management with a proper game status mapping
+  const [gameStatusMap, setGameStatusMap] = React.useState<Record<string, 'analyzing' | 'queued' | 'analyzed'>>({});
+  
+  // Update the ref when activeAnalyzingGameId changes
+  React.useEffect(() => {
+    activeGameIdRef.current = activeAnalyzingGameId;
+    
+    // Update gameStatusMap whenever active game changes
+    if (activeAnalyzingGameId) {
+      setGameStatusMap(prev => ({
+        ...prev,
+        [activeAnalyzingGameId]: 'analyzing'
+      }));
+    }
+  }, [activeAnalyzingGameId]);
+  
+  // Setup and prepare realtime subscriptions for different events
+  const setupRealtimeSubscription = async () => {
+    if (!session?.user?.id) return;
+    
+    // Clean up any existing subscription first
+    if (subscription) {
+      await supabase.removeChannel(subscription);
+    }
+    
+    // Create a channel filtered to the current user's games
+    // Listen for ALL event types to maximize chance of catching updates
+    const newSubscription = supabase
+      .channel('game-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen for all events: INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'games',
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        async (payload) => {
+          // Handle game updates
+          if (payload.eventType === 'UPDATE') {
+            // Process updates where analyzed status changed
+            if (payload.new && payload.old && 
+                payload.new.analyzed !== payload.old.analyzed) {
+              // Get fresh status from all games to ensure we don't miss anything
+              checkAnnotationStatus();
+            }
+          }
+          // Also handle INSERT events to refresh the list
+          else if (payload.eventType === 'INSERT') {
+            checkAnnotationStatus();
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setSubscriptionReady(true);
+          // Get initial state
+          checkAnnotationStatus();
+        }
+      });
+      
+    setSubscription(newSubscription);
+  };
+  
+  // Use a dedicated polling mechanism for more reliable updates during analysis
+  // We'll use this as a backup to ensure UI stays in sync
+  React.useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    // Only start polling if analysis is running
+    if (isAnnotationRunning) {
+      // Poll every 5 seconds during analysis (changed from 2 seconds)
+      intervalId = setInterval(() => {
+        checkAnnotationStatus();
+      }, 5000);
+    }
+    
+    // Clean up on unmount or when analysis stops
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isAnnotationRunning]);
+
+  // Check if annotation process is currently running - with enhanced logging
+  const checkAnnotationStatus = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // Get games that are not yet analyzed
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, analyzed, created_at')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true }); // Use FIFO order: oldest first
+        
+      if (error) {
+        return;
+      }
+      
+      if (!data) return;
+      
+      // Build status maps
+      const statusMap: Record<string, boolean> = {};
+      const newGameStatusMap: Record<string, 'analyzing' | 'queued' | 'analyzed'> = {};
+      
+      // Process all games
+      data.forEach(game => {
+        statusMap[game.id] = game.analyzed;
+        newGameStatusMap[game.id] = game.analyzed ? 'analyzed' : 'queued';
+      });
+      
+      // Find unanalyzed games
+      const unanalyzedGames = data.filter(game => !game.analyzed);
+      const isRunning = unanalyzedGames.length > 0;
+      
+      // Set first unanalyzed game as active if we have unanalyzed games
+      if (isRunning) {
+        // Get the oldest unanalyzed game as the active one (FIFO order)
+        const activeId = unanalyzedGames[0].id;
+        
+        // Check if we're stuck analyzing the same game
+        if (activeId === stuckGameId) {
+          // Increment the counter
+          const newCount = stuckGameCount + 1;
+          setStuckGameCount(newCount);
+          
+          // If stuck for too long (3+ status checks on same game), try to force progress
+          // Reduced from 5 to 3 for faster detection
+          if (newCount >= 3) {
+            // Reset counter
+            setStuckGameCount(0);
+            
+            // Force a new API call to try to unstick the process
+            setTimeout(() => triggerGameAnalysis(true), 300);
+            
+            // For now, continue with normal processing
+          }
+        } else {
+          // Reset stuck counter for new game
+          setStuckGameId(activeId);
+          setStuckGameCount(0);
+        }
+        
+        // Check if the active game has changed
+        if (activeId !== activeAnalyzingGameId) {
+          setActiveAnalyzingGameId(activeId);
+        }
+        
+        // Mark this game as analyzing in the status map
+        newGameStatusMap[activeId] = 'analyzing';
+        
+        // Log the current analysis state for debugging
+        // console.log(`Analyzing game ${activeId}, ${unanalyzedGames.length - 1} games queued`);
+        
+        // If we have queued games, list their IDs for debugging
+        // console.log('Queued games:', unanalyzedGames.slice(1).map(g => g.id).join(', '));
+      } else {
+        setActiveAnalyzingGameId(null);
+        setStuckGameId(null);
+        setStuckGameCount(0);
+      }
+      
+      // Set annotation running state
+      setIsAnnotationRunning(isRunning);
+      
+      // Update the set of games being analyzed
+      const newAnalyzingGames = new Set(unanalyzedGames.map(game => game.id));
+      setAnalyzingGames(newAnalyzingGames);
+      
+      // Update analyzed status map
+      setAnalyzedStatusMap(statusMap);
+      
+      // Update game status map
+      setGameStatusMap(newGameStatusMap);
+      
+      // Update game objects efficiently
+      setUserGames(prev => {
+        // Always refetch game list if we have unanalyzed games to ensure proper order
+        if (unanalyzedGames.length > 0) {
+          // Force a refresh of the game list on next render cycle
+          setTimeout(() => fetchUserGames(1), 0);
+        }
+        
+        // Create a new array only if there are changes
+        let hasChanges = false;
+        const updated = prev.map(game => {
+          const serverAnalyzed = statusMap[game.id];
+          if (serverAnalyzed !== undefined && serverAnalyzed !== game.analyzed) {
+            hasChanges = true;
+            return { ...game, analyzed: serverAnalyzed };
+          }
+          return game;
+        });
+        
+        // Force the refresh trigger to update on any change
+        if (hasChanges) {
+          setRefreshTrigger(prev => prev + 1);
+          // Update game cards version to force re-rendering
+          setGameCardsVersion(prev => prev + 1);
+        }
+        
+        return hasChanges ? updated : prev;
+      });
+    } catch (err) {
+      // Remove: console.error('Error checking annotation status:', err);
+    }
+  };
 
   // Fetch user aliases from the database
   const fetchUserAliases = async () => {
@@ -118,14 +370,13 @@ const GamesPage = () => {
         .single();
         
       if (error) {
-        console.error('Error fetching user aliases:', error);
         // If aliases column is missing or empty, set to empty array
         setUserAliases([]);
       } else if (data) {
         setUserAliases(data.aliases || []);
       }
     } catch (err) {
-      console.error('Error with user aliases:', err);
+      // Remove: console.error('Error with user aliases:', err);
     }
   };
 
@@ -148,7 +399,6 @@ const GamesPage = () => {
         .range(from, to);
       
       if (error) {
-        console.error('Error fetching games:', error);
         setMessage({
           text: `Error fetching games: ${error.message}`,
           type: 'error'
@@ -167,7 +417,6 @@ const GamesPage = () => {
         }
       }
     } catch (err) {
-      console.error('Error fetching games:', err);
       setMessage({
         text: `Error fetching games: ${err instanceof Error ? err.message : 'Unknown error'}`,
         type: 'error'
@@ -200,12 +449,12 @@ const GamesPage = () => {
         .eq('id', session.user.id);
         
       if (error) {
-        console.error('Error updating user aliases:', error);
+        // Remove: console.error('Error updating user aliases:', error);
       } else {
         setUserAliases(updatedAliases);
       }
     } catch (err) {
-      console.error('Error with updating aliases:', err);
+      // Remove: console.error('Error with updating aliases:', err);
     }
   };
 
@@ -227,7 +476,7 @@ const GamesPage = () => {
         .single();
         
       if (fetchError) {
-        console.error('Error fetching user data:', fetchError);
+        // Remove: console.error('Error fetching user data:', fetchError);
       }
       
       // If display_name is NULL or empty, set it to this first alias
@@ -241,7 +490,7 @@ const GamesPage = () => {
           .eq('id', session.user.id);
           
         if (updateError) {
-          console.error('Error updating user aliases and display name:', updateError);
+          // Remove: console.error('Error updating user aliases and display name:', updateError);
         }
       } else {
         // Otherwise just update the aliases
@@ -251,11 +500,11 @@ const GamesPage = () => {
           .eq('id', session.user.id);
           
         if (updateError) {
-          console.error('Error updating user aliases:', updateError);
+          // Remove: console.error('Error updating user aliases:', updateError);
         }
       }
     } catch (err) {
-      console.error('Error with updating aliases:', err);
+      // Remove: console.error('Error with updating aliases:', err);
     }
   };
 
@@ -266,132 +515,193 @@ const GamesPage = () => {
     // Use provided aliases or fall back to state
     const aliases = aliasesOverride || userAliases;
     
-    console.log('Determining color for game:', {
-      whitePlayer: game.whitePlayer,
-      blackPlayer: game.blackPlayer,
-      aliases: aliases
-    });
-    
     // Check if either player matches any alias - use lowercase comparison for case insensitive matching
     if (game.whitePlayer && aliases.some(alias => 
       game.whitePlayer!.toLowerCase() === alias.toLowerCase())) {
-      console.log(`✅ Match found: ${game.whitePlayer} matches an alias, user played as white`);
       return 'white';
     }
     
     if (game.blackPlayer && aliases.some(alias => 
       game.blackPlayer!.toLowerCase() === alias.toLowerCase())) {
-      console.log(`✅ Match found: ${game.blackPlayer} matches an alias, user played as black`);
       return 'black';
     }
     
-    console.log('❌ No match found for either player');
     return null; // No match found
   };
 
-  // Process games after confirmation
+  // Add a new function to trigger analysis independently
+  const triggerGameAnalysis = async (forceRetry = false) => {
+    if (!session?.user?.id) return;
+    
+    try {
+      // Don't trigger again if analysis is already running - just update the UI
+      // Allow override with forceRetry for stuck detection
+      if (isAnnotationRunning && !forceRetry) {
+        // Remove: console.log('Analysis already running...');
+        setTimeout(() => checkAnnotationStatus(), 500);
+        return;
+      }
+      
+      // Get the session access token to use directly
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        // Remove: console.error('No access token available...');
+        return;
+      }
+      
+      // Remove: console.log(forceRetry ? 'Forcing analysis...' : 'Triggering game analysis...');
+      
+      // Make sure subscription is active
+      if (!subscription || !subscriptionReady) {
+        await setupRealtimeSubscription();
+        // Wait a bit for subscription to initialize
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      // Call the API
+      try {
+        setIsAnnotationRunning(true); // Set as running before API call
+        await gameApi.processUnannotatedGames(session.user.id, accessToken, forceRetry);
+        // Remove: console.log('Analysis API call successful');
+      } catch (apiError) {
+        // Remove: console.error('Error calling analysis API:', apiError);
+      }
+      
+      // Force a status check
+      setTimeout(() => {
+        // Remove: console.log('Refreshing game status after API call');
+        checkAnnotationStatus();
+      }, 500);
+    } catch (err) {
+      // Remove: console.error('Error triggering game analysis:', err);
+    }
+  };
+
+  // Modified process confirmed games function
   const processConfirmedGames = async (gamesToProcess?: ChessGame[]) => {
     // Use provided games or fall back to state
     const games = gamesToProcess || pendingGames;
-    console.log('processConfirmedGames called with', games.length, 'games');
     
     if (!session?.user?.id || games.length === 0) {
-      console.log('Aborting processConfirmedGames: no session user or no pending games');
       setIsProcessing(false);
+      setLoading(false); // Make sure to reset loading
       return;
     }
     
     setLoading(true);
-    setMessage({ text: 'Uploading confirmed games...', type: 'info' });
-    console.log('Set loading state and updated message to uploading');
+    setMessage({ text: 'Uploading games...', type: 'info' });
     
     try {
       // Prepare games for insertion
-      console.log('Preparing games for insertion...');
       const gamesToInsert = games.map(game => prepareGameForInsert(game, session.user.id));
-      console.log('Prepared', gamesToInsert.length, 'games for insertion');
       
       // Process in batches of 50 to stay within limits
       const batchSize = 50;
       let successCount = 0;
       let errorCount = 0;
+      let newGameIds: string[] = [];
       
-      console.log('Starting batch uploads with batch size', batchSize);
       for (let i = 0; i < gamesToInsert.length; i += batchSize) {
         const batch = gamesToInsert.slice(i, i + batchSize);
-        console.log(`Processing batch ${Math.floor(i/batchSize) + 1} with ${batch.length} games`);
         
         try {
-          const { error: insertError } = await supabase
+          // Remove: console.log(`Inserting batch of ${batch.length} games into database (batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(gamesToInsert.length/batchSize)})`);
+          
+          // Capture the IDs of the inserted games
+          const { data: insertedData, error: insertError } = await supabase
             .from('games')
-            .insert(batch);
+            .insert(batch)
+            .select('id');
             
           if (insertError) {
             errorCount += batch.length;
-            console.error('Error inserting batch:', insertError);
-          } else {
-            successCount += batch.length;
-            console.log(`Successfully inserted batch, total success count: ${successCount}`);
+            // Remove: console.error('Error inserting batch:', insertError);
+            // Remove: console.error('Failed batch details:', JSON.stringify(batch.map(g => ({
+              // pgn_length: g.pgn?.length || 0,
+              // user_id: g.user_id,
+              // user_color: g.user_color,
+              // unique_game_id: g.unique_game_id
+            // }))));
+          } else if (insertedData) {
+            successCount += insertedData.length;
+            // Remove: console.log(`Successfully inserted ${insertedData.length} games, IDs:`, insertedData.map(g => g.id).join(', '));
+            
+            // Collect the new game IDs for the analyzing state
+            newGameIds = [...newGameIds, ...insertedData.map(game => game.id)];
           }
         } catch (batchError) {
-          console.error('Exception during batch insert:', batchError);
+          // Remove: console.error('Exception during batch insert:', batchError);
           errorCount += batch.length;
         }
         
         // Update progress
         setUploadProgress(Math.round(((i + batch.length) / gamesToInsert.length) * 100));
-        console.log(`Upload progress: ${Math.round(((i + batch.length) / gamesToInsert.length) * 100)}%`);
       }
       
-      // Only show error message immediately if there were errors
-      if (errorCount > 0) {
-        setMessage({ 
-          text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors`,
-          type: 'error'
-        });
-      }
-      
-      // Reset state
+      // Reset pending games state
       setPendingGames([]);
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       
       // Update game count after successful upload
-      fetchGameCount();
+      await fetchGameCount();
       
-      // Call the processUnannotatedGames API after successful upload
-      if (session?.user?.id) {
-        try {
-          // Get the session access token to use directly
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData?.session?.access_token;
-          
-          // Call the API with explicit access token
-          if (accessToken) {
-            await gameApi.processUnannotatedGames(session.user.id, accessToken);
-            console.log('✅ Triggered analysis of unannotated games');
-            
-            // Add notification about background processing
-            setMessage({ 
-              text: `${successCount} games uploaded. Analysis has been started in the background.`,
-              type: 'success'
-            });
-          } else {
-            throw new Error('No access token available');
-          }
-        } catch (analysisError) {
-          console.error('Error triggering game analysis:', analysisError);
-          // Still show success for upload but mention analysis couldn't be started
+      // Refresh the games list to show the new games
+      await fetchUserGames(1);
+      
+      // Add the new games to the analyzing set
+      if (newGameIds.length > 0) {
+        setAnalyzingGames(prev => {
+          const newSet = new Set(prev);
+          newGameIds.forEach(id => newSet.add(id));
+          return newSet;
+        });
+        
+        // Set the first new game as the active one if no active game
+        if (!activeAnalyzingGameId) {
+          setActiveAnalyzingGameId(newGameIds[0]);
+        }
+        
+        // Make sure annotation running is set to true
+        setIsAnnotationRunning(true);
+      }
+      
+      // Show appropriate message
+      if (errorCount > 0) {
+        setMessage({ 
+          text: `Upload complete: ${successCount} games uploaded, ${errorCount} errors. Analysis started in background.`,
+          type: 'error'
+        });
+      } else {
+        // Change the message based on whether analysis is already running
+        if (isAnnotationRunning) {
           setMessage({ 
-            text: `${successCount} games uploaded. Game analysis could not be started automatically.`,
+            text: `${successCount} games uploaded successfully. Added to analysis queue.`,
+            type: 'success'
+          });
+        } else {
+          setMessage({ 
+            text: `${successCount} games uploaded successfully. Analysis started in background.`,
             type: 'success'
           });
         }
       }
+      
+      // Immediately set loading to false after upload is complete
+      setLoading(false);
+      
+      // Always trigger game analysis if games were uploaded successfully
+      if (successCount > 0) {
+        // Call the analysis trigger function after a short delay
+        setTimeout(() => triggerGameAnalysis(), 300);
+      }
     } catch (err) {
       setMessage({ text: 'Error uploading games: ' + (err as Error).message, type: 'error' });
+      setLoading(false); // Make sure loading is reset on error
     } finally {
-      setLoading(false);
+      setLoading(false); // Guarantee loading state is reset
       setIsProcessing(false);
     }
   };
@@ -408,6 +718,8 @@ const GamesPage = () => {
     // Add the player name to aliases
     const playerName = color === 'white' ? currentGame.whitePlayer : currentGame.blackPlayer;
     if (playerName) {
+      // Remove: console.log(`Adding ${playerName} to user aliases`);
+      
       // Update local state immediately to use for reassessment
       const newAliases = [...userAliases, playerName];
       setUserAliases(newAliases);
@@ -426,13 +738,16 @@ const GamesPage = () => {
           // First check the new alias
           if ((game.whitePlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'white') {
             game.user_color = 'white';
+            // Remove: console.log(`Auto-assigned white to game ${i} based on new alias`);
           } else if ((game.blackPlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'black') {
             game.user_color = 'black';
+            // Remove: console.log(`Auto-assigned black to game ${i} based on new alias`);
           } else {
             // Try to match with any existing alias
             const computedColor = determineUserColor(game, newAliases);
             if (computedColor) {
               game.user_color = computedColor;
+              // Remove: console.log(`Auto-assigned ${computedColor} to game ${i} based on existing aliases`);
             }
           }
         }
@@ -441,19 +756,19 @@ const GamesPage = () => {
     
     // Move to the next unconfirmed game
     setPendingGames(updatedGames);
-    findNextUnconfirmedGame(updatedGames, 0); // Start from beginning to ensure we don't miss any
+    findNextUnconfirmedGame(updatedGames, currentGameIndex + 1); // Continue from next index
   };
 
   // Modify the findNextUnconfirmedGame function to include a timeout
   const findNextUnconfirmedGame = (games: ChessGame[], startIndex: number) => {
     try {
-      console.log(`Finding next unconfirmed game starting from index ${startIndex} out of ${games.length} games`);
-      
       // Clear any existing timeout
       if (confirmationTimeoutId) {
         clearTimeout(confirmationTimeoutId);
         setConfirmationTimeoutId(null);
       }
+      
+      // console.log(`Finding next unconfirmed game starting at index ${startIndex}, total games: ${games.length}`);
       
       let unconfirmedCount = 0;
       for (let i = 0; i < games.length; i++) {
@@ -461,11 +776,12 @@ const GamesPage = () => {
           unconfirmedCount++;
         }
       }
-      console.log(`Total unconfirmed games: ${unconfirmedCount}`);
+      
+      // Remove: console.log(`Found ${unconfirmedCount} unconfirmed games out of ${games.length} total`);
       
       // If no unconfirmed games found, just process all games
       if (unconfirmedCount === 0) {
-        console.log('No unconfirmed games found in findNextUnconfirmedGame, proceeding to upload');
+        // Remove: console.log('No unconfirmed games found, processing all games');
         setCurrentGameIndex(-1);
         setShowPlayerConfirmation(false);
         handleAllGamesColored(games);
@@ -474,19 +790,19 @@ const GamesPage = () => {
       
       for (let i = startIndex; i < games.length; i++) {
         if (!games[i].user_color) {
-          console.log(`Found unconfirmed game at index ${i}: Event: ${games[i].event}, White: ${games[i].whitePlayer}, Black: ${games[i].blackPlayer}`);
+          // Remove: console.log(`Found unconfirmed game at index ${i}: ${games[i].whitePlayer} vs ${games[i].blackPlayer}`);
           setCurrentGameIndex(i);
           setShowPlayerConfirmation(true);
           
           // Set a timeout to force proceed if the confirmation modal doesn't appear
           const timeoutId = setTimeout(() => {
-            console.log('⚠️ Player confirmation timeout - forcing upload');
+            // Remove: console.log('Confirmation timeout reached, proceeding with defaults');
             // Force setting user colors to prevent getting stuck
             const updatedGames = [...games];
             for (let j = 0; j < updatedGames.length; j++) {
               if (!updatedGames[j].user_color) {
-                // Default to playing as white if we don't know
-                updatedGames[j].user_color = 'white';
+                // Remove: console.log(`Auto-assigning user_color white to game ${j}`);
+                updatedGames[j].user_color = 'white' as 'white';
               }
             }
             setPendingGames(updatedGames);
@@ -501,12 +817,12 @@ const GamesPage = () => {
       }
       
       // No more games to confirm, process all games
-      console.log('No more unconfirmed games found, proceeding to upload');
+      // Remove: console.log('No more unconfirmed games found, processing all');
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       handleAllGamesColored(games);
     } catch (error) {
-      console.error('Error in findNextUnconfirmedGame:', error);
+      // Remove: console.error('Error in findNextUnconfirmedGame:', error);
       // If there's an error, try to continue with uploading anyway
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
@@ -525,12 +841,12 @@ const GamesPage = () => {
         .eq('user_id', session.user.id);
         
       if (error) {
-        console.error('Error fetching game count:', error);
+        // Remove: console.error('Error fetching game count:', error);
       } else {
         setGameCount(count);
       }
     } catch (err) {
-      console.error('Error with game count:', err);
+      // Remove: console.error('Error with game count:', err);
     }
   };
 
@@ -590,7 +906,6 @@ const GamesPage = () => {
           }
         }
       } catch (e) {
-        console.warn("Could not parse date:", game.gameDate);
         // Skip adding the date field
       }
     }
@@ -611,15 +926,20 @@ const GamesPage = () => {
       return;
     }
 
-    setLoading(true);
-    setMessage({ text: 'Processing PGN file...', type: 'info' });
-    setUploadProgress(0);
-    setParsingMetrics(null);
-
     try {
+      setLoading(true);
+      setMessage({ text: 'Processing PGN file...', type: 'info' });
+      setUploadProgress(0);
+      setParsingMetrics(null);
+
       const file = files[0];
       const fileSize = file.size;
       const text = await file.text();
+      
+      // Always reset file input to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       
       // Start measuring parsing time
       const parsingStartTime = performance.now();
@@ -661,7 +981,6 @@ const GamesPage = () => {
             .in('unique_game_id', idChunk);
             
           if (queryError) {
-            console.error('Error checking for duplicates:', queryError);
             // Continue anyway - we'll just assume no duplicates in this chunk
           } else if (existingGamesChunk) {
             // Add to our set of existing IDs
@@ -676,6 +995,10 @@ const GamesPage = () => {
         if (newGames.length === 0) {
           setMessage({ text: `All ${duplicateCount} games are duplicates. Nothing to upload.`, type: 'info' });
           setLoading(false);
+          // Reset file input to allow selecting the same file again
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
           return;
         }
         
@@ -699,14 +1022,12 @@ const GamesPage = () => {
           
           // If we have no aliases at all, we need to ask for at least one
           if (userAliases.length === 0) {
-            console.log('No aliases configured yet, proceeding to confirmation');
             setMessage({ 
               text: `Please confirm which player you are in the games.`,
               type: 'info'
             });
             findNextUnconfirmedGame(gamesWithColor, 0);
           } else {
-            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
             setMessage({ 
               text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
               type: 'info'
@@ -715,7 +1036,6 @@ const GamesPage = () => {
           }
         } else {
           // All games have user_color determined, proceed with upload
-          console.log('All games have user color determined automatically, proceeding to upload');
           handleAllGamesColored(gamesWithColor);
         }
         
@@ -732,17 +1052,33 @@ const GamesPage = () => {
           gamesPerSecond: gamesPerSecond,
           fileSize: fileSize
         });
+        
+        // Reset file input to allow selecting the same file again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       } catch (fetchError) {
-        console.error('Error during duplicate checking:', fetchError);
         setMessage({ 
           text: `Error checking for duplicates: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
           type: 'error'
         });
         setLoading(false);
+        // Reset file input to allow selecting the same file again
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     } catch (err) {
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
-      setLoading(false);
+    } finally {
+      // Always reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      // Only reset loading state if we're not proceeding to another step
+      if (!pendingGames.length) {
+        setLoading(false);
+      }
     }
   };
 
@@ -796,7 +1132,7 @@ const GamesPage = () => {
           // We'll store just the description for now as we can't convert without a date
           endTimeISO = headers.EndTime;
         } catch (e) {
-          console.warn("Could not parse EndTime:", headers.EndTime);
+          // Skip adding the date field
         }
       }
       
@@ -805,7 +1141,7 @@ const GamesPage = () => {
           // Similarly for StartTime
           startTimeISO = headers.StartTime;
         } catch (e) {
-          console.warn("Could not parse StartTime:", headers.StartTime);
+          // Skip adding the date field
         }
       }
       
@@ -953,7 +1289,6 @@ const GamesPage = () => {
             .in('unique_game_id', idChunk);
             
           if (queryError) {
-            console.error('Error checking for duplicates:', queryError);
             // Continue anyway - we'll just assume no duplicates in this chunk
           } else if (existingGamesChunk) {
             // Add to our set of existing IDs
@@ -991,14 +1326,12 @@ const GamesPage = () => {
           
           // If we have no aliases at all, we need to ask for at least one
           if (userAliases.length === 0) {
-            console.log('No aliases configured yet, proceeding to confirmation');
             setMessage({ 
               text: `Please confirm which player you are in the games.`,
               type: 'info'
             });
             findNextUnconfirmedGame(gamesWithColor, 0);
           } else {
-            console.log(`${unconfirmedGames.length} games need confirmation with existing aliases:`, userAliases);
             setMessage({ 
               text: `${unconfirmedGames.length} of ${gamesWithColor.length} games need player confirmation.`,
               type: 'info'
@@ -1007,7 +1340,6 @@ const GamesPage = () => {
           }
         } else {
           // All games have user_color determined, proceed with upload
-          console.log('All games have user color determined automatically, proceeding to upload');
           handleAllGamesColored(gamesWithColor);
         }
         
@@ -1041,7 +1373,7 @@ const GamesPage = () => {
   };
 
   // Add cleanup for the confirmation timeout
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
       // Clean up the timeout when the component unmounts
       if (confirmationTimeoutId) {
@@ -1073,22 +1405,45 @@ const GamesPage = () => {
 
   // This function is causing issues, let's wrap it in a try-catch and add more logging
   const handleAllGamesColored = (gamesWithColor: ChessGame[]) => {
-    console.log('handleAllGamesColored called with', gamesWithColor.length, 'games');
-    
     if (isProcessing) {
-      console.log('Upload already in progress, ignoring duplicate call');
       return;
     }
     
     try {
-      setIsProcessing(true);
-      console.log('All games have user color determined automatically, proceeding to upload');
-      setTimeout(() => {
-        console.log('Starting processConfirmedGames after delay');
-        processConfirmedGames(gamesWithColor);
-      }, 50);
+      // Log some stats about the games
+      const colorStats = {
+        white: 0,
+        black: 0,
+        unknown: 0
+      };
+      
+      gamesWithColor.forEach(game => {
+        if (game.user_color === 'white') colorStats.white++;
+        else if (game.user_color === 'black') colorStats.black++;
+        else colorStats.unknown++;
+      });
+      
+      // Check if we have any games without colors
+      if (colorStats.unknown > 0) {
+        // Try to fix by setting to white
+        const fixedGames = gamesWithColor.map(game => {
+          if (!game.user_color) {
+            return { ...game, user_color: 'white' as 'white' };
+          }
+          return game;
+        });
+        
+        setIsProcessing(true);
+        setTimeout(() => {
+          processConfirmedGames(fixedGames);
+        }, 50);
+      } else {
+        setIsProcessing(true);
+        setTimeout(() => {
+          processConfirmedGames(gamesWithColor);
+        }, 50);
+      }
     } catch (error) {
-      console.error('Error in handleAllGamesColored:', error);
       setMessage({ 
         text: 'Error preparing games for upload',
         type: 'error'
@@ -1096,6 +1451,203 @@ const GamesPage = () => {
       setLoading(false);
       setIsProcessing(false);
     }
+  };
+
+  // Restore the cleanup function
+  const cleanupRealtimeSubscription = async () => {
+    if (subscription) {
+      await supabase.removeChannel(subscription);
+      setSubscription(null);
+      setSubscriptionReady(false);
+    }
+  };
+  
+  // Restore the force refresh function without DOM manipulation
+  const forceRefreshGameData = async () => {
+    // Refresh all data
+    await fetchGameCount();
+    await fetchUserGames(1);
+    await checkAnnotationStatus();
+  };
+
+  // Before the component returns, generate game cards - Now more efficient with unique keys
+  const generateGameCards = () => {
+    // Pre-compute positions once for all games
+    const unanalyzedGames = userGames
+      .filter(g => !g.analyzed)
+      .sort((a, b) => {
+        // Sort by created_at to match backend processing order
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB; // Ascending = oldest first
+      });
+      
+    return userGames.map((game) => {
+      // Determine if the user played as white or black
+      const userPlayedAs = game.user_color || 'unknown';
+      
+      // Format the date
+      const formattedDate = game.game_date 
+        ? new Date(game.game_date).toLocaleDateString() 
+        : 'Unknown date';
+      
+      // Determine the winner for highlighting
+      let whitePlayerClass = 'text-gray-300';
+      let blackPlayerClass = 'text-gray-300';
+      
+      if (game.result === '1-0') {
+        // White won
+        whitePlayerClass = 'text-green-400 font-medium';
+      } else if (game.result === '0-1') {
+        // Black won
+        blackPlayerClass = 'text-green-400 font-medium';
+      } else if (game.result === '1/2-1/2') {
+        // Draw - highlight both
+        whitePlayerClass = 'text-yellow-400 font-medium';
+        blackPlayerClass = 'text-yellow-400 font-medium';
+      }
+      
+      // Add indicator for user's color
+      if (userPlayedAs === 'white') {
+        whitePlayerClass += ' flex items-center';
+      }
+      if (userPlayedAs === 'black') {
+        blackPlayerClass += ' flex items-center';
+      }
+      
+      // Get game status with more precise logging
+      const gameStatus = gameStatusMap[game.id] || (game.analyzed ? 'analyzed' : 'queued');
+      const isBeingAnalyzed = gameStatus === 'analyzing';
+      
+      // Unique key that includes both id and status to ensure rerendering when status changes
+      const cardKey = `${game.id}-${gameStatus}`;
+      
+      return (
+        <div 
+          key={cardKey}
+          className="game-card bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0 relative"
+          data-analyzing={isBeingAnalyzed ? "true" : "false"}
+          data-status={gameStatus}
+          style={{
+            backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
+          }}
+          onClick={() => router.push(`/analyze?gameId=${game.id}`)}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'scale(0.98)';
+            e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = 'translateY(-4px)';
+            e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = '';
+            e.currentTarget.style.boxShadow = '';
+            e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
+          }}
+        >
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-sm font-medium text-white">
+              {formattedDate}
+            </div>
+            
+            {/* Analysis status indicator - updated to use gameStatus */}
+            {gameStatus === 'analyzing' ? (
+              <div className="flex items-center bg-blue-900/70 text-blue-300 text-xs px-2 py-1 rounded-full">
+                <div className="animate-pulse w-2 h-2 bg-blue-400 rounded-full mr-1.5"></div>
+                Analyzing
+              </div>
+            ) : gameStatus === 'queued' ? (
+              <div className="flex items-center bg-gray-800/70 text-gray-400 text-xs px-2 py-1 rounded-full">
+                <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
+                Queued
+              </div>
+            ) : (
+              <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Analyzed
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-2 space-y-2">
+            <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
+              <div className="flex items-center space-x-2">
+                {userPlayedAs === 'white' && (
+                  <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                )}
+                <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-center">
+              <div className="border-t border-gray-600 w-full"></div>
+              <div className="text-xs text-gray-400 font-medium px-2">vs</div>
+              <div className="border-t border-gray-600 w-full"></div>
+            </div>
+            
+            <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
+              <div className="flex items-center space-x-2">
+                {userPlayedAs === 'black' && (
+                  <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
+                )}
+                <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
+  
+  // Add a refresh button to the debug panel
+  const DebugInfo = () => {
+    // Only show in development
+    return null;
+  };
+
+  // Add effect to monitor for analyzed games and trigger next in queue
+  React.useEffect(() => {
+    // Check if a game has just completed analysis
+    const newlyCompleted = new Set<string>();
+    
+    // Get the currently analyzed games from state
+    const currentlyAnalyzed = new Set<string>();
+    Object.entries(analyzedStatusMap).forEach(([id, analyzed]) => {
+      if (analyzed) {
+        currentlyAnalyzed.add(id);
+        // If this game was not previously analyzed, it was just completed
+        if (!previouslyAnalyzedRef.current.has(id)) {
+          newlyCompleted.add(id);
+        }
+      }
+    });
+    
+    // If we detected newly completed games and there are still games in the queue
+    if (newlyCompleted.size > 0 && isAnnotationRunning) {
+      // Log for debugging
+      // Remove: console.log('Detected newly completed analysis:', Array.from(newlyCompleted));
+      // Remove: console.log('Continuing to next game in queue');
+      
+      // Trigger the next game in queue
+      setTimeout(() => {
+        triggerGameAnalysis(true);
+      }, 1000);
+    }
+    
+    // Update our ref with the current state
+    previouslyAnalyzedRef.current = currentlyAnalyzed;
+  }, [analyzedStatusMap, isAnnotationRunning]);
+
+  // Add a dedicated function to manually continue analysis 
+  const continueAnalysis = () => {
+    // Remove: console.log('Manually continuing analysis');
+    triggerGameAnalysis(true);
   };
 
   if (!session) {
@@ -1108,6 +1660,9 @@ const GamesPage = () => {
         <title>Chess Tutor - My Games</title>
         <meta name="description" content="Upload and manage your chess games" />
       </Head>
+      
+      {/* Debug component */}
+      <DebugInfo />
       
       <div className="w-full max-w-4xl px-4 py-8">
         {/* Games List Section */}
@@ -1142,96 +1697,8 @@ const GamesPage = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-                {userGames.map((game) => {
-                  // Determine if the user played as white or black
-                  const userPlayedAs = game.user_color || 'unknown';
-                  
-                  // Format the date
-                  const formattedDate = game.game_date 
-                    ? new Date(game.game_date).toLocaleDateString() 
-                    : 'Unknown date';
-                  
-                  // Determine the winner for highlighting
-                  let whitePlayerClass = 'text-gray-300';
-                  let blackPlayerClass = 'text-gray-300';
-                  
-                  if (game.result === '1-0') {
-                    // White won
-                    whitePlayerClass = 'text-green-400 font-medium';
-                  } else if (game.result === '0-1') {
-                    // Black won
-                    blackPlayerClass = 'text-green-400 font-medium';
-                  } else if (game.result === '1/2-1/2') {
-                    // Draw - highlight both
-                    whitePlayerClass = 'text-yellow-400 font-medium';
-                    blackPlayerClass = 'text-yellow-400 font-medium';
-                  }
-                  
-                  // Add indicator for user's color
-                  if (userPlayedAs === 'white') {
-                    whitePlayerClass += ' flex items-center';
-                  }
-                  if (userPlayedAs === 'black') {
-                    blackPlayerClass += ' flex items-center';
-                  }
-                  
-                  return (
-                    <div 
-                      key={game.id} 
-                      className="bg-gradient-to-br from-gray-700 to-gray-800 hover:from-indigo-900 hover:to-purple-900 rounded-lg p-4 border border-gray-700 hover:border-indigo-500 transition-all duration-200 cursor-pointer transform hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20 active:shadow-md active:translate-y-0"
-                      style={{
-                        backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
-                      }}
-                      onClick={() => router.push(`/analyze?gameId=${game.id}`)}
-                      onMouseDown={(e) => {
-                        e.currentTarget.style.transform = 'scale(0.98)';
-                        e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
-                      }}
-                      onMouseUp={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-4px)';
-                        e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(79, 70, 229, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = '';
-                        e.currentTarget.style.boxShadow = '';
-                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))';
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundImage = 'linear-gradient(to bottom right, rgba(67, 56, 202, 0.8), rgba(126, 34, 206, 0.9))';
-                      }}
-                    >
-                      <div className="text-base font-medium text-white mb-3">
-                        {formattedDate}
-                      </div>
-                      
-                      <div className="mt-2 space-y-2">
-                        <div className={`${whitePlayerClass} rounded bg-gray-100/10 px-2 py-1.5`}>
-                          <div className="flex items-center space-x-2">
-                            {userPlayedAs === 'white' && (
-                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
-                            )}
-                            <span className="truncate flex-grow text-sm">{game.white_player || 'Unknown'}</span>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-center">
-                          <div className="border-t border-gray-600 w-full"></div>
-                          <div className="text-xs text-gray-400 font-medium px-2">vs</div>
-                          <div className="border-t border-gray-600 w-full"></div>
-                        </div>
-                        
-                        <div className={`${blackPlayerClass} rounded bg-gray-900/80 px-2 py-1.5`}>
-                          <div className="flex items-center space-x-2">
-                            {userPlayedAs === 'black' && (
-                              <span className="inline-flex w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-300 ring-opacity-50"></span>
-                            )}
-                            <span className="truncate flex-grow text-sm">{game.black_player || 'Unknown'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Use the normal function call approach - refreshTrigger included to force re-renders */}
+                {refreshTrigger || true ? generateGameCards() : null}
               </div>
               
               {hasMoreGames && (
@@ -1324,6 +1791,16 @@ const GamesPage = () => {
               </Button>
             </div>
           </div>
+          
+          {/* Analysis status indicator */}
+          {isAnnotationRunning && (
+            <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700/50 rounded-md">
+              <div className="flex items-center text-blue-300">
+                <div className="animate-pulse w-2.5 h-2.5 bg-blue-400 rounded-full mr-2"></div>
+                <span>Game analysis running in the background</span>
+              </div>
+            </div>
+          )}
           
           {parsingMetrics && (
             <div className="mb-4 p-4 bg-gray-700 rounded-md text-gray-200">
