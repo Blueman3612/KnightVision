@@ -246,7 +246,6 @@ const GamesPage = () => {
         .order('created_at', { ascending: true }); // Use FIFO order: oldest first
         
       if (error) {
-        console.error('Error checking annotation status:', error);
         return;
       }
       
@@ -280,8 +279,6 @@ const GamesPage = () => {
           // If stuck for too long (3+ status checks on same game), try to force progress
           // Reduced from 5 to 3 for faster detection
           if (newCount >= 3) {
-            console.log(`Detected stuck analysis on game ${activeId} for ${newCount} checks, attempting to force progress`);
-            
             // Reset counter
             setStuckGameCount(0);
             
@@ -298,7 +295,6 @@ const GamesPage = () => {
         
         // Check if the active game has changed
         if (activeId !== activeAnalyzingGameId) {
-          console.log(`Active analysis game changed from ${activeAnalyzingGameId || 'none'} to ${activeId}`);
           setActiveAnalyzingGameId(activeId);
         }
         
@@ -306,12 +302,10 @@ const GamesPage = () => {
         newGameStatusMap[activeId] = 'analyzing';
         
         // Log the current analysis state for debugging
-        console.log(`Analyzing game ${activeId}, ${unanalyzedGames.length - 1} games queued`);
+        // console.log(`Analyzing game ${activeId}, ${unanalyzedGames.length - 1} games queued`);
         
         // If we have queued games, list their IDs for debugging
-        if (unanalyzedGames.length > 1) {
-          console.log('Queued games:', unanalyzedGames.slice(1).map(g => g.id).join(', '));
-        }
+        // console.log('Queued games:', unanalyzedGames.slice(1).map(g => g.id).join(', '));
       } else {
         setActiveAnalyzingGameId(null);
         setStuckGameId(null);
@@ -360,7 +354,7 @@ const GamesPage = () => {
         return hasChanges ? updated : prev;
       });
     } catch (err) {
-      console.error('Error checking annotation status:', err);
+      // Remove: console.error('Error checking annotation status:', err);
     }
   };
 
@@ -376,14 +370,13 @@ const GamesPage = () => {
         .single();
         
       if (error) {
-        console.error('Error fetching user aliases:', error);
         // If aliases column is missing or empty, set to empty array
         setUserAliases([]);
       } else if (data) {
         setUserAliases(data.aliases || []);
       }
     } catch (err) {
-      console.error('Error with user aliases:', err);
+      // Remove: console.error('Error with user aliases:', err);
     }
   };
 
@@ -406,7 +399,6 @@ const GamesPage = () => {
         .range(from, to);
       
       if (error) {
-        console.error('Error fetching games:', error);
         setMessage({
           text: `Error fetching games: ${error.message}`,
           type: 'error'
@@ -425,7 +417,6 @@ const GamesPage = () => {
         }
       }
     } catch (err) {
-      console.error('Error fetching games:', err);
       setMessage({
         text: `Error fetching games: ${err instanceof Error ? err.message : 'Unknown error'}`,
         type: 'error'
@@ -458,12 +449,12 @@ const GamesPage = () => {
         .eq('id', session.user.id);
         
       if (error) {
-        console.error('Error updating user aliases:', error);
+        // Remove: console.error('Error updating user aliases:', error);
       } else {
         setUserAliases(updatedAliases);
       }
     } catch (err) {
-      console.error('Error with updating aliases:', err);
+      // Remove: console.error('Error with updating aliases:', err);
     }
   };
 
@@ -485,7 +476,7 @@ const GamesPage = () => {
         .single();
         
       if (fetchError) {
-        console.error('Error fetching user data:', fetchError);
+        // Remove: console.error('Error fetching user data:', fetchError);
       }
       
       // If display_name is NULL or empty, set it to this first alias
@@ -499,7 +490,7 @@ const GamesPage = () => {
           .eq('id', session.user.id);
           
         if (updateError) {
-          console.error('Error updating user aliases and display name:', updateError);
+          // Remove: console.error('Error updating user aliases and display name:', updateError);
         }
       } else {
         // Otherwise just update the aliases
@@ -509,11 +500,11 @@ const GamesPage = () => {
           .eq('id', session.user.id);
           
         if (updateError) {
-          console.error('Error updating user aliases:', updateError);
+          // Remove: console.error('Error updating user aliases:', updateError);
         }
       }
     } catch (err) {
-      console.error('Error with updating aliases:', err);
+      // Remove: console.error('Error with updating aliases:', err);
     }
   };
 
@@ -546,7 +537,7 @@ const GamesPage = () => {
       // Don't trigger again if analysis is already running - just update the UI
       // Allow override with forceRetry for stuck detection
       if (isAnnotationRunning && !forceRetry) {
-        console.log('Analysis already running, skipping API call but refreshing status');
+        // Remove: console.log('Analysis already running...');
         setTimeout(() => checkAnnotationStatus(), 500);
         return;
       }
@@ -556,11 +547,11 @@ const GamesPage = () => {
       const accessToken = sessionData?.session?.access_token;
       
       if (!accessToken) {
-        console.error('No access token available for analysis');
+        // Remove: console.error('No access token available...');
         return;
       }
       
-      console.log(forceRetry ? 'Forcing analysis API call to retry' : 'Triggering game analysis API call');
+      // Remove: console.log(forceRetry ? 'Forcing analysis...' : 'Triggering game analysis...');
       
       // Make sure subscription is active
       if (!subscription || !subscriptionReady) {
@@ -573,18 +564,18 @@ const GamesPage = () => {
       try {
         setIsAnnotationRunning(true); // Set as running before API call
         await gameApi.processUnannotatedGames(session.user.id, accessToken, forceRetry);
-        console.log('Analysis API call successful');
+        // Remove: console.log('Analysis API call successful');
       } catch (apiError) {
-        console.error('Error calling analysis API:', apiError);
+        // Remove: console.error('Error calling analysis API:', apiError);
       }
       
       // Force a status check
       setTimeout(() => {
-        console.log('Refreshing game status after API call');
+        // Remove: console.log('Refreshing game status after API call');
         checkAnnotationStatus();
       }, 500);
     } catch (err) {
-      console.error('Error triggering game analysis:', err);
+      // Remove: console.error('Error triggering game analysis:', err);
     }
   };
 
@@ -616,7 +607,7 @@ const GamesPage = () => {
         const batch = gamesToInsert.slice(i, i + batchSize);
         
         try {
-          console.log(`Inserting batch of ${batch.length} games into database (batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(gamesToInsert.length/batchSize)})`);
+          // Remove: console.log(`Inserting batch of ${batch.length} games into database (batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(gamesToInsert.length/batchSize)})`);
           
           // Capture the IDs of the inserted games
           const { data: insertedData, error: insertError } = await supabase
@@ -626,24 +617,22 @@ const GamesPage = () => {
             
           if (insertError) {
             errorCount += batch.length;
-            console.error('Error inserting batch:', insertError);
-            
-            // Log details about the batch that failed
-            console.error('Failed batch details:', JSON.stringify(batch.map(g => ({
-              pgn_length: g.pgn?.length || 0,
-              user_id: g.user_id,
-              user_color: g.user_color,
-              unique_game_id: g.unique_game_id
-            }))));
+            // Remove: console.error('Error inserting batch:', insertError);
+            // Remove: console.error('Failed batch details:', JSON.stringify(batch.map(g => ({
+              // pgn_length: g.pgn?.length || 0,
+              // user_id: g.user_id,
+              // user_color: g.user_color,
+              // unique_game_id: g.unique_game_id
+            // }))));
           } else if (insertedData) {
             successCount += insertedData.length;
-            console.log(`Successfully inserted ${insertedData.length} games, IDs:`, insertedData.map(g => g.id).join(', '));
+            // Remove: console.log(`Successfully inserted ${insertedData.length} games, IDs:`, insertedData.map(g => g.id).join(', '));
             
             // Collect the new game IDs for the analyzing state
             newGameIds = [...newGameIds, ...insertedData.map(game => game.id)];
           }
         } catch (batchError) {
-          console.error('Exception during batch insert:', batchError);
+          // Remove: console.error('Exception during batch insert:', batchError);
           errorCount += batch.length;
         }
         
@@ -721,8 +710,6 @@ const GamesPage = () => {
   const confirmPlayerColor = (color: 'white' | 'black') => {
     if (currentGameIndex < 0 || currentGameIndex >= pendingGames.length) return;
     
-    console.log(`Confirming user as ${color} for game ${currentGameIndex}`);
-    
     // Update the current game with the selected color
     const updatedGames = [...pendingGames];
     const currentGame = updatedGames[currentGameIndex];
@@ -731,7 +718,7 @@ const GamesPage = () => {
     // Add the player name to aliases
     const playerName = color === 'white' ? currentGame.whitePlayer : currentGame.blackPlayer;
     if (playerName) {
-      console.log(`Adding ${playerName} to user aliases`);
+      // Remove: console.log(`Adding ${playerName} to user aliases`);
       
       // Update local state immediately to use for reassessment
       const newAliases = [...userAliases, playerName];
@@ -751,16 +738,16 @@ const GamesPage = () => {
           // First check the new alias
           if ((game.whitePlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'white') {
             game.user_color = 'white';
-            console.log(`Auto-assigned white to game ${i} based on new alias`);
+            // Remove: console.log(`Auto-assigned white to game ${i} based on new alias`);
           } else if ((game.blackPlayer?.toLowerCase() === playerName.toLowerCase()) && color === 'black') {
             game.user_color = 'black';
-            console.log(`Auto-assigned black to game ${i} based on new alias`);
+            // Remove: console.log(`Auto-assigned black to game ${i} based on new alias`);
           } else {
             // Try to match with any existing alias
             const computedColor = determineUserColor(game, newAliases);
             if (computedColor) {
               game.user_color = computedColor;
-              console.log(`Auto-assigned ${computedColor} to game ${i} based on existing aliases`);
+              // Remove: console.log(`Auto-assigned ${computedColor} to game ${i} based on existing aliases`);
             }
           }
         }
@@ -781,7 +768,7 @@ const GamesPage = () => {
         setConfirmationTimeoutId(null);
       }
       
-      console.log(`Finding next unconfirmed game starting at index ${startIndex}, total games: ${games.length}`);
+      // console.log(`Finding next unconfirmed game starting at index ${startIndex}, total games: ${games.length}`);
       
       let unconfirmedCount = 0;
       for (let i = 0; i < games.length; i++) {
@@ -790,11 +777,11 @@ const GamesPage = () => {
         }
       }
       
-      console.log(`Found ${unconfirmedCount} unconfirmed games out of ${games.length} total`);
+      // Remove: console.log(`Found ${unconfirmedCount} unconfirmed games out of ${games.length} total`);
       
       // If no unconfirmed games found, just process all games
       if (unconfirmedCount === 0) {
-        console.log('No unconfirmed games found, processing all games');
+        // Remove: console.log('No unconfirmed games found, processing all games');
         setCurrentGameIndex(-1);
         setShowPlayerConfirmation(false);
         handleAllGamesColored(games);
@@ -803,19 +790,18 @@ const GamesPage = () => {
       
       for (let i = startIndex; i < games.length; i++) {
         if (!games[i].user_color) {
-          console.log(`Found unconfirmed game at index ${i}: ${games[i].whitePlayer} vs ${games[i].blackPlayer}`);
+          // Remove: console.log(`Found unconfirmed game at index ${i}: ${games[i].whitePlayer} vs ${games[i].blackPlayer}`);
           setCurrentGameIndex(i);
           setShowPlayerConfirmation(true);
           
           // Set a timeout to force proceed if the confirmation modal doesn't appear
           const timeoutId = setTimeout(() => {
-            console.log('Confirmation timeout reached, proceeding with defaults');
+            // Remove: console.log('Confirmation timeout reached, proceeding with defaults');
             // Force setting user colors to prevent getting stuck
             const updatedGames = [...games];
             for (let j = 0; j < updatedGames.length; j++) {
               if (!updatedGames[j].user_color) {
-                // Default to playing as white if we don't know
-                console.log(`Auto-assigning user_color white to game ${j}`);
+                // Remove: console.log(`Auto-assigning user_color white to game ${j}`);
                 updatedGames[j].user_color = 'white' as 'white';
               }
             }
@@ -831,12 +817,12 @@ const GamesPage = () => {
       }
       
       // No more games to confirm, process all games
-      console.log('No more unconfirmed games found, processing all');
+      // Remove: console.log('No more unconfirmed games found, processing all');
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
       handleAllGamesColored(games);
     } catch (error) {
-      console.error('Error in findNextUnconfirmedGame:', error);
+      // Remove: console.error('Error in findNextUnconfirmedGame:', error);
       // If there's an error, try to continue with uploading anyway
       setCurrentGameIndex(-1);
       setShowPlayerConfirmation(false);
@@ -855,12 +841,12 @@ const GamesPage = () => {
         .eq('user_id', session.user.id);
         
       if (error) {
-        console.error('Error fetching game count:', error);
+        // Remove: console.error('Error fetching game count:', error);
       } else {
         setGameCount(count);
       }
     } catch (err) {
-      console.error('Error with game count:', err);
+      // Remove: console.error('Error with game count:', err);
     }
   };
 
@@ -920,7 +906,6 @@ const GamesPage = () => {
           }
         }
       } catch (e) {
-        console.warn("Could not parse date:", game.gameDate);
         // Skip adding the date field
       }
     }
@@ -996,7 +981,6 @@ const GamesPage = () => {
             .in('unique_game_id', idChunk);
             
           if (queryError) {
-            console.error('Error checking for duplicates:', queryError);
             // Continue anyway - we'll just assume no duplicates in this chunk
           } else if (existingGamesChunk) {
             // Add to our set of existing IDs
@@ -1074,7 +1058,6 @@ const GamesPage = () => {
           fileInputRef.current.value = '';
         }
       } catch (fetchError) {
-        console.error('Error during duplicate checking:', fetchError);
         setMessage({ 
           text: `Error checking for duplicates: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
           type: 'error'
@@ -1086,7 +1069,6 @@ const GamesPage = () => {
         }
       }
     } catch (err) {
-      console.error('Error in handleFileUpload:', err);
       setMessage({ text: 'Error processing PGN file: ' + (err as Error).message, type: 'error' });
     } finally {
       // Always reset file input
@@ -1150,7 +1132,7 @@ const GamesPage = () => {
           // We'll store just the description for now as we can't convert without a date
           endTimeISO = headers.EndTime;
         } catch (e) {
-          console.warn("Could not parse EndTime:", headers.EndTime);
+          // Skip adding the date field
         }
       }
       
@@ -1159,7 +1141,7 @@ const GamesPage = () => {
           // Similarly for StartTime
           startTimeISO = headers.StartTime;
         } catch (e) {
-          console.warn("Could not parse StartTime:", headers.StartTime);
+          // Skip adding the date field
         }
       }
       
@@ -1307,7 +1289,6 @@ const GamesPage = () => {
             .in('unique_game_id', idChunk);
             
           if (queryError) {
-            console.error('Error checking for duplicates:', queryError);
             // Continue anyway - we'll just assume no duplicates in this chunk
           } else if (existingGamesChunk) {
             // Add to our set of existing IDs
@@ -1425,13 +1406,10 @@ const GamesPage = () => {
   // This function is causing issues, let's wrap it in a try-catch and add more logging
   const handleAllGamesColored = (gamesWithColor: ChessGame[]) => {
     if (isProcessing) {
-      console.log('Already processing games, ignoring call to handleAllGamesColored');
       return;
     }
     
     try {
-      console.log(`Processing ${gamesWithColor.length} games with colors determined`);
-      
       // Log some stats about the games
       const colorStats = {
         white: 0,
@@ -1445,16 +1423,11 @@ const GamesPage = () => {
         else colorStats.unknown++;
       });
       
-      console.log(`Game color stats - White: ${colorStats.white}, Black: ${colorStats.black}, Unknown: ${colorStats.unknown}`);
-      
       // Check if we have any games without colors
       if (colorStats.unknown > 0) {
-        console.warn(`Warning: ${colorStats.unknown} games don't have user_color set`);
-        
         // Try to fix by setting to white
         const fixedGames = gamesWithColor.map(game => {
           if (!game.user_color) {
-            console.log(`Fixing game without color: ${game.whitePlayer} vs ${game.blackPlayer}`);
             return { ...game, user_color: 'white' as 'white' };
           }
           return game;
@@ -1471,7 +1444,6 @@ const GamesPage = () => {
         }, 50);
       }
     } catch (error) {
-      console.error('Error in handleAllGamesColored:', error);
       setMessage({ 
         text: 'Error preparing games for upload',
         type: 'error'
@@ -1510,20 +1482,6 @@ const GamesPage = () => {
         return dateA - dateB; // Ascending = oldest first
       });
       
-    // Create a map of game ID to queue position
-    const queuePositionMap: Record<string, number> = {};
-    
-    // The first unanalyzed game is the one being analyzed, rest are queued
-    if (unanalyzedGames.length > 0) {
-      // First game is analyzing, not in queue
-      const analyzingId = unanalyzedGames[0].id;
-      
-      // Assign positions to all other games (1-based indexing for display)
-      for (let i = 1; i < unanalyzedGames.length; i++) {
-        queuePositionMap[unanalyzedGames[i].id] = i;
-      }
-    }
-      
     return userGames.map((game) => {
       // Determine if the user played as white or black
       const userPlayedAs = game.user_color || 'unknown';
@@ -1561,11 +1519,8 @@ const GamesPage = () => {
       const gameStatus = gameStatusMap[game.id] || (game.analyzed ? 'analyzed' : 'queued');
       const isBeingAnalyzed = gameStatus === 'analyzing';
       
-      // Get queue position directly from the map
-      const queuePosition = queuePositionMap[game.id] || -1;
-      
       // Unique key that includes both id and status to ensure rerendering when status changes
-      const cardKey = `${game.id}-${gameStatus}-${queuePosition}`;
+      const cardKey = `${game.id}-${gameStatus}`;
       
       return (
         <div 
@@ -1607,17 +1562,8 @@ const GamesPage = () => {
               </div>
             ) : gameStatus === 'queued' ? (
               <div className="flex items-center bg-gray-800/70 text-gray-400 text-xs px-2 py-1 rounded-full">
-                {queuePosition > 0 ? (
-                  <>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
-                    Queue #{queuePosition}
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
-                    Queued
-                  </>
-                )}
+                <div className="w-2 h-2 bg-gray-500 rounded-full mr-1.5"></div>
+                Queued
               </div>
             ) : (
               <div className="flex items-center bg-green-900/70 text-green-300 text-xs px-2 py-1 rounded-full">
@@ -1662,32 +1608,7 @@ const GamesPage = () => {
   // Add a refresh button to the debug panel
   const DebugInfo = () => {
     // Only show in development
-    if (process.env.NODE_ENV !== 'development') return null;
-    
-    return (
-      <div className="fixed bottom-4 right-4 bg-gray-900 text-xs text-white p-2 rounded shadow z-50 opacity-70 hover:opacity-100">
-        <div>Subscription: {subscription ? 'Active' : 'Inactive'}</div>
-        <div>Loading: {loading ? 'True' : 'False'}</div>
-        <div>Processing: {isProcessing ? 'True' : 'False'}</div>
-        <div>Analyzing: {analyzingGames.size} games</div>
-        <div>Active Game: {activeAnalyzingGameId || 'None'}</div>
-        <div>Stuck Count: {stuckGameCount}</div>
-        <div className="flex space-x-2 mt-2">
-          <button 
-            onClick={checkAnnotationStatus}
-            className="px-2 py-1 bg-blue-700 rounded text-white text-xs hover:bg-blue-600"
-          >
-            Refresh Status
-          </button>
-          <button 
-            onClick={continueAnalysis}
-            className="px-2 py-1 bg-green-700 rounded text-white text-xs hover:bg-green-600"
-          >
-            Continue Analysis
-          </button>
-        </div>
-      </div>
-    );
+    return null;
   };
 
   // Add effect to monitor for analyzed games and trigger next in queue
@@ -1710,8 +1631,8 @@ const GamesPage = () => {
     // If we detected newly completed games and there are still games in the queue
     if (newlyCompleted.size > 0 && isAnnotationRunning) {
       // Log for debugging
-      console.log('Detected newly completed analysis:', Array.from(newlyCompleted));
-      console.log('Continuing to next game in queue');
+      // Remove: console.log('Detected newly completed analysis:', Array.from(newlyCompleted));
+      // Remove: console.log('Continuing to next game in queue');
       
       // Trigger the next game in queue
       setTimeout(() => {
@@ -1725,7 +1646,7 @@ const GamesPage = () => {
 
   // Add a dedicated function to manually continue analysis 
   const continueAnalysis = () => {
-    console.log('Manually continuing analysis');
+    // Remove: console.log('Manually continuing analysis');
     triggerGameAnalysis(true);
   };
 
