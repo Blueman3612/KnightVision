@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useState, useRef } from 'react';
+import React, { ReactNode, useEffect, useState, useRef, useReducer } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Chessboard from '@/components/Chessboard';
@@ -12,6 +12,71 @@ interface TutorPageProps {
   children?: ReactNode;
 }
 
+// Define game state machine types
+type GameState = 'playing' | 'saving' | 'resetting' | 'ready';
+
+type GameAction = 
+  | { type: 'RESIGN'; color: string }
+  | { type: 'SAVE_COMPLETE' }
+  | { type: 'RESET_COMPLETE' }
+  | { type: 'NEW_GAME' };
+
+interface GameStateContext {
+  status: GameState;
+  gameStatus: string;
+  isGameOver: boolean;
+  disableBoard: boolean;
+  needsReset: boolean;
+}
+
+// Reducer for game state machine
+function gameStateReducer(state: GameStateContext, action: GameAction): GameStateContext {
+  switch (action.type) {
+    case 'RESIGN':
+      // Player has resigned, start save process
+      return {
+        ...state,
+        status: 'saving',
+        gameStatus: `${action.color} resigned`,
+        isGameOver: true,
+        disableBoard: true,
+        needsReset: false
+      };
+    
+    case 'SAVE_COMPLETE':
+      // Game is saved, now reset
+      return {
+        ...state,
+        status: 'resetting',
+        needsReset: true
+      };
+      
+    case 'RESET_COMPLETE':
+      // Reset is complete, ready for new game
+      return {
+        ...state,
+        status: 'ready',
+        gameStatus: '',
+        isGameOver: false,
+        disableBoard: false,
+        needsReset: false
+      };
+      
+    case 'NEW_GAME':
+      // Start a new game
+      return {
+        status: 'playing',
+        gameStatus: '',
+        isGameOver: false,
+        disableBoard: false,
+        needsReset: false
+      };
+      
+    default:
+      return state;
+  }
+}
+
 function TutorPage() {
   const router = useRouter();
   const session = useSession();
@@ -20,14 +85,22 @@ function TutorPage() {
   const chessRef = useRef(new Chess());
   const [orientation, setOrientation] = useState<'white' | 'black'>('white');
   const [playerSide, setPlayerSide] = useState<'white' | 'black'>('white');
-  const [gameStatus, setGameStatus] = useState<string>('');
   const [fen, setFen] = useState<string>(chessRef.current.fen());
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
-  const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [gameStartTime, setGameStartTime] = useState<Date>(new Date());
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const [boardKey, setBoardKey] = useState<number>(0);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  
+  // Initialize game state machine
+  const [gameStateContext, dispatchGameState] = useReducer(gameStateReducer, {
+    status: 'playing',
+    gameStatus: '',
+    isGameOver: false,
+    disableBoard: false,
+    needsReset: false
+  });
 
   // Redirect if not logged in
   useEffect(() => {
@@ -73,10 +146,36 @@ function TutorPage() {
     }
   }, [moveHistory]);
 
+  // Handle game reset after game state transitions
+  useEffect(() => {
+    // When state changes to resetting, perform the reset
+    if (gameStateContext.status === 'resetting' && gameStateContext.needsReset) {
+      const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      
+      // Reset board state
+      const chess = chessRef.current;
+      try {
+        if (chess) {
+          chess.reset();
+          setFen(startingFen);
+        }
+      } catch (error) {
+        console.error('Error resetting chess instance:', error);
+      }
+      
+      // Reset all state
+      setMoveHistory([]);
+      setBoardKey(prev => prev + 1);
+      
+      // Notify state machine that reset is complete
+      dispatchGameState({ type: 'RESET_COMPLETE' });
+    }
+  }, [gameStateContext.status, gameStateContext.needsReset]);
+
   // Save game when it ends
   useEffect(() => {
     const saveGame = async () => {
-      if (isGameOver && moveHistory.length > 0 && session) {
+      if (gameStateContext.isGameOver && moveHistory.length > 0 && session) {
         try {
           // Get the PGN from the chess instance
           const chess = chessRef.current;
@@ -105,6 +204,51 @@ function TutorPage() {
             chessAny.load('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
           }
           
+          // Get game ending status
+          const inCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
+          const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
+          const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
+          const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
+          const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
+          
+          // Determine accurate result and termination
+          // If gameStatus contains "resigned", it's a resignation
+          const isResignation = gameStateContext.gameStatus.toLowerCase().includes('resign');
+          
+          let result = '1/2-1/2'; // Default
+          let terminationReason = 'normal';
+          let terminationText = '';
+          
+          if (inCheckmate) {
+            // Checkmate - the player whose turn it is has lost
+            result = turn === 'w' ? '0-1' : '1-0';
+            terminationReason = 'checkmate';
+            terminationText = turn === 'w' ? 'Black won by checkmate' : 'White won by checkmate';
+          } else if (isResignation) {
+            // Resignation - the player who resigned has lost
+            // The gameStatus will be set in the resignGame function
+            // "White resigned" or "Black resigned"
+            result = gameStateContext.gameStatus.toLowerCase().includes('white') ? '0-1' : '1-0';
+            terminationReason = 'resignation';
+            terminationText = gameStateContext.gameStatus;
+          } else if (isStalemate) {
+            // Stalemate is a draw
+            result = '1/2-1/2';
+            terminationReason = 'stalemate';
+            terminationText = 'Game drawn by stalemate';
+          } else if (isThreefoldRepetition) {
+            result = '1/2-1/2';
+            terminationReason = 'repetition';
+            terminationText = 'Game drawn by repetition';
+          } else if (isDraw) {
+            result = '1/2-1/2';
+            terminationReason = 'draw';
+            terminationText = 'Game drawn';
+          }
+          
+          // Use most descriptive termination for PGN header
+          const pgnTermination = terminationText || terminationReason;
+          
           // Set the headers for the PGN
           if (typeof chessAny.header === 'function') {
             chessAny.header(
@@ -116,7 +260,8 @@ function TutorPage() {
               'WhiteElo', '?',
               'BlackElo', '?',
               'TimeControl', '-',
-              'Result', chessAny.in_checkmate?.() ? (chessAny.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2'
+              'Result', result,
+              'Termination', pgnTermination
             );
           }
           
@@ -139,22 +284,6 @@ function TutorPage() {
           // Extract the moves-only part of the PGN (everything after the last header)
           const lastHeaderIndex = pgn.lastIndexOf(']') + 1;
           const movesOnly = pgn.substring(lastHeaderIndex).trim();
-          
-          const inCheckmate = typeof chessAny.in_checkmate === 'function' ? chessAny.in_checkmate() : false;
-          const isDraw = typeof chessAny.in_draw === 'function' ? chessAny.in_draw() : false;
-          const isStalemate = typeof chessAny.in_stalemate === 'function' ? chessAny.in_stalemate() : false;
-          const isThreefoldRepetition = typeof chessAny.in_threefold_repetition === 'function' ? chessAny.in_threefold_repetition() : false;
-          const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
-          
-          const result = inCheckmate 
-            ? (turn === 'w' ? '0-1' : '1-0') 
-            : '1/2-1/2';
-            
-          // Determine termination reason
-          const termination = inCheckmate ? 'checkmate' : 
-                      isStalemate ? 'stalemate' : 
-                      isDraw ? 'draw' : 
-                      isThreefoldRepetition ? 'repetition' : 'normal';
           
           // Convert date format from yyyy.mm.dd to yyyy-mm-dd for the database
           const databaseDate = formattedDate.replace(/\./g, '-');
@@ -186,6 +315,7 @@ function TutorPage() {
           } else if (existingGames && existingGames.length > 0) {
             // Game already exists, don't save
             console.log('Game already exists in database, not saving duplicate');
+            dispatchGameState({ type: 'SAVE_COMPLETE' });
             return;
           }
           
@@ -205,7 +335,7 @@ function TutorPage() {
               platform: 'KnightVision',
               start_time: gameStartTime.toISOString(),
               end_time: new Date().toISOString(),
-              termination: termination,
+              termination: terminationReason,
               unique_game_id: uniqueGameId,
               user_color: playerSide,
               // Add missing columns
@@ -222,30 +352,31 @@ function TutorPage() {
             
             // Fallback to RPC method if direct insert fails
             const { data: rpcData, error: rpcError } = await supabase.rpc('insert_game', {
-              p_pgn: pgn,
-              p_result: result
-            });
-            
+            p_pgn: pgn,
+            p_result: result
+          });
+          
             if (rpcError) {
               console.error('Error saving game with RPC:', rpcError);
               toast.error('Failed to save your game');
+              dispatchGameState({ type: 'SAVE_COMPLETE' });
               return;
             }
-            
-            // Update the game to set cpu = true and other metadata
-            const { error: updateError } = await supabase
-              .from('games')
-              .update({
-                cpu: true,
+          
+          // Update the game to set cpu = true and other metadata
+          const { error: updateError } = await supabase
+            .from('games')
+            .update({
+              cpu: true,
                 white_player: playerSide === 'white' ? userName : 'KnightVision',
                 black_player: playerSide === 'black' ? userName : 'KnightVision',
-                white_elo: playerSide === 'white' ? null : 1350,
-                black_elo: playerSide === 'black' ? null : 1350,
+              white_elo: playerSide === 'white' ? null : 1350,
+              black_elo: playerSide === 'black' ? null : 1350,
                 platform: 'KnightVision',
-                start_time: gameStartTime.toISOString(),
-                end_time: new Date().toISOString(),
-                termination: termination,
-                unique_game_id: uniqueGameId,
+              start_time: gameStartTime.toISOString(),
+              end_time: new Date().toISOString(),
+                termination: terminationReason,
+              unique_game_id: uniqueGameId,
                 user_color: playerSide,
                 // Add missing columns
                 event: 'Chess Tutor Game',
@@ -254,24 +385,32 @@ function TutorPage() {
                 moves_only: movesOnly
               })
               .eq('id', rpcData);
-              
-            if (updateError) {
-              console.error('Error updating game metadata:', updateError);
-            } else {
-              toast.success('Game saved successfully!');
-            }
+            
+          if (updateError) {
+            console.error('Error updating game metadata:', updateError);
+            dispatchGameState({ type: 'SAVE_COMPLETE' });
           } else {
             toast.success('Game saved successfully!');
+            dispatchGameState({ type: 'SAVE_COMPLETE' });
+          }
+          } else {
+            toast.success('Game saved successfully!');
+            dispatchGameState({ type: 'SAVE_COMPLETE' });
           }
         } catch (error) {
           console.error('Error in game saving process:', error);
           toast.error('An error occurred while saving your game');
+          // Even on error, we need to complete the save process
+          dispatchGameState({ type: 'SAVE_COMPLETE' });
         }
       }
     };
     
-    saveGame();
-  }, [isGameOver, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
+    // Only call saveGame when state is 'saving'
+    if (gameStateContext.status === 'saving') {
+      saveGame();
+    }
+  }, [gameStateContext.status, gameStateContext.isGameOver, gameStateContext.gameStatus, moveHistory, session, playerSide, supabase, gameStartTime, toast]);
 
   const handleMove = (from: string, to: string) => {
     try {
@@ -335,25 +474,31 @@ function TutorPage() {
         chessAny.in_threefold_repetition() : false;
       
       const gameOver = isCheckmate || isDraw || isStalemate || isThreefoldRepetition;
-      setIsGameOver(gameOver);
       
       if (gameOver) {
+        // Update game state through state machine
+        let gameStatus = '';
         if (isCheckmate) {
-          setGameStatus('Checkmate!');
+          gameStatus = 'Checkmate!';
         } else if (isDraw) {
-          setGameStatus('Draw!');
+          gameStatus = 'Draw!';
         } else if (isStalemate) {
-          setGameStatus('Stalemate!');
+          gameStatus = 'Stalemate!';
         } else if (isThreefoldRepetition) {
-          setGameStatus('Draw by repetition!');
+          gameStatus = 'Draw by repetition!';
         } else if (typeof chessAny.insufficient_material === 'function' ? 
           chessAny.insufficient_material() : false) {
-          setGameStatus('Draw by insufficient material!');
+          gameStatus = 'Draw by insufficient material!';
         }
+        
+        // Manually update the state context
+        dispatchGameState({ 
+          type: 'RESIGN', 
+          color: gameStatus 
+        });
       } else if (typeof chessAny.in_check === 'function' && chessAny.in_check()) {
-        setGameStatus('Check!');
-      } else {
-        setGameStatus('');
+        // In check but game not over
+        dispatchGameState({ type: 'NEW_GAME' }); // Reset to playing state
       }
     } catch (e) {
       console.error('Error handling move:', e);
@@ -364,10 +509,9 @@ function TutorPage() {
     const chess = chessRef.current;
     chess.reset();
     setFen(chess.fen());
-    setGameStatus('');
     setMoveHistory([]);
-    setIsGameOver(false);
     setGameStartTime(new Date());
+    dispatchGameState({ type: 'NEW_GAME' });
     toast.success('New game started!');
   };
   
@@ -376,7 +520,7 @@ function TutorPage() {
       // Use moveHistory length as our primary indicator
       
       // If game is over, always allow switching
-      if (isGameOver) {
+      if (gameStateContext.isGameOver) {
         return true;
       }
       
@@ -426,10 +570,11 @@ function TutorPage() {
     setPlayerSide(newPlayerSide);
     setOrientation(newPlayerSide);
     setFen(startingFen);
-    setGameStatus('');
     setMoveHistory([]);
-    setIsGameOver(false);
     setGameStartTime(new Date());
+    
+    // Reset game state 
+    dispatchGameState({ type: 'NEW_GAME' });
     
     // Show toast notification
     toast.success(`You are now playing as ${newPlayerSide}`);
@@ -447,14 +592,10 @@ function TutorPage() {
   };
 
   const resignGame = () => {
-    const chess = chessRef.current;
-    const chessAny = chess as any;
-    
-    // Set game as over
-    setIsGameOver(true);
-    
-    // Display resignation message
-    setGameStatus(`${playerSide === 'white' ? 'White' : 'Black'} resigned`);
+    // Trigger the resignation through state machine
+    const resignedColor = playerSide === 'white' ? 'White' : 'Black';
+    dispatchGameState({ type: 'RESIGN', color: `${resignedColor} resigned` });
+    setMenuOpen(false);
   };
   
   const flipBoard = () => {
@@ -537,10 +678,7 @@ function TutorPage() {
                     )}
                     
                     <button 
-                      onClick={() => {
-                        resignGame();
-                        setMenuOpen(false);
-                      }}
+                      onClick={() => resignGame()}
                       className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 flex items-center"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -564,19 +702,20 @@ function TutorPage() {
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
-              key={`board-${playerSide}-${isGameOver ? 'over' : 'playing'}`} // Force remount ONLY when player side changes or game ends
+              key={`board-${playerSide}-${gameStateContext.status}-${boardKey}`}
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
               playerSide={playerSide}
-              skillLevel={0} // Set Stockfish to skill level 0
+              skillLevel={0}
+              viewOnly={gameStateContext.disableBoard}
             />
           </div>
         </div>
         
-        {gameStatus && (
+        {gameStateContext.gameStatus && (
           <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
-            <p className="text-center font-medium text-gray-800">{gameStatus}</p>
+            <p className="text-center font-medium text-gray-800">{gameStateContext.gameStatus}</p>
           </div>
         )}
       </div>
