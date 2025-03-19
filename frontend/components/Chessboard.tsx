@@ -656,8 +656,17 @@ function Chessboard({
     <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>
       <div ref={boardRef as any} className="w-full h-full overflow-hidden" style={{ borderRadius: '8px' }} />
       {isProcessing && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
-          <div className="text-white text-lg font-bold">Stockfish is thinking...</div>
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="h-12 w-12 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-full border-3 border-transparent animate-spin" 
+                 style={{ 
+                   borderTopColor: '#a5b4fc', 
+                   borderRightColor: '#8b5cf6',
+                   borderBottomColor: '#d946ef',
+                   borderWidth: '4px'
+                 }}>
+            </div>
+          </div>
         </div>
       )}
     </div>
