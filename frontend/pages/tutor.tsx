@@ -33,6 +33,9 @@ function TutorPage() {
   // Mode selection state
   const [tutorMode, setTutorMode] = useState<TutorMode>('selection');
   
+  // Track if we're temporarily in menu mode but have a game in progress
+  const [gameInProgress, setGameInProgress] = useState<boolean>(false);
+  
   // Replace reducer with individual state variables
   const [gameStatus, setGameStatus] = useState<string>('');
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
@@ -111,6 +114,7 @@ function TutorPage() {
       setIsGameOver(false);
       setDisableBoard(false);
       setNeedsReset(false);
+      setGameInProgress(false);
       
       // Go back to selection mode when game is reset
       setTutorMode('selection');
@@ -471,9 +475,36 @@ function TutorPage() {
     toast.success('New game started!');
   };
   
+  // Function to handle return to menu while preserving game state
+  const goToMenu = () => {
+    if (moveHistory.length > 0 && !isGameOver) {
+      // If we have moves and game isn't over, we're pausing a game in progress
+      setGameInProgress(true);
+    }
+    setTutorMode('selection');
+    setMenuOpen(false);
+  };
+
+  // Start the interactive game
+  const startTutorGame = () => {
+    if (gameInProgress) {
+      // If we have a game in progress, just go back to it
+      setTutorMode('playing');
+      setGameInProgress(false);
+    } else {
+      // Otherwise, start a new game
+      resetGame();
+      setTutorMode('playing');
+    }
+  };
+
+  // A more reliable way to check if sides can be switched
   const canSwitchSides = () => {
     try {
-      // Use moveHistory length as our primary indicator
+      // Game in progress flag takes precedence - if we're showing a paused game, don't allow switching
+      if (gameInProgress) {
+        return false;
+      }
       
       // If game is over, always allow switching
       if (isGameOver) {
@@ -584,12 +615,6 @@ function TutorPage() {
       setFen(chess.fen());
     }, 100);
   }
-
-  // Start the interactive game
-  const startTutorGame = () => {
-    resetGame();
-    setTutorMode('playing');
-  };
 
   // If not logged in, show nothing (will redirect)
   if (!session) {
@@ -704,8 +729,7 @@ function TutorPage() {
                     
                     <button 
                       onClick={() => {
-                        setTutorMode('selection');
-                        setMenuOpen(false);
+                        goToMenu();
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
                     >
