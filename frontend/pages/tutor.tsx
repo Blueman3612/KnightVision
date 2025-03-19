@@ -4,7 +4,7 @@ import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
-import { useToast } from '../components/ui';
+import { useToast, Button, Tooltip } from '../components/ui';
 
 interface TutorPageProps {
   children?: ReactNode;
@@ -12,6 +12,7 @@ interface TutorPageProps {
 
 // Define game state types
 type GameState = 'playing' | 'saving' | 'resetting' | 'ready';
+type TutorMode = 'selection' | 'playing';
 
 function TutorPage() {
   const router = useRouter();
@@ -28,6 +29,9 @@ function TutorPage() {
   const [boardKey, setBoardKey] = useState<number>(0);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  
+  // Mode selection state
+  const [tutorMode, setTutorMode] = useState<TutorMode>('selection');
   
   // Replace reducer with individual state variables
   const [gameStatus, setGameStatus] = useState<string>('');
@@ -107,6 +111,9 @@ function TutorPage() {
       setIsGameOver(false);
       setDisableBoard(false);
       setNeedsReset(false);
+      
+      // Go back to selection mode when game is reset
+      setTutorMode('selection');
     }
   }, [gameState, needsReset]);
 
@@ -578,6 +585,12 @@ function TutorPage() {
     }, 100);
   }
 
+  // Start the interactive game
+  const startTutorGame = () => {
+    resetGame();
+    setTutorMode('playing');
+  };
+
   // If not logged in, show nothing (will redirect)
   if (!session) {
     return null;
@@ -590,17 +603,60 @@ function TutorPage() {
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
+          {/* Mode selection overlay */}
+          {tutorMode === 'selection' && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-gray-900 bg-opacity-70 backdrop-blur-sm rounded-lg">
+              <div className="flex flex-col space-y-6 w-80">
+                <Tooltip content="Custom lessons based on your weaknesses">
+                  <Button 
+                    variant="primary"
+                    size="lg" 
+                    fullWidth
+                    disabled
+                    className="py-6 text-lg font-medium"
+                    leftIcon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
+                      </svg>
+                    }
+                  >
+                    Personalized Lesson
+                  </Button>
+                </Tooltip>
+                
+                <Tooltip content="Play against an adaptive engine that helps you learn">
+                  <Button 
+                    variant="secondary"
+                    size="lg" 
+                    fullWidth
+                    onClick={startTutorGame}
+                    className="py-6 text-lg font-medium"
+                    leftIcon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                      </svg>
+                    }
+                  >
+                    Play Tutor
+                  </Button>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+          
           <div className="absolute top-2 right-2 z-20">
             <div className="relative">
-              <button 
-                ref={menuButtonRef}
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+              {tutorMode === 'playing' && (
+                <button 
+                  ref={menuButtonRef}
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="cursor-pointer bg-gray-800 bg-opacity-60 hover:bg-opacity-80 text-white p-1.5 rounded-full flex items-center justify-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              )}
               
               {menuOpen && (
                 <div 
@@ -610,8 +666,6 @@ function TutorPage() {
                   <div className="py-1">
                     <button 
                       onClick={() => {
-                        // IMPORTANT: Do NOT get the current position from the chess instance here
-                        // Only change the visual orientation, not the player's side
                         flipBoard();
                         setMenuOpen(false);
                       }}
@@ -647,6 +701,19 @@ function TutorPage() {
                       </svg>
                       Resign
                     </button>
+                    
+                    <button 
+                      onClick={() => {
+                        setTutorMode('selection');
+                        setMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      Back to Menu
+                    </button>
                   </div>
                 </div>
               )}
@@ -669,12 +736,12 @@ function TutorPage() {
               orientation={orientation}
               playerSide={playerSide}
               skillLevel={0}
-              viewOnly={disableBoard}
+              viewOnly={tutorMode === 'selection' || disableBoard}
             />
           </div>
         </div>
         
-        {gameStatus && (
+        {gameStatus && tutorMode === 'playing' && (
           <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
             <p className="text-center font-medium text-gray-800">{gameStatus}</p>
           </div>
