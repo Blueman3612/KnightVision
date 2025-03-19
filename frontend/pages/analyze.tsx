@@ -12,6 +12,8 @@ interface GameData {
   pgn: string;
   white_player?: string;
   black_player?: string;
+  white_elo?: number;
+  black_elo?: number;
   result?: string;
   event?: string;
   game_date?: string;
@@ -515,14 +517,28 @@ const AnalyzePage = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                   <span className="text-gray-400">White:</span>
-                  <span className="text-gray-200 ml-2 font-medium">{gameData?.white_player || 'Unknown'}</span>
+                  <span className="text-gray-200 ml-2 font-medium">
+                    {gameData?.white_player || 'Unknown'}
+                    {gameData?.white_elo && (
+                      <span className="ml-1.5 text-xs px-1.5 py-0.5 bg-white/10 rounded text-gray-300 font-normal">
+                        {gameData.white_elo}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                   <span className="text-gray-400">Black:</span>
-                  <span className="text-gray-200 ml-2 font-medium">{gameData?.black_player || 'Unknown'}</span>
+                  <span className="text-gray-200 ml-2 font-medium">
+                    {gameData?.black_player || 'Unknown'}
+                    {gameData?.black_elo && (
+                      <span className="ml-1.5 text-xs px-1.5 py-0.5 bg-black/20 rounded text-gray-300 font-normal">
+                        {gameData.black_elo}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 {!gameData?.analyzed && (
                   <div className="flex items-center mt-3 py-2 px-3 bg-amber-900/30 rounded-md border border-amber-800/50">
@@ -547,26 +563,52 @@ const AnalyzePage = () => {
                   }}
                 >
                   <div className="grid grid-cols-2 gap-1.5">
-                    {moves.map((move, index) => (
-                      <Button
-                        key={index}
-                        variant={moveIndex === index ? 'secondary' : 'ghost'}
-                        size="xs"
-                        onClick={() => goToMove(index)}
-                        className={`
-                          text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
-                          ${moveIndex === index 
-                            ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
-                            : 'hover:!bg-gray-700/80'}
-                          ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
-                        `}
-                      >
-                        <span className={`mr-1.5 text-xs font-medium ${moveIndex === index ? 'text-blue-200' : 'text-gray-400'}`}>
-                          {formatMoveNumber(index)}
-                        </span>
-                        <span className={`text-sm ${moveIndex === index ? 'font-medium' : ''}`}>{move}</span>
-                      </Button>
-                    ))}
+                    {moves.map((move, index) => {
+                      // Get corresponding move annotation if available
+                      const annotation = gameData?.analyzed && moveAnnotations.length > index ? 
+                        moveAnnotations[index] : null;
+                      
+                      // Only detect blunders
+                      const isBlunder = annotation?.classification === 'blunder';
+                        
+                      return (
+                        <Button
+                          key={index}
+                          variant={moveIndex === index ? 'secondary' : 'ghost'}
+                          size="xs"
+                          onClick={() => goToMove(index)}
+                          className={`
+                            text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
+                            ${moveIndex === index 
+                              ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
+                              : 'hover:!bg-gray-700/80'}
+                            ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
+                            whitespace-nowrap
+                          `}
+                        >
+                          <span className={`text-xs font-medium ${moveIndex === index ? 'text-blue-200' : 'text-gray-400'}`}>
+                            {formatMoveNumber(index)}
+                          </span>
+                          <span className={`text-sm ${moveIndex === index ? 'font-medium' : ''}`}>{move}</span>
+                          
+                          {/* Blunder indicator as an inline element */}
+                          {isBlunder && (
+                            <span 
+                              className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 align-text-bottom"
+                              style={{ 
+                                fontSize: '9px', 
+                                color: 'white',
+                                fontWeight: 'bold',
+                                border: '1px solid #1A202C'
+                              }}
+                              title="Blunder"
+                            >
+                              ??
+                            </span>
+                          )}
+                        </Button>
+                      );
+                    })}
                   </div>
                 </div>
                 
