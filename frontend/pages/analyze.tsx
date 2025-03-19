@@ -16,6 +16,22 @@ interface GameData {
   event?: string;
   game_date?: string;
   user_color?: 'white' | 'black';
+  analyzed: boolean;
+}
+
+interface MoveAnnotation {
+  move_number: number;
+  move_san: string;
+  move_uci: string;
+  color: string;
+  fen_before: string;
+  fen_after: string;
+  evaluation_before: number;
+  evaluation_after: number;
+  evaluation_change: number;
+  classification: string;
+  is_best_move: boolean;
+  is_book_move: boolean;
 }
 
 const AnalyzePage = () => {
@@ -33,6 +49,7 @@ const AnalyzePage = () => {
   // Evaluation state
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [moveAnnotations, setMoveAnnotations] = useState<MoveAnnotation[]>([]);
   
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -42,69 +59,61 @@ const AnalyzePage = () => {
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
   
-  // Fetch evaluation whenever position changes
+  // Fetch move annotations for the current game
   useEffect(() => {
-    let isMounted = true;
-    const getEvaluation = async () => {
-      if (!currentFen || !isMounted) return;
+    const fetchMoveAnnotations = async () => {
+      if (!gameData?.id || !session?.user?.id || !gameData.analyzed) return;
       
-      console.log('Evaluating FEN:', currentFen);
-      const turn = currentFen.split(' ')[1]; // 'w' for white, 'b' for black
-      console.log('Turn:', turn);
-      
-      setIsEvaluating(true);
       try {
-        console.log('Calling /evaluate with FEN:', currentFen, 'depth:', 20);
-        const response = await gameApi.evaluatePosition(currentFen, 20);
+        const { data, error } = await supabase
+          .from('move_annotations')
+          .select('*')
+          .eq('game_id', gameData.id)
+          .order('move_number', { ascending: true });
+          
+        if (error) throw error;
         
-        // Don't update state if component unmounted
-        if (!isMounted) return;
-        
-        console.log('Raw evaluation response:', response);
-        
-        // Check if response has the expected format with numeric score
-        // The API returns 'evaluation' field, not 'score'
-        if (!response || response.evaluation === undefined || response.evaluation === null) {
-          console.error('Invalid response format or missing evaluation:', response);
-          setEvaluation(null);
-          return;
-        }
-        
-        // Parse score as number if it's a string
-        let scoreValue = response.evaluation;
-        if (typeof scoreValue === 'string') {
-          scoreValue = parseFloat(scoreValue);
-          console.log('Parsed string score to number:', scoreValue);
-        }
-        
-        // Validate that we have a valid number
-        if (isNaN(scoreValue)) {
-          console.error('Score is not a valid number:', response.evaluation);
-          setEvaluation(null);
-          return;
-        }
-        
-        console.log('Raw score from API:', scoreValue, 'typeof:', typeof scoreValue);
-        
-        // Stockfish returns score from perspective of side to move
-        // We normalize to white's perspective (positive = good for white)
-        const normalizedScore = turn === 'b' ? -scoreValue : scoreValue;
-        console.log('Normalized score (white perspective):', normalizedScore);
-        
-        setEvaluation(normalizedScore);
+        setMoveAnnotations(data || []);
       } catch (error) {
-        console.error('Error evaluating position:', error);
-        if (isMounted) setEvaluation(null);
-      } finally {
-        if (isMounted) setIsEvaluating(false);
+        console.error('Error fetching move annotations:', error);
       }
     };
     
-    getEvaluation();
+    fetchMoveAnnotations();
+  }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+  
+  // Set evaluation based on position and annotations when position changes
+  useEffect(() => {
+    // If the game hasn't been analyzed, don't try to display evaluations
+    if (!gameData?.analyzed || !currentFen) {
+      setEvaluation(null);
+      return;
+    }
     
-    // Cleanup function to prevent state updates after unmount
-    return () => { isMounted = false; };
-  }, [currentFen]);
+    // Find the annotation for the current position
+    let currentAnnotation = null;
+    
+    // Special case for starting position (moveIndex = -1)
+    if (moveIndex === -1 && moveAnnotations.length > 0) {
+      currentAnnotation = moveAnnotations[0];
+      setEvaluation(currentAnnotation.evaluation_before);
+      return;
+    }
+    
+    // For any other position, find the annotation by FEN
+    if (moveIndex >= 0 && moveIndex < moveAnnotations.length) {
+      currentAnnotation = moveAnnotations[moveIndex];
+      
+      if (currentAnnotation) {
+        // Use evaluation_after since we're viewing the position after the move
+        setEvaluation(currentAnnotation.evaluation_after);
+      } else {
+        setEvaluation(null);
+      }
+    } else {
+      setEvaluation(null);
+    }
+  }, [currentFen, moveIndex, moveAnnotations, gameData?.analyzed]);
   
   // Fetch game data when component mounts or gameId changes
   useEffect(() => {
@@ -349,68 +358,66 @@ const AnalyzePage = () => {
                 </div>
               </div>
               
-              {/* Evaluation bar - now as absolute overlay with proper spacing */}
-              <div 
-                className="absolute top-0 bottom-0 w-8 flex flex-col z-10"
-                style={{ 
-                  left: '-16px', 
-                  transform: 'translateX(-100%)',
-                  borderRadius: '3px',
-                  overflow: 'visible'
-                }}
-              >
-                <div className="relative h-full w-full overflow-hidden rounded-[3px] shadow-sm">
-                  {/* Black side (top) */}
-                  <div 
-                    className="absolute top-0 left-0 right-0 transition-height duration-300 ease-out"
-                    style={{ 
-                      height: `${calculateEvalBarHeight(evaluation)}%`,
-                      background: 'linear-gradient(to bottom, #252525, #3e3e3e)'
-                    }}
-                  ></div>
-                  {/* White side (bottom) */}
-                  <div 
-                    className="absolute bottom-0 left-0 right-0"
-                    style={{
-                      height: `${100 - calculateEvalBarHeight(evaluation)}%`,
-                      background: 'linear-gradient(to bottom, #ffffff, #d8d8d8)'
-                    }}
-                  ></div>
-                  
-                  {/* Divider line between colors */}
-                  <div 
-                    className="absolute left-0 right-0 h-px bg-gray-400"
-                    style={{ 
-                      top: `${calculateEvalBarHeight(evaluation)}%`
-                    }}
-                  ></div>
-                </div>
-                
-                {/* Evaluation number - positioned in the center of the bar */}
+              {/* Evaluation bar - only display if game has been analyzed */}
+              {gameData?.analyzed && (
                 <div 
-                  className="absolute flex items-center justify-center text-xs font-medium"
-                  style={{
-                    left: '50%',
-                    top: `${calculateEvalBarHeight(evaluation)}%`,
-                    transform: 'translate(-50%, -50%)',
-                    height: '18px',
-                    minWidth: '36px',
-                    paddingLeft: '8px',
-                    paddingRight: '8px',
-                    background: evaluation !== null && evaluation < 0 ? '#333' : 'white',
-                    color: evaluation !== null && evaluation < 0 ? 'white' : '#333',
-                    borderRadius: '9px',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-                    zIndex: 20
+                  className="absolute top-0 bottom-0 w-8 flex flex-col z-10"
+                  style={{ 
+                    left: '-16px', 
+                    transform: 'translateX(-100%)',
+                    borderRadius: '3px',
+                    overflow: 'visible'
                   }}
                 >
-                  {isEvaluating ? (
-                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  ) : (
-                    formatEvaluation(evaluation)
-                  )}
+                  <div className="relative h-full w-full overflow-hidden rounded-[3px] shadow-sm">
+                    {/* Black side (top) */}
+                    <div 
+                      className="absolute top-0 left-0 right-0 transition-height duration-300 ease-out"
+                      style={{ 
+                        height: `${calculateEvalBarHeight(evaluation)}%`,
+                        background: 'linear-gradient(to bottom, #252525, #3e3e3e)'
+                      }}
+                    ></div>
+                    {/* White side (bottom) */}
+                    <div 
+                      className="absolute bottom-0 left-0 right-0"
+                      style={{
+                        height: `${100 - calculateEvalBarHeight(evaluation)}%`,
+                        background: 'linear-gradient(to bottom, #ffffff, #d8d8d8)'
+                      }}
+                    ></div>
+                    
+                    {/* Divider line between colors */}
+                    <div 
+                      className="absolute left-0 right-0 h-px bg-gray-400"
+                      style={{ 
+                        top: `${calculateEvalBarHeight(evaluation)}%`
+                      }}
+                    ></div>
+                  </div>
+                  
+                  {/* Evaluation number - positioned in the center of the bar */}
+                  <div 
+                    className="absolute flex items-center justify-center text-xs font-medium"
+                    style={{
+                      left: '50%',
+                      top: `${calculateEvalBarHeight(evaluation)}%`,
+                      transform: 'translate(-50%, -50%)',
+                      height: '18px',
+                      minWidth: '36px',
+                      paddingLeft: '8px',
+                      paddingRight: '8px',
+                      background: evaluation !== null && evaluation < 0 ? '#333' : 'white',
+                      color: evaluation !== null && evaluation < 0 ? 'white' : '#333',
+                      borderRadius: '9px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                      zIndex: 20
+                    }}
+                  >
+                    {formatEvaluation(evaluation)}
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Chessboard wrapper */}
               <div className="h-full w-full">
@@ -510,6 +517,11 @@ const AnalyzePage = () => {
                   <span className="text-gray-400">Result:</span>
                   <span className="text-gray-200 ml-2">{gameData?.result || 'Unknown'}</span>
                 </div>
+                {!gameData?.analyzed && (
+                  <div>
+                    <span className="text-amber-400">Note: This game hasn't been analyzed yet.</span>
+                  </div>
+                )}
               </div>
             </div>
             
