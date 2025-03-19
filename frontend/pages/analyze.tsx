@@ -5,6 +5,7 @@ import NextHead from 'next/head';
 import { Chess } from 'chess.js';
 import Chessboard from '../components/Chessboard';
 import { Button } from '../components/ui';
+import Tooltip from '../components/ui/Tooltip';
 import { gameApi } from '../lib/api';
 
 interface GameData {
@@ -593,18 +594,23 @@ const AnalyzePage = () => {
                           
                           {/* Blunder indicator as an inline element */}
                           {isBlunder && (
-                            <span 
-                              className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 align-text-bottom"
-                              style={{ 
-                                fontSize: '9px', 
-                                color: 'white',
-                                fontWeight: 'bold',
-                                border: '1px solid #1A202C'
-                              }}
-                              title="Blunder"
+                            <Tooltip
+                              content="Blunder"
+                              position="top"
+                              offset={4}
                             >
-                              ??
-                            </span>
+                              <span 
+                                className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 align-text-bottom"
+                                style={{ 
+                                  fontSize: '9px', 
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  border: '1px solid #1A202C'
+                                }}
+                              >
+                                ??
+                              </span>
+                            </Tooltip>
                           )}
                         </Button>
                       );
