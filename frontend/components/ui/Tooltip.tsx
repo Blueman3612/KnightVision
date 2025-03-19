@@ -19,75 +19,94 @@ const Tooltip = ({
   offset = 8
 }: TooltipProps) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [coords, setCoords] = useState({ x: 0, y: 0 });
-  const [mounted, setMounted] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isPositioned, setIsPositioned] = useState(false);
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const positionRef = useRef({ x: 0, y: 0 });
 
   // Handle mounting for SSR compatibility
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
+    setIsMounted(true);
+    return () => setIsMounted(false);
   }, []);
 
-  // Calculate position on mount and resize
+  // Calculate position whenever visibility changes or window resizes
   useEffect(() => {
     const calculatePosition = () => {
-      if (!triggerRef.current || !isVisible) return;
+      if (!triggerRef.current || !tooltipRef.current || !isVisible) return;
       
       const triggerRect = triggerRef.current.getBoundingClientRect();
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
       
-      // Calculate tooltip size and position based on trigger element
       let x = 0;
       let y = 0;
       
-      // We need to wait for the tooltip to be rendered before measuring its size
-      requestAnimationFrame(() => {
-        if (!tooltipRef.current) return;
-        
-        const tooltipRect = tooltipRef.current.getBoundingClientRect();
-        
-        switch (position) {
-          case 'top':
-            x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
-            y = triggerRect.top - tooltipRect.height - offset;
-            break;
-          case 'right':
-            x = triggerRect.right + offset;
-            y = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-            break;
-          case 'bottom':
-            x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
-            y = triggerRect.bottom + offset;
-            break;
-          case 'left':
-            x = triggerRect.left - tooltipRect.width - offset;
-            y = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
-            break;
-        }
-        
-        // Adjust to keep tooltip within viewport
-        const padding = 10; // Padding from edge of viewport
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        
-        if (x < padding) x = padding;
-        if (x + tooltipRect.width > viewportWidth - padding) {
-          x = viewportWidth - tooltipRect.width - padding;
-        }
-        
-        if (y < padding) y = padding;
-        if (y + tooltipRect.height > viewportHeight - padding) {
-          y = viewportHeight - tooltipRect.height - padding;
-        }
-        
-        setCoords({ x, y });
-      });
+      switch (position) {
+        case 'top':
+          x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+          y = triggerRect.top - tooltipRect.height - offset;
+          break;
+        case 'right':
+          x = triggerRect.right + offset;
+          y = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+          break;
+        case 'bottom':
+          x = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+          y = triggerRect.bottom + offset;
+          break;
+        case 'left':
+          x = triggerRect.left - tooltipRect.width - offset;
+          y = triggerRect.top + (triggerRect.height / 2) - (tooltipRect.height / 2);
+          break;
+      }
+      
+      // Adjust for viewport edges
+      const padding = 10;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      if (x < padding) x = padding;
+      if (x + tooltipRect.width > viewportWidth - padding) {
+        x = viewportWidth - tooltipRect.width - padding;
+      }
+      
+      if (y < padding) y = padding;
+      if (y + tooltipRect.height > viewportHeight - padding) {
+        y = viewportHeight - tooltipRect.height - padding;
+      }
+      
+      // Update position
+      positionRef.current = { x, y };
+      
+      // Apply position to tooltip element directly
+      if (tooltipRef.current) {
+        tooltipRef.current.style.left = `${x}px`;
+        tooltipRef.current.style.top = `${y}px`;
+        tooltipRef.current.style.opacity = '1';
+        tooltipRef.current.style.transform = 'scale(1)';
+        tooltipRef.current.style.visibility = 'visible';
+      }
+      
+      setIsPositioned(true);
     };
-
+    
+    // Initial calculation
     if (isVisible) {
-      calculatePosition();
+      setIsPositioned(false);
+      
+      // First render tooltip as invisible
+      if (tooltipRef.current) {
+        tooltipRef.current.style.opacity = '0';
+        tooltipRef.current.style.transform = 'scale(0.95)';
+        tooltipRef.current.style.visibility = 'hidden';
+      }
+      
+      // Then calculate position after a small delay to ensure tooltip is rendered
+      setTimeout(calculatePosition, 10);
+      
+      // Update position on scroll/resize
       window.addEventListener('resize', calculatePosition);
       window.addEventListener('scroll', calculatePosition);
       
@@ -110,18 +129,50 @@ const Tooltip = ({
       timerRef.current = null;
     }
     setIsVisible(false);
+    setIsPositioned(false);
   };
 
-  // Base tooltip styles
+  // Styles for tooltip
   const tooltipBaseStyles = 
-    'fixed z-[9999] px-3 py-2 text-sm text-white bg-gray-800 rounded shadow-lg pointer-events-none transform transition-all duration-200 ease-in-out';
+    'fixed z-[9999] px-4 py-2.5 text-sm text-white text-center font-medium pointer-events-none rounded-lg shadow-lg backdrop-blur-[2px]';
   
-  // Position-specific arrow styles
+  const tooltipBackground = 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700';
+  
+  const transitionStyles = 'transition-all duration-200 ease-in-out';
+  
   const arrowStyles = {
-    top: 'after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-8 after:border-transparent after:border-t-gray-800',
-    right: 'after:absolute after:top-1/2 after:left-0 after:-translate-y-1/2 after:-translate-x-full after:border-8 after:border-transparent after:border-r-gray-800',
-    bottom: 'after:absolute after:bottom-full after:left-1/2 after:-translate-x-1/2 after:border-8 after:border-transparent after:border-b-gray-800',
-    left: 'after:absolute after:top-1/2 after:right-0 after:-translate-y-1/2 after:translate-x-full after:border-8 after:border-transparent after:border-l-gray-800'
+    top: 'after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-[6px] after:border-transparent after:border-t-gray-800',
+    right: 'after:absolute after:top-1/2 after:left-0 after:-translate-y-1/2 after:-translate-x-full after:border-[6px] after:border-transparent after:border-r-gray-800',
+    bottom: 'after:absolute after:bottom-full after:left-1/2 after:-translate-x-1/2 after:border-[6px] after:border-transparent after:border-b-gray-800',
+    left: 'after:absolute after:top-1/2 after:right-0 after:-translate-y-1/2 after:translate-x-full after:border-[6px] after:border-transparent after:border-l-gray-800'
+  };
+
+  // Render the tooltip only after component mounts (for SSR compatibility)
+  const renderTooltip = () => {
+    if (!isMounted || !isVisible) return null;
+    
+    return createPortal(
+      <div
+        ref={tooltipRef}
+        className={`
+          ${tooltipBaseStyles}
+          ${tooltipBackground}
+          ${transitionStyles}
+          ${arrowStyles[position]}
+          ${className}
+        `}
+        style={{
+          maxWidth: '280px',
+          opacity: '0',
+          transform: 'scale(0.95)',
+          visibility: 'hidden'
+        }}
+        role="tooltip"
+      >
+        {content}
+      </div>,
+      document.body
+    );
   };
 
   return (
@@ -134,27 +185,7 @@ const Tooltip = ({
       onBlur={handleMouseLeave}
     >
       {children}
-      
-      {mounted && isVisible && createPortal(
-        <div
-          ref={tooltipRef}
-          className={`
-            ${tooltipBaseStyles}
-            ${arrowStyles[position]}
-            ${isVisible ? 'opacity-100' : 'opacity-0'}
-            ${className}
-          `}
-          style={{
-            left: `${coords.x}px`,
-            top: `${coords.y}px`,
-            maxWidth: '280px'
-          }}
-          role="tooltip"
-        >
-          {content}
-        </div>,
-        document.body
-      )}
+      {renderTooltip()}
     </div>
   );
 };
