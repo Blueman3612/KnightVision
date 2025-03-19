@@ -43,6 +43,12 @@ function Chessboard({
   // Track loading state for the thinking indicator
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Add state to store pre-moves
+  const [premove, setPremove] = useState<{from: Key, to: Key} | null>(null);
+  
+  // Add a ref to store premove across state updates
+  const premoveRef = useRef<{from: Key, to: Key} | null>(null);
+  
   // Flag to track if the board has been initialized
   const hasInitializedRef = useRef(false);
   
@@ -145,12 +151,162 @@ function Chessboard({
     }
   }
   
+  // Function to handle a user move
+  async function handleMove(from: Key, to: Key) {
+    try {
+      // If Stockfish is processing and it's not player's turn, register this as a pre-move
+      if (isProcessing && chessRef.current) {
+        const chess = chessRef.current;
+        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+        
+        if (turnColor !== playerSide) {
+          console.log('Setting pre-move from', from, 'to', to);
+          setPremove({ from, to });
+          premoveRef.current = { from, to }; // Store in ref as well
+          return false;
+        }
+      }
+      
+      // Make sure we have a chess instance
+      if (!chessRef.current) {
+        console.error("Chess instance is null in handleMove");
+        return false;
+      }
+      
+      const chess = chessRef.current;
+      
+      // Store the current evaluation as the previous one before making the move
+      if (currentEvalRef.current !== null) {
+        previousEvalRef.current = currentEvalRef.current;
+      }
+      
+      // Get the pre-move FEN for logging
+      const preFen = chess.fen();
+      
+      // Try to make the move in chess.js
+      const moveResult = chess.move({
+        from: from as string,
+        to: to as string,
+        promotion: 'q' // Always promote to queen for simplicity
+      });
+      
+      if (!moveResult) {
+        console.error('Invalid move:', from, to);
+        return false;
+      }
+      
+      // Get the updated FEN after the move for synchronization
+      const updatedFen = chess.fen();
+      
+      // Evaluate the position after player's move - this will be compared to previousEvalRef
+      // to determine how much the position changed due to player's move
+      const newEval = await updateEvaluation(updatedFen, currentEvalRef);
+      
+      // Calculate the evaluation change
+      const evalChange = previousEvalRef.current !== null 
+        ? newEval - previousEvalRef.current 
+        : 0;
+        
+      // Call onMove callback if provided - pass along the updated FEN
+      if (onMove) {
+        // It's critical we pass the current FEN so the parent can stay in sync
+        onMove(from as string, to as string);
+      }
+      
+      // Update board position
+      if (chessgroundRef.current) {
+        const newDests = calculateDests();
+        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
+        const canMove = turnColor === playerSide;
+        
+        chessgroundRef.current.set({
+          fen: updatedFen,
+          turnColor: turnColor,
+          movable: { 
+            color: playerSide,
+            dests: canMove ? newDests : new Map() 
+          },
+          lastMove: [from, to]
+        });
+      }
+      
+      // Check if game is over
+      const isGameOver = chess.isGameOver?.() || false;
+      
+      // Make computer move if game not over and it's computer's turn
+      if (!isGameOver && chess.turn() === (playerSide === 'white' ? 'b' : 'w')) {
+        // Give a small delay to make the move feel more natural
+        setTimeout(() => {
+          makeStockfishMove();
+        }, 300);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error("Error making move:", error);
+      return false;
+    }
+  }
+  
+  // Function to execute a pre-move if one exists
+  const executePremove = () => {
+    // Check both the state and ref for premove data
+    const premoveData = premove || premoveRef.current;
+    
+    if (premoveData && chessRef.current) {
+      const { from, to } = premoveData;
+      console.log('Attempting to execute pre-move:', from, 'to', to);
+      
+      try {
+        // Check if the pre-move is legal in the current position
+        const chess = chessRef.current;
+        const legalMoves = chess.moves({ verbose: true });
+        
+        console.log('Legal moves:', legalMoves);
+        const isLegalMove = legalMoves.some((m: any) => 
+          m.from === from && m.to === to
+        );
+        
+        if (isLegalMove) {
+          console.log('Pre-move is legal, executing...');
+          // Store the premove in local variables before clearing state
+          const fromSquare = from;
+          const toSquare = to;
+          
+          // Clear both the state and ref
+          setPremove(null);
+          premoveRef.current = null;
+          
+          // Execute the move directly
+          handleMove(fromSquare, toSquare);
+          return true;
+        } else {
+          console.log('Pre-move is not legal in current position, clearing');
+          // Illegal pre-move, clear both state and ref
+          setPremove(null);
+          premoveRef.current = null;
+        }
+      } catch (error) {
+        console.error('Error executing pre-move:', error);
+        setPremove(null);
+        premoveRef.current = null;
+      }
+    }
+    return false;
+  };
+  
   // Function to make a Stockfish move
   async function makeStockfishMove() {
     // Skip if no chessground or processing another move
     if (!chessgroundRef.current || isProcessing) return;
     
     try {
+      // Store current premove before setting isProcessing
+      if (premove) {
+        console.log('Storing premove before Stockfish moves:', premove);
+        premoveRef.current = premove;
+      }
+      
       setIsProcessing(true);
       
       // Ensure chess instance exists
@@ -281,6 +437,11 @@ function Chessboard({
           // Check if it's now the player's turn
           const isPlayerTurn = turnColor === playerSide;
           
+          // Call onMove callback with the computer's move to keep parent in sync
+          if (onMove) {
+            onMove(moveFrom, moveTo);
+          }
+          
           // Update chessground with the new position and move permissions
           chessgroundRef.current.set({
             fen: updatedFen,
@@ -290,15 +451,28 @@ function Chessboard({
               color: playerSide,
               dests: isPlayerTurn ? newDests : new Map()
             },
-            // Important: ensure the player can now move
-            draggable: { enabled: isPlayerTurn && !viewOnly },
-            selectable: { enabled: isPlayerTurn && !viewOnly }
+            // Keep the board interactable
+            draggable: { enabled: !viewOnly },
+            selectable: { enabled: !viewOnly },
+            premovable: { enabled: true }
           });
-        }
-        
-        // Call onMove callback with the computer's move to keep parent in sync
-        if (onMove) {
-          onMove(moveFrom, moveTo);
+          
+          // Set processing to false
+          setIsProcessing(false);
+          
+          console.log('Stockfish move complete, player turn:', isPlayerTurn, 'premove:', premove, 'premoveRef:', premoveRef.current);
+          
+          // Execute any premove directly if it's the player's turn
+          if (isPlayerTurn) {
+            // Use requestAnimationFrame to ensure the DOM and state are updated
+            requestAnimationFrame(() => {
+              console.log('Checking for premove to execute:', premoveRef.current);
+              const result = executePremove();
+              console.log('Premove execution result:', result);
+            });
+          }
+        } else {
+          setIsProcessing(false);
         }
       } catch (moveError) {
         console.error("Error making move:", moveError);
@@ -306,92 +480,7 @@ function Chessboard({
       }
     } catch (error) {
       console.error("Error in makeStockfishMove function:", error);
-    } finally {
       setIsProcessing(false);
-    }
-  }
-  
-  // Function to handle a user move
-  async function handleMove(from: Key, to: Key) {
-    try {
-      // Make sure we have a chess instance
-      if (!chessRef.current) {
-        console.error("Chess instance is null in handleMove");
-        return false;
-      }
-      
-      const chess = chessRef.current;
-      
-      // Store the current evaluation as the previous one before making the move
-      if (currentEvalRef.current !== null) {
-        previousEvalRef.current = currentEvalRef.current;
-      }
-      
-      // Get the pre-move FEN for logging
-      const preFen = chess.fen();
-      
-      // Try to make the move in chess.js
-      const moveResult = chess.move({
-        from: from as string,
-        to: to as string,
-        promotion: 'q' // Always promote to queen for simplicity
-      });
-      
-      if (!moveResult) {
-        console.error('Invalid move:', from, to);
-        return false;
-      }
-      
-      // Get the updated FEN after the move for synchronization
-      const updatedFen = chess.fen();
-      
-      // Evaluate the position after player's move - this will be compared to previousEvalRef
-      // to determine how much the position changed due to player's move
-      const newEval = await updateEvaluation(updatedFen, currentEvalRef);
-      
-      // Calculate the evaluation change
-      const evalChange = previousEvalRef.current !== null 
-        ? newEval - previousEvalRef.current 
-        : 0;
-        
-      // Call onMove callback if provided - pass along the updated FEN
-      if (onMove) {
-        // It's critical we pass the current FEN so the parent can stay in sync
-        onMove(from as string, to as string);
-      }
-      
-      // Update board position
-      if (chessgroundRef.current) {
-        const newDests = calculateDests();
-        const turnColor = chess.turn() === 'w' ? 'white' : 'black';
-        const canMove = turnColor === playerSide;
-        
-        chessgroundRef.current.set({
-          fen: updatedFen,
-          turnColor: turnColor,
-          movable: { 
-            color: playerSide,
-            dests: canMove ? newDests : new Map() 
-          },
-          lastMove: [from, to]
-        });
-      }
-      
-      // Check if game is over
-      const isGameOver = chess.isGameOver?.() || false;
-      
-      // Make computer move if game not over and it's computer's turn
-      if (!isGameOver && chess.turn() === (playerSide === 'white' ? 'b' : 'w')) {
-        // Give a small delay to make the move feel more natural
-        setTimeout(() => {
-          makeStockfishMove();
-        }, 300);
-      }
-      
-      return true;
-    } catch (error: any) {
-      console.error("Error making move:", error);
-      return false;
     }
   }
   
@@ -461,18 +550,33 @@ function Chessboard({
               duration: 200
             },
             draggable: {
-              enabled: !viewOnly && canPlayerMove,
+              enabled: !viewOnly,
               showGhost: true
             },
             selectable: {
-              enabled: !viewOnly && canPlayerMove
+              enabled: !viewOnly
             },
             highlight: {
               lastMove: true,
               check: true
             },
             premovable: {
-              enabled: false
+              enabled: true,
+              showDests: true,
+              castle: true,
+              events: {
+                set: (orig, dest) => {
+                  console.log('Premove set from chessground:', orig, dest);
+                  setPremove({ from: orig, to: dest });
+                  premoveRef.current = { from: orig, to: dest }; // Also store in ref
+                  return true; // Return true to confirm the premove was set
+                },
+                unset: () => {
+                  console.log('Premove unset from chessground');
+                  setPremove(null);
+                  premoveRef.current = null;
+                }
+              }
             }
           };
           
@@ -531,7 +635,7 @@ function Chessboard({
     }
   }, [orientation]);
   
-  // Modify updateChessground to be more robust and always verify state is correct
+  // Modify updateChessground to ensure premovable is properly configured
   function updateChessground() {
     if (!boardRef.current) {
       console.error("Cannot update chessground: boardRef is null");
@@ -590,8 +694,13 @@ function Chessboard({
         turnColor: turnColor,
         orientation: orientation,
         movable: updatedMovable,
-        draggable: { enabled: !viewOnly && canMove },
-        selectable: { enabled: !viewOnly && canMove }
+        draggable: { enabled: !viewOnly },
+        selectable: { enabled: !viewOnly },
+        premovable: { 
+          enabled: true,
+          showDests: true,
+          castle: true
+        }
       });
     } catch (err: any) {
       console.error("Error updating chessground:", err);
@@ -655,8 +764,32 @@ function Chessboard({
   return (
     <div className="w-full h-full relative overflow-hidden" style={{ borderRadius: '8px' }}>
       <div ref={boardRef as any} className="w-full h-full overflow-hidden" style={{ borderRadius: '8px' }} />
+      
+      {/* Add blue highlight for premove destination square */}
+      {premove && (
+        <div 
+          className="absolute pointer-events-none"
+          style={{
+            width: '12.5%',
+            height: '12.5%',
+            backgroundColor: 'rgba(20, 85, 200, 0.2)',
+            border: '2px solid rgba(20, 85, 200, 0.5)',
+            left: `${orientation === 'white' ? 
+              (premove.to.charCodeAt(0) - 'a'.charCodeAt(0)) * 12.5 : 
+              (7 - (premove.to.charCodeAt(0) - 'a'.charCodeAt(0))) * 12.5}%`,
+            top: `${orientation === 'white' ? 
+              (8 - parseInt(premove.to[1])) * 12.5 : 
+              (parseInt(premove.to[1]) - 1) * 12.5}%`,
+            zIndex: 6,
+            boxSizing: 'border-box',
+            transform: 'translate(0%, 0%)',
+            boxShadow: 'inset 0 0 10px rgba(20, 85, 200, 0.3)'
+          }}
+        />
+      )}
+      
       {isProcessing && (
-        <div className="absolute inset-0 flex items-center justify-center z-10">
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="h-12 w-12 flex items-center justify-center">
             <div className="h-12 w-12 rounded-full border-3 border-transparent animate-spin" 
                  style={{ 
