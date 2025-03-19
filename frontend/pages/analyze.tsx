@@ -490,56 +490,92 @@ const AnalyzePage = () => {
           {/* Right side - Game info and moves */}
           <div className="w-80 flex flex-col h-[calc(100vh-6rem)]">
             {/* Game information */}
-            <div className="bg-gray-800 rounded-lg p-3 mb-2">
-              <h2 className="text-base font-semibold text-white mb-1">Game Details</h2>
-              <div className="space-y-1 text-sm">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 mb-3 shadow-md">
+              <h2 className="text-base font-semibold text-white mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Game Details
+              </h2>
+              <div className="space-y-2 text-sm">
                 {gameData?.event && (
-                  <div className="truncate">
+                  <div className="flex items-center truncate">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                    </svg>
                     <span className="text-gray-400">Event:</span>
-                    <span className="text-gray-200 ml-2">{gameData.event}</span>
+                    <span className="text-gray-200 ml-2 font-medium truncate">{gameData.event}</span>
                   </div>
                 )}
-                <div>
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                   <span className="text-gray-400">Date:</span>
-                  <span className="text-gray-200 ml-2">
+                  <span className="text-gray-200 ml-2 font-medium">
                     {gameData?.game_date ? new Date(gameData.game_date).toLocaleDateString() : 'Unknown'}
                   </span>
                 </div>
-                <div>
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
                   <span className="text-gray-400">White:</span>
-                  <span className="text-gray-200 ml-2">{gameData?.white_player || 'Unknown'}</span>
+                  <span className="text-gray-200 ml-2 font-medium">{gameData?.white_player || 'Unknown'}</span>
                 </div>
-                <div>
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
                   <span className="text-gray-400">Black:</span>
-                  <span className="text-gray-200 ml-2">{gameData?.black_player || 'Unknown'}</span>
+                  <span className="text-gray-200 ml-2 font-medium">{gameData?.black_player || 'Unknown'}</span>
                 </div>
-                <div>
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                  </svg>
                   <span className="text-gray-400">Result:</span>
-                  <span className="text-gray-200 ml-2">{gameData?.result || 'Unknown'}</span>
+                  <span className="text-gray-200 ml-2 font-medium">{gameData?.result || 'Unknown'}</span>
                 </div>
                 {!gameData?.analyzed && (
-                  <div>
-                    <span className="text-amber-400">Note: This game hasn't been analyzed yet.</span>
+                  <div className="flex items-center mt-3 py-2 px-3 bg-amber-900/30 rounded-md border border-amber-800/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="text-amber-400 text-xs">This game hasn't been analyzed yet.</span>
                   </div>
                 )}
               </div>
             </div>
             
             {/* Moves list */}
-            <div className="bg-gray-800 rounded-lg p-3 flex-1 overflow-hidden">
-              <h2 className="text-base font-semibold text-white mb-1">Moves</h2>
-              <div className="h-[calc(100%-2rem)] overflow-y-auto pr-1">
-                <div className="grid grid-cols-2 gap-1">
+            <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 flex-1 overflow-hidden shadow-md">
+              <h2 className="text-base font-semibold text-white mb-3 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                Moves
+              </h2>
+              <div className="h-[calc(100%-2.25rem)] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-1.5">
                   {moves.map((move, index) => (
                     <Button
                       key={index}
                       variant={moveIndex === index ? 'secondary' : 'ghost'}
                       size="xs"
                       onClick={() => goToMove(index)}
-                      className={`text-left !py-1 !px-2 ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}`}
+                      className={`
+                        text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
+                        ${moveIndex === index 
+                          ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
+                          : 'hover:!bg-gray-700/80'}
+                        ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
+                      `}
                     >
-                      <span className="text-gray-400 mr-1 text-xs">{formatMoveNumber(index)}</span>
-                      <span className="text-sm">{move}</span>
+                      <span className={`mr-1.5 text-xs font-medium ${moveIndex === index ? 'text-blue-200' : 'text-gray-400'}`}>
+                        {formatMoveNumber(index)}
+                      </span>
+                      <span className={`text-sm ${moveIndex === index ? 'font-medium' : ''}`}>{move}</span>
                     </Button>
                   ))}
                 </div>
@@ -552,4 +588,32 @@ const AnalyzePage = () => {
   );
 };
 
-export default AnalyzePage; 
+const customStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+export default AnalyzePage;
+
+export function Head() {
+  return (
+    <>
+      <style>{customStyles}</style>
+    </>
+  );
+} 
