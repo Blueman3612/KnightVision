@@ -160,7 +160,6 @@ function Chessboard({
         const turnColor = chess.turn() === 'w' ? 'white' : 'black';
         
         if (turnColor !== playerSide) {
-          console.log('Setting pre-move from', from, 'to', to);
           setPremove({ from, to });
           premoveRef.current = { from, to }; // Store in ref as well
           return false;
@@ -255,20 +254,17 @@ function Chessboard({
     
     if (premoveData && chessRef.current) {
       const { from, to } = premoveData;
-      console.log('Attempting to execute pre-move:', from, 'to', to);
       
       try {
         // Check if the pre-move is legal in the current position
         const chess = chessRef.current;
         const legalMoves = chess.moves({ verbose: true });
         
-        console.log('Legal moves:', legalMoves);
         const isLegalMove = legalMoves.some((m: any) => 
           m.from === from && m.to === to
         );
         
         if (isLegalMove) {
-          console.log('Pre-move is legal, executing...');
           // Store the premove in local variables before clearing state
           const fromSquare = from;
           const toSquare = to;
@@ -281,7 +277,6 @@ function Chessboard({
           handleMove(fromSquare, toSquare);
           return true;
         } else {
-          console.log('Pre-move is not legal in current position, clearing');
           // Illegal pre-move, clear both state and ref
           setPremove(null);
           premoveRef.current = null;
@@ -303,7 +298,6 @@ function Chessboard({
     try {
       // Store current premove before setting isProcessing
       if (premove) {
-        console.log('Storing premove before Stockfish moves:', premove);
         premoveRef.current = premove;
       }
       
@@ -460,15 +454,11 @@ function Chessboard({
           // Set processing to false
           setIsProcessing(false);
           
-          console.log('Stockfish move complete, player turn:', isPlayerTurn, 'premove:', premove, 'premoveRef:', premoveRef.current);
-          
           // Execute any premove directly if it's the player's turn
           if (isPlayerTurn) {
             // Use requestAnimationFrame to ensure the DOM and state are updated
             requestAnimationFrame(() => {
-              console.log('Checking for premove to execute:', premoveRef.current);
-              const result = executePremove();
-              console.log('Premove execution result:', result);
+              executePremove();
             });
           }
         } else {
@@ -566,13 +556,11 @@ function Chessboard({
               castle: true,
               events: {
                 set: (orig, dest) => {
-                  console.log('Premove set from chessground:', orig, dest);
                   setPremove({ from: orig, to: dest });
                   premoveRef.current = { from: orig, to: dest }; // Also store in ref
                   return true; // Return true to confirm the premove was set
                 },
                 unset: () => {
-                  console.log('Premove unset from chessground');
                   setPremove(null);
                   premoveRef.current = null;
                 }
@@ -768,22 +756,20 @@ function Chessboard({
       {/* Add blue highlight for premove destination square */}
       {premove && (
         <div 
-          className="absolute pointer-events-none"
+          className="absolute z-5 pointer-events-none"
           style={{
             width: '12.5%',
             height: '12.5%',
-            backgroundColor: 'rgba(20, 85, 200, 0.2)',
-            border: '2px solid rgba(20, 85, 200, 0.5)',
+            backgroundColor: 'rgba(0, 120, 255, 0.3)',
+            border: '2px solid rgba(0, 120, 255, 0.7)',
             left: `${orientation === 'white' ? 
               (premove.to.charCodeAt(0) - 'a'.charCodeAt(0)) * 12.5 : 
               (7 - (premove.to.charCodeAt(0) - 'a'.charCodeAt(0))) * 12.5}%`,
             top: `${orientation === 'white' ? 
               (8 - parseInt(premove.to[1])) * 12.5 : 
               (parseInt(premove.to[1]) - 1) * 12.5}%`,
-            zIndex: 6,
-            boxSizing: 'border-box',
-            transform: 'translate(0%, 0%)',
-            boxShadow: 'inset 0 0 10px rgba(20, 85, 200, 0.3)'
+            zIndex: 5,
+            boxSizing: 'border-box'
           }}
         />
       )}
