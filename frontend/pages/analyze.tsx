@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
-import Head from 'next/head';
+import NextHead from 'next/head';
 import { Chess } from 'chess.js';
 import Chessboard from '../components/Chessboard';
 import { Button } from '../components/ui';
@@ -491,12 +491,6 @@ const AnalyzePage = () => {
           <div className="w-80 flex flex-col h-[calc(100vh-6rem)]">
             {/* Game information */}
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 mb-3 shadow-md">
-              <h2 className="text-base font-semibold text-white mb-3 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Game Details
-              </h2>
               <div className="space-y-2 text-sm">
                 {gameData?.event && (
                   <div className="flex items-center truncate">
@@ -530,13 +524,6 @@ const AnalyzePage = () => {
                   <span className="text-gray-400">Black:</span>
                   <span className="text-gray-200 ml-2 font-medium">{gameData?.black_player || 'Unknown'}</span>
                 </div>
-                <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                  </svg>
-                  <span className="text-gray-400">Result:</span>
-                  <span className="text-gray-200 ml-2 font-medium">{gameData?.result || 'Unknown'}</span>
-                </div>
                 {!gameData?.analyzed && (
                   <div className="flex items-center mt-3 py-2 px-3 bg-amber-900/30 rounded-md border border-amber-800/50">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -550,35 +537,72 @@ const AnalyzePage = () => {
             
             {/* Moves list */}
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-4 flex-1 overflow-hidden shadow-md">
-              <h2 className="text-base font-semibold text-white mb-3 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-                Moves
-              </h2>
-              <div className="h-[calc(100%-2.25rem)] overflow-y-auto pr-2 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-1.5">
-                  {moves.map((move, index) => (
-                    <Button
-                      key={index}
-                      variant={moveIndex === index ? 'secondary' : 'ghost'}
-                      size="xs"
-                      onClick={() => goToMove(index)}
-                      className={`
-                        text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
-                        ${moveIndex === index 
-                          ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
-                          : 'hover:!bg-gray-700/80'}
-                        ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
-                      `}
-                    >
-                      <span className={`mr-1.5 text-xs font-medium ${moveIndex === index ? 'text-blue-200' : 'text-gray-400'}`}>
-                        {formatMoveNumber(index)}
-                      </span>
-                      <span className={`text-sm ${moveIndex === index ? 'font-medium' : ''}`}>{move}</span>
-                    </Button>
-                  ))}
+              <div className="h-full flex flex-col">
+                <div 
+                  className="flex-1 overflow-y-auto pr-2"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(71, 85, 105, 0.5) rgba(15, 23, 42, 0.3)',
+                    msOverflowStyle: 'none' // For Internet Explorer and Edge
+                  }}
+                >
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {moves.map((move, index) => (
+                      <Button
+                        key={index}
+                        variant={moveIndex === index ? 'secondary' : 'ghost'}
+                        size="xs"
+                        onClick={() => goToMove(index)}
+                        className={`
+                          text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
+                          ${moveIndex === index 
+                            ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
+                            : 'hover:!bg-gray-700/80'}
+                          ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
+                        `}
+                      >
+                        <span className={`mr-1.5 text-xs font-medium ${moveIndex === index ? 'text-blue-200' : 'text-gray-400'}`}>
+                          {formatMoveNumber(index)}
+                        </span>
+                        <span className={`text-sm ${moveIndex === index ? 'font-medium' : ''}`}>{move}</span>
+                      </Button>
+                    ))}
+                  </div>
                 </div>
+                
+                {/* Result at bottom of moves panel */}
+                {gameData?.result && (
+                  <div 
+                    className={`
+                      flex items-center justify-center mt-3 pt-3 pb-3 border-t border-gray-700 rounded-b-md
+                    `}
+                    style={{
+                      background: gameData.result === '1-0' 
+                        ? 'linear-gradient(90deg, rgba(30, 41, 59, 0.7) 0%, rgba(255, 255, 255, 0.25) 50%, rgba(30, 41, 59, 0.7) 100%)'
+                        : gameData.result === '0-1'
+                        ? 'linear-gradient(90deg, rgba(30, 41, 59, 0.7) 0%, rgba(0, 0, 0, 0.35) 50%, rgba(30, 41, 59, 0.7) 100%)'
+                        : 'transparent'
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                    <span className="text-gray-400 mr-2">Result:</span>
+                    <span 
+                      className="font-medium rounded-md px-2 py-0.5"
+                      style={{
+                        color: gameData.result === '1-0' ? 'white' : 
+                               gameData.result === '0-1' ? 'white' : 
+                               'rgb(229, 231, 235)',
+                        background: gameData.result === '1-0' ? 'rgba(255, 255, 255, 0.2)' :
+                                   gameData.result === '0-1' ? 'rgba(0, 0, 0, 0.4)' :
+                                   'transparent'
+                      }}
+                    >
+                      {gameData.result}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -589,22 +613,34 @@ const AnalyzePage = () => {
 };
 
 const customStyles = `
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  /* This adds custom scrollbars to the html and body elements */
+  html::-webkit-scrollbar, body::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
   
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
+  html::-webkit-scrollbar-track, body::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.3);
     border-radius: 3px;
   }
   
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+  html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.5);
     border-radius: 3px;
+    border: none;
   }
   
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+  html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
+  }
+  
+  html::-webkit-scrollbar-button, body::-webkit-scrollbar-button {
+    display: none;
+  }
+  
+  html, body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(71, 85, 105, 0.5) rgba(15, 23, 42, 0.3);
   }
 `;
 
