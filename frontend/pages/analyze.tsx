@@ -37,6 +37,15 @@ interface MoveAnnotation {
   is_book_move: boolean;
 }
 
+interface TacticalMotif {
+  id: string;
+  game_id: string;
+  move_number: number;
+  motif_type: string;
+  pieces_involved: string[];
+  strength: number;
+}
+
 const AnalyzePage = () => {
   const router = useRouter();
   const session = useSession();
@@ -55,6 +64,7 @@ const AnalyzePage = () => {
   const [moveAnnotations, setMoveAnnotations] = useState<MoveAnnotation[]>([]);
   const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
   const [hasEnhancedAnalysis, setHasEnhancedAnalysis] = useState(false);
+  const [tacticalMotifs, setTacticalMotifs] = useState<TacticalMotif[]>([]);
   
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -86,6 +96,28 @@ const AnalyzePage = () => {
     
     fetchMoveAnnotations();
   }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+  
+  // Fetch tactical motifs for the current game
+  useEffect(() => {
+    const fetchTacticalMotifs = async () => {
+      if (!gameData?.id || !session?.user?.id) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('tactical_motifs')
+          .select('*')
+          .eq('game_id', gameData.id);
+          
+        if (error) throw error;
+        
+        setTacticalMotifs(data || []);
+      } catch (error) {
+        console.error('Error fetching tactical motifs:', error);
+      }
+    };
+    
+    fetchTacticalMotifs();
+  }, [gameData?.id, session?.user?.id, supabase]);
   
   // Check if the game has enhanced analysis
   useEffect(() => {
@@ -364,6 +396,15 @@ const AnalyzePage = () => {
         .eq('game_id', gameData.id);
         
       setHasEnhancedAnalysis(!!count && count > 0);
+      
+      // Fetch tactical motifs after analysis
+      const { data: motifsData, error: motifsError } = await supabase
+        .from('tactical_motifs')
+        .select('*')
+        .eq('game_id', gameData.id);
+        
+      if (motifsError) throw motifsError;
+      setTacticalMotifs(motifsData || []);
     } catch (error) {
       console.error('Error triggering deep analysis:', error);
     } finally {
@@ -648,6 +689,11 @@ const AnalyzePage = () => {
                       
                       // Only detect blunders
                       const isBlunder = annotation?.classification === 'blunder';
+                      
+                      // Check for tactical motifs
+                      const motif = tacticalMotifs.find(m => m.move_number === index + 1);
+                      const hasFork = motif?.motif_type === 'fork';
+                      const hasPin = motif?.motif_type === 'pin';
                         
                       return (
                         <Button
@@ -686,6 +732,52 @@ const AnalyzePage = () => {
                                 }}
                               >
                                 ??
+                              </span>
+                            </Tooltip>
+                          )}
+                          
+                          {/* Fork indicator */}
+                          {hasFork && (
+                            <Tooltip
+                              content="Fork"
+                              position="top"
+                              offset={4}
+                            >
+                              <span 
+                                className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 align-text-bottom"
+                                style={{ 
+                                  fontSize: '10px', 
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  border: '1px solid #1A202C'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                  <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75z" />
+                                </svg>
+                              </span>
+                            </Tooltip>
+                          )}
+                          
+                          {/* Pin indicator */}
+                          {hasPin && (
+                            <Tooltip
+                              content="Pin"
+                              position="top"
+                              offset={4}
+                            >
+                              <span 
+                                className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 align-text-bottom"
+                                style={{ 
+                                  fontSize: '10px', 
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  border: '1px solid #1A202C'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                  <path fillRule="evenodd" d="M10 2a.75.75 0 01.75.75v.258a33.186 33.186 0 016.668.83.75.75 0 01-.336 1.461 31.28 31.28 0 00-1.103-.232l1.702 7.545a.75.75 0 01-.387.832A4.981 4.981 0 0115 14c-.825 0-1.606-.2-2.294-.556a.75.75 0 01-.387-.832l1.77-7.849a31.743 31.743 0 00-3.339-.254v11.505a20.01 20.01 0 013.78.501.75.75 0 11-.339 1.462A18.558 18.558 0 0010 17.5c-1.442 0-2.845.165-4.191.477a.75.75 0 01-.338-1.462 20.01 20.01 0 013.779-.501V5.298a31.755 31.755 0 00-3.339.254l1.77 7.85a.75.75 0 01-.387.831A4.981 4.981 0 015 14a4.982 4.982 0 01-2.294-.556.75.75 0 01-.387-.832l1.702-7.545a31.28 31.28 0 00-1.103.232.75.75 0 11-.336-1.462 33.196 33.196 0 016.668-.829V2.75A.75.75 0 0110 2z" clipRule="evenodd" />
+                                </svg>
                               </span>
                             </Tooltip>
                           )}
