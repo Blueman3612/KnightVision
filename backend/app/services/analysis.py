@@ -168,7 +168,13 @@ class AnalysisService:
                 # Get enhanced position analysis before the move
                 try:
                     position_before = await self.analyze_position(fen_before, depth)
-                    evaluation_before = position_before.evaluation
+                    # Convert evaluation to white's perspective if it's black's turn
+                    if not board.turn:  # False means it's black's turn
+                        logger.info(f"Move {move_number} ({color}): Converting evaluation from {position_before.evaluation} to {-position_before.evaluation} (black to move)")
+                        evaluation_before = -position_before.evaluation
+                    else:
+                        logger.info(f"Move {move_number} ({color}): Keeping evaluation as {position_before.evaluation} (white to move)")
+                        evaluation_before = position_before.evaluation
                     square_control_before = position_before.square_control
                 except Exception as e:
                     logger.error(f"Error analyzing position before move {move_number} {color}: {e}")
@@ -198,7 +204,13 @@ class AnalysisService:
                 # Get enhanced position analysis after the move
                 try:
                     position_after = await self.analyze_position(fen_after, depth)
-                    evaluation_after = position_after.evaluation
+                    # Convert evaluation to white's perspective if it's black's turn
+                    if not board_copy_after.turn:  # False means it's black's turn
+                        logger.info(f"Move {move_number} ({color}) after: Converting evaluation from {position_after.evaluation} to {-position_after.evaluation} (black to move)")
+                        evaluation_after = -position_after.evaluation
+                    else:
+                        logger.info(f"Move {move_number} ({color}) after: Keeping evaluation as {position_after.evaluation} (white to move)")
+                        evaluation_after = position_after.evaluation
                     square_control_after = position_after.square_control
                 except Exception as e:
                     logger.error(f"Error analyzing position after move {move_number} {color}: {e}")
@@ -215,14 +227,20 @@ class AnalysisService:
                     evaluation_after = 0.0
                     square_control_after = default_control
                 
-                # Calculate evaluation change from the player's perspective
-                if color == "black":
-                    evaluation_change = -evaluation_after - (-evaluation_before)
-                else:
-                    evaluation_change = evaluation_after - evaluation_before
+                # Calculate evaluation change (always from white's perspective for storage)
+                evaluation_change = evaluation_after - evaluation_before
+                logger.info(f"Move {move_number} ({color}): Evaluation change from {evaluation_before} to {evaluation_after} = {evaluation_change} (white's perspective)")
                 
+                # For classification, adjust based on whose move it was
+                if color == "black":
+                    classification_change = -evaluation_change  # Negate for black's perspective
+                    logger.info(f"Move {move_number} ({color}): Classification change = {classification_change} (black's perspective)")
+                else:
+                    classification_change = evaluation_change
+                    logger.info(f"Move {move_number} ({color}): Classification change = {classification_change} (white's perspective)")
+                    
                 # Classify the move
-                classification = classify_move(evaluation_change)
+                classification = classify_move(classification_change)
                 
                 # Check if this was the best move
                 is_best_move = position_before.best_move == move_uci if position_before.best_move else False
