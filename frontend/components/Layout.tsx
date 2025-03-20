@@ -31,6 +31,8 @@ function Layout({ children, hideNav = false }: LayoutProps) {
         <meta name="description" content="Personalized chess training and analysis platform" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/svg+xml" href="/knight-logo.svg" />
+        <link rel="apple-touch-icon" href="/knight-logo-192.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />

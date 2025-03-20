@@ -624,7 +624,7 @@ function TutorPage() {
   return (
     <>
       <Head>
-        <title>Chess Tutor</title>
+        <title>KnightVision</title>
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>

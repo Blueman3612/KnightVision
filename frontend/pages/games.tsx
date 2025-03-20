@@ -1657,7 +1657,7 @@ const GamesPage = () => {
   return (
     <>
       <Head>
-        <title>Chess Tutor - My Games</title>
+        <title>KnightVision | My Games</title>
         <meta name="description" content="Upload and manage your chess games" />
       </Head>
       

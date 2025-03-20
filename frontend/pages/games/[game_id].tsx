@@ -906,7 +906,7 @@ export function Head() {
   return (
     <>
       <style>{customStyles}</style>
-      <title>Chess Tutor - Game Analysis</title>
+      <title>KnightVision - Analysis</title>
     </>
   );
 } 

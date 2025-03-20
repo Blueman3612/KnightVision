@@ -71,7 +71,7 @@ const Register = () => {
   return (
     <>
       <Head>
-        <title>Create Account | KnightVision</title>
+        <title>KnightVision | Create Account</title>
       </Head>
       <div className="min-h-screen flex flex-col justify-center">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
