@@ -592,7 +592,6 @@ function Chessboard({
               autoShapes: [],
               shapes: [],
               onChange: (shapes) => {
-                console.log('Shapes changed:', shapes);
                 setShapes(shapes);
               }
             }

@@ -23,6 +23,7 @@ interface GameData {
 }
 
 interface MoveAnnotation {
+  id: string;
   move_number: number;
   move_san: string;
   move_uci: string;
@@ -39,7 +40,7 @@ interface MoveAnnotation {
 
 interface TacticalMotif {
   id: string;
-  game_id: string;
+  annotation_id: string;
   move_number: number;
   motif_type: string;
   pieces_involved: string[];
@@ -65,6 +66,7 @@ const AnalyzePage = () => {
   const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
   const [hasEnhancedAnalysis, setHasEnhancedAnalysis] = useState(false);
   const [tacticalMotifs, setTacticalMotifs] = useState<TacticalMotif[]>([]);
+  const [moveToEnhancedAnnotationMap, setMoveToEnhancedAnnotationMap] = useState<Map<number, string>>(new Map());
   
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -103,14 +105,39 @@ const AnalyzePage = () => {
       if (!gameData?.id || !session?.user?.id) return;
       
       try {
+        // First get all enhanced move annotation IDs for this game
+        const { data: enhancedAnnotationData, error: enhancedAnnotationError } = await supabase
+          .from('enhanced_move_annotations')
+          .select('id, move_number')
+          .eq('game_id', gameData.id);
+          
+        if (enhancedAnnotationError) throw enhancedAnnotationError;
+        
+        if (!enhancedAnnotationData || enhancedAnnotationData.length === 0) {
+          setTacticalMotifs([]);
+          return;
+        }
+        
+        // Get annotation IDs as an array
+        const enhancedAnnotationIds = enhancedAnnotationData.map((a: { id: string }) => a.id);
+        
+        // Create a map of move numbers to enhanced annotation IDs for quick lookup
+        const moveToEnhancedAnnotationMap = new Map<number, string>(
+          enhancedAnnotationData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
+        );
+        
+        // Then fetch tactical motifs for these annotation IDs
         const { data, error } = await supabase
           .from('tactical_motifs')
           .select('*')
-          .eq('game_id', gameData.id);
+          .in('annotation_id', enhancedAnnotationIds);
           
         if (error) throw error;
         
         setTacticalMotifs(data || []);
+        
+        // Store the move number to annotation ID mapping in state
+        setMoveToEnhancedAnnotationMap(moveToEnhancedAnnotationMap);
       } catch (error) {
         console.error('Error fetching tactical motifs:', error);
       }
@@ -390,21 +417,34 @@ const AnalyzePage = () => {
       setGameData(prev => prev ? {...prev, analyzed: true} : null);
       
       // Check for enhanced annotations
-      const { count } = await supabase
+      const { data: enhancedData, error: enhancedError, count } = await supabase
         .from('enhanced_move_annotations')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact' })
         .eq('game_id', gameData.id);
         
+      if (enhancedError) throw enhancedError;
+      
       setHasEnhancedAnalysis(!!count && count > 0);
       
-      // Fetch tactical motifs after analysis
-      const { data: motifsData, error: motifsError } = await supabase
-        .from('tactical_motifs')
-        .select('*')
-        .eq('game_id', gameData.id);
+      if (enhancedData && enhancedData.length > 0) {
+        // Create a map of move numbers to enhanced annotation IDs
+        const moveToAnnotationMap = new Map<number, string>(
+          enhancedData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
+        );
+        setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
         
-      if (motifsError) throw motifsError;
-      setTacticalMotifs(motifsData || []);
+        // Get enhanced annotation IDs to fetch tactical motifs
+        const enhancedAnnotationIds = enhancedData.map((a: { id: string }) => a.id);
+        
+        // Fetch tactical motifs after analysis
+        const { data: motifsData, error: motifsError } = await supabase
+          .from('tactical_motifs')
+          .select('*')
+          .in('annotation_id', enhancedAnnotationIds);
+          
+        if (motifsError) throw motifsError;
+        setTacticalMotifs(motifsData || []);
+      }
     } catch (error) {
       console.error('Error triggering deep analysis:', error);
     } finally {
@@ -690,8 +730,13 @@ const AnalyzePage = () => {
                       // Only detect blunders
                       const isBlunder = annotation?.classification === 'blunder';
                       
+                      // Get enhanced annotation ID for this move
+                      const enhancedAnnotationId = moveToEnhancedAnnotationMap.get(index + 1);
+                      
                       // Check for tactical motifs
-                      const motif = tacticalMotifs.find(m => m.move_number === index + 1);
+                      const motif = enhancedAnnotationId ? tacticalMotifs.find(
+                        m => m.annotation_id === enhancedAnnotationId
+                      ) : null;
                       const hasFork = motif?.motif_type === 'fork';
                       const hasPin = motif?.motif_type === 'pin';
                         
