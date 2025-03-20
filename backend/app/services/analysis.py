@@ -238,6 +238,7 @@ class AnalysisService:
                 move_analysis = MoveAnalysis(
                     move_uci=move_uci,
                     move_san=move_san,
+                    move_number=move_number,
                     fen_before=fen_before,
                     fen_after=fen_after,
                     evaluation_before=evaluation_before,
