@@ -906,7 +906,7 @@ export function Head() {
   return (
     <>
       <style>{customStyles}</style>
-      <title>KnightVision - Analysis</title>
+      <title>KnightVision | Analysis</title>
     </>
   );
 } 
