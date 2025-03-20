@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS enhanced_move_annotations (
     game_id UUID REFERENCES games(id) ON DELETE CASCADE,
     move_san VARCHAR(10) NOT NULL,
     move_uci VARCHAR(5) NOT NULL,
+    move_number INT NOT NULL,
     fen_before TEXT NOT NULL,
     fen_after TEXT NOT NULL,
     evaluation_before FLOAT NOT NULL,

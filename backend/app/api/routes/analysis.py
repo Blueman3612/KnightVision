@@ -203,6 +203,7 @@ async def enhanced_annotate_game(
                         move_analysis = MoveAnalysis(
                             move_uci=annotation_data["move_uci"],
                             move_san=annotation_data["move_san"],
+                            move_number=annotation_data.get("move_number", 0),  # Default to 0 for backwards compatibility
                             fen_before=annotation_data["fen_before"],
                             fen_after=annotation_data["fen_after"],
                             evaluation_before=annotation_data["evaluation_before"],
@@ -289,6 +290,7 @@ async def enhanced_annotate_game(
                     "game_id": game_id,
                     "move_uci": annotation.move_uci,
                     "move_san": annotation.move_san,
+                    "move_number": annotation.move_number,
                     "fen_before": annotation.fen_before,
                     "fen_after": annotation.fen_after,
                     "evaluation_before": annotation.evaluation_before,

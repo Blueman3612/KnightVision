@@ -36,6 +36,7 @@ class MoveAnalysis(BaseModel):
     """Enhanced move analysis with tactical annotations."""
     move_uci: str
     move_san: str
+    move_number: int
     fen_before: str
     fen_after: str
     evaluation_before: float
