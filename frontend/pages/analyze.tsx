@@ -53,6 +53,8 @@ const AnalyzePage = () => {
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [moveAnnotations, setMoveAnnotations] = useState<MoveAnnotation[]>([]);
+  const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
+  const [hasEnhancedAnalysis, setHasEnhancedAnalysis] = useState(false);
   
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -84,6 +86,28 @@ const AnalyzePage = () => {
     
     fetchMoveAnnotations();
   }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+  
+  // Check if the game has enhanced analysis
+  useEffect(() => {
+    const checkEnhancedAnalysis = async () => {
+      if (!gameData?.id || !session?.user?.id) return;
+      
+      try {
+        const { data, error, count } = await supabase
+          .from('enhanced_move_annotations')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', gameData.id);
+          
+        if (error) throw error;
+        
+        setHasEnhancedAnalysis(!!count && count > 0);
+      } catch (error) {
+        console.error('Error checking enhanced annotations:', error);
+      }
+    };
+    
+    checkEnhancedAnalysis();
+  }, [gameData?.id, session?.user?.id, supabase]);
   
   // Set evaluation based on position and annotations when position changes
   useEffect(() => {
@@ -311,6 +335,41 @@ const AnalyzePage = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [menuOpen]);
+  
+  // Trigger deep analysis for the current game
+  const triggerDeepAnalysis = async () => {
+    if (!gameData?.id || !session?.user?.id) return;
+    
+    try {
+      setIsDeepAnalyzing(true);
+      const data = await gameApi.post(`/analysis/${gameData.id}/enhanced-annotate`);
+      
+      // Refresh the move annotations after analysis is complete
+      const { data: annotationsData, error } = await supabase
+        .from('move_annotations')
+        .select('*')
+        .eq('game_id', gameData.id)
+        .order('move_number', { ascending: true });
+        
+      if (error) throw error;
+      setMoveAnnotations(annotationsData || []);
+      
+      // Update the game's analyzed state
+      setGameData(prev => prev ? {...prev, analyzed: true} : null);
+      
+      // Check for enhanced annotations
+      const { count } = await supabase
+        .from('enhanced_move_annotations')
+        .select('*', { count: 'exact', head: true })
+        .eq('game_id', gameData.id);
+        
+      setHasEnhancedAnalysis(!!count && count > 0);
+    } catch (error) {
+      console.error('Error triggering deep analysis:', error);
+    } finally {
+      setIsDeepAnalyzing(false);
+    }
+  };
   
   if (!session) {
     return null; // Will redirect to login
@@ -549,6 +608,24 @@ const AnalyzePage = () => {
                     <span className="text-amber-400 text-xs">This game hasn't been analyzed yet.</span>
                   </div>
                 )}
+                
+                {/* Deep Analysis Button */}
+                <div className="mt-3">
+                  <Button
+                    onClick={triggerDeepAnalysis}
+                    disabled={isDeepAnalyzing || hasEnhancedAnalysis}
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    leftIcon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    }
+                  >
+                    {isDeepAnalyzing ? 'Analyzing...' : hasEnhancedAnalysis ? 'Already Deep Analyzed' : 'Run Deep Analysis'}
+                  </Button>
+                </div>
               </div>
             </div>
             

@@ -133,6 +133,21 @@ export const gameApi = {
     return response.data;
   },
 
+  // Generic post method for custom API endpoints
+  post: async (endpoint: string, data?: any) => {
+    try {
+      const response = await api.post(endpoint, data);
+      return response.data;
+    } catch (error: any) {
+      console.error(`❌ Error in API post to ${endpoint}:`, error);
+      if (error.response) {
+        console.error('Response data:', error.response.data);
+        console.error('Response status:', error.response.status);
+      }
+      throw error;
+    }
+  },
+
   // Process unannotated games 
   processUnannotatedGames: async (userId: string, accessToken?: string, forceRetry: boolean = false) => {
     try {
