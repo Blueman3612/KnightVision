@@ -764,13 +764,15 @@ const AnalyzePage = () => {
                               <span 
                                 className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 align-text-bottom"
                                 style={{ 
-                                  fontSize: '9px', 
+                                  fontSize: '10px', 
                                   color: 'white',
                                   fontWeight: 'bold',
                                   border: '1px solid #1A202C'
                                 }}
                               >
-                                ??
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                  <path d="M8.5 4a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM7 9a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1H8a1 1 0 01-1-1V9zm8-5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-1.5 5a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 01-1 1h-1a1 1 0 01-1-1V9z" />
+                                </svg>
                               </span>
                             </Tooltip>
                           )}
