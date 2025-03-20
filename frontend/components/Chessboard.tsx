@@ -11,6 +11,13 @@ declare module 'chessground' {
   export function Chessground(element: HTMLElement, config?: any): Api;
 }
 
+// Define types for drawing shapes
+interface DrawShape {
+  orig: Key;
+  dest?: Key;
+  brush: string;
+}
+
 interface ChessboardProps {
   fen?: string;
   orientation?: Color;
@@ -61,6 +68,9 @@ function Chessboard({
   // Track position evaluation before player's move
   const previousEvalRef = useRef<number | null>(null);
   const currentEvalRef = useRef<number | null>(null);
+  
+  // Add state for tracking drawn shapes (arrows and circles)
+  const [shapes, setShapes] = useState<DrawShape[]>([]);
   
   // Utility to safely update evaluation references
   const updateEvaluation = async (fen: string, target: { current: number | null }) => {
@@ -501,9 +511,14 @@ function Chessboard({
       return; // Exit early and let the next render handle initialization
     }
     
+    // Create a handler function for context menu that we can reference later for cleanup
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    
     // Wait for DOM to be ready
     const initializeBoard = () => {
-    if (!boardRef.current || !chessRef.current) return;
+      if (!boardRef.current || !chessRef.current) return;
     
       try {
         // Ensure we have chess.js instance before proceeding
@@ -565,6 +580,21 @@ function Chessboard({
                   premoveRef.current = null;
                 }
               }
+            },
+            drawable: {
+              enabled: true,
+              visible: true,
+              defaultSnapToValidMove: false,
+              eraseOnClick: true,
+              brushes: {
+                green: { key: 'g', color: '#15781B', opacity: 0.7, lineWidth: 1 }
+              },
+              autoShapes: [],
+              shapes: [],
+              onChange: (shapes) => {
+                console.log('Shapes changed:', shapes);
+                setShapes(shapes);
+              }
             }
           };
           
@@ -575,6 +605,11 @@ function Chessboard({
           
           chessgroundRef.current = Chessground(boardRef.current, config);
           hasInitializedRef.current = true;
+          
+          // Prevent the context menu (right-click) to enable arrow drawing
+          if (boardRef.current) {
+            boardRef.current.addEventListener('contextmenu', handleContextMenu);
+          }
           
           // Check if computer should make a move
           const isStartingPosition = currentFen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -607,12 +642,15 @@ function Chessboard({
     // Cleanup on unmount
     return () => {
       if (chessgroundRef.current) {
+        if (boardRef.current) {
+          boardRef.current.removeEventListener('contextmenu', handleContextMenu);
+        }
         chessgroundRef.current.destroy();
         chessgroundRef.current = null;
       }
       hasInitializedRef.current = false;
     };
-  }, [fen, playerSide, viewOnly]); // Remove orientation from dependencies
+  }, [fen, playerSide, viewOnly]);
   
   // Add separate effect for orientation changes only
   useEffect(() => {
@@ -623,7 +661,7 @@ function Chessboard({
     }
   }, [orientation]);
   
-  // Modify updateChessground to ensure premovable is properly configured
+  // Modify updateChessground to ensure drawable is properly configured
   function updateChessground() {
     if (!boardRef.current) {
       console.error("Cannot update chessground: boardRef is null");
@@ -688,6 +726,17 @@ function Chessboard({
           enabled: true,
           showDests: true,
           castle: true
+        },
+        drawable: {
+          enabled: true,
+          visible: true,
+          defaultSnapToValidMove: false,
+          eraseOnClick: true,
+          brushes: {
+            green: { key: 'g', color: '#15781B', opacity: 0.7, lineWidth: 0.35 }
+          },
+          autoShapes: [],
+          shapes: []
         }
       });
     } catch (err: any) {
