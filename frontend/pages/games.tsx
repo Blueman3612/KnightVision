@@ -1531,7 +1531,7 @@ const GamesPage = () => {
           style={{
             backgroundImage: 'linear-gradient(to bottom right, rgba(55, 65, 81, 1), rgba(31, 41, 55, 1))'
           }}
-          onClick={() => router.push(`/analyze?gameId=${game.id}`)}
+          onClick={() => router.push(`/games/${game.id}`)}
           onMouseDown={(e) => {
             e.currentTarget.style.transform = 'scale(0.98)';
             e.currentTarget.style.boxShadow = '0 0 15px rgba(79, 70, 229, 0.4)';
