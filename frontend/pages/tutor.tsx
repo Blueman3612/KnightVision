@@ -5,6 +5,7 @@ import Chessboard from '@/components/Chessboard';
 import { Chess } from 'chess.js';
 import Head from 'next/head';
 import { useToast, Button, Tooltip } from '../components/ui';
+import Modal from '../components/ui/Modal';
 
 interface TutorPageProps {
   children?: ReactNode;
@@ -42,6 +43,12 @@ function TutorPage() {
   const [disableBoard, setDisableBoard] = useState<boolean>(false);
   const [gameState, setGameState] = useState<GameState>('playing');
   const [needsReset, setNeedsReset] = useState<boolean>(false);
+  
+  // New state for game end modal
+  const [showGameEndModal, setShowGameEndModal] = useState<boolean>(false);
+  const [gameSaved, setGameSaved] = useState<boolean>(false);
+  const [gameResult, setGameResult] = useState<string>('');
+  const [finalMoveCount, setFinalMoveCount] = useState<number>(0);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -124,7 +131,11 @@ function TutorPage() {
   // Save game when it ends
   useEffect(() => {
     const saveGame = async () => {
-      if (isGameOver && moveHistory.length > 0 && session) {
+      // Store the move count for the modal
+      setFinalMoveCount(moveHistory.length);
+      
+      // Only save game if player has made at least 8 moves (changed from 4)
+      if (isGameOver && moveHistory.length >= 8 && session) {
         try {
           // Get the PGN from the chess instance
           const chess = chessRef.current;
@@ -161,7 +172,7 @@ function TutorPage() {
           
           // Determine accurate result and termination
           // If gameStatus contains "resigned", it's a resignation
-          const isResignation = gameStatus.toLowerCase().includes('resign');
+          const isResignation = gameResult.toLowerCase().includes('resigned');
           
           let result = '1/2-1/2'; // Default
           let terminationReason = 'normal';
@@ -174,11 +185,9 @@ function TutorPage() {
             terminationText = turn === 'w' ? 'Black won by checkmate' : 'White won by checkmate';
           } else if (isResignation) {
             // Resignation - the player who resigned has lost
-            // The gameStatus will be set in the resignGame function
-            // "White resigned" or "Black resigned"
-            result = gameStatus.toLowerCase().includes('white') ? '0-1' : '1-0';
+            result = gameResult.toLowerCase().includes('white resigned') ? '0-1' : '1-0';
             terminationReason = 'resignation';
-            terminationText = gameStatus;
+            terminationText = gameResult;
           } else if (isStalemate) {
             // Stalemate is a draw
             result = '1/2-1/2';
@@ -306,6 +315,8 @@ function TutorPage() {
             if (rpcError) {
               console.error('Error saving game with RPC:', rpcError);
               toast.error('Failed to save your game');
+              setGameSaved(false);
+              setShowGameEndModal(true);
               setGameState('resetting');
               setNeedsReset(true);
               return;
@@ -336,26 +347,30 @@ function TutorPage() {
             
           if (updateError) {
             console.error('Error updating game metadata:', updateError);
-            setGameState('resetting');
-            setNeedsReset(true);
+            setGameSaved(false);
+            setShowGameEndModal(true);
           } else {
-            toast.success('Game saved successfully!');
-            setGameState('resetting');
-            setNeedsReset(true);
+            setGameSaved(true);
+            setShowGameEndModal(true);
           }
           } else {
-            toast.success('Game saved successfully!');
-            setGameState('resetting');
-            setNeedsReset(true);
+            setGameSaved(true);
+            setShowGameEndModal(true);
           }
         } catch (error) {
           console.error('Error in game saving process:', error);
           toast.error('An error occurred while saving your game');
           // Even on error, we need to complete the save process
-          setGameState('resetting');
-          setNeedsReset(true);
+          setGameSaved(false);
+          setShowGameEndModal(true);
         }
+      } else {
+        // Not enough moves to save the game
+        setGameSaved(false);
+        setShowGameEndModal(true);
       }
+      
+      // Don't trigger reset here - let the modal handle it when it's closed
     };
     
     // Only call saveGame when state is 'saving'
@@ -430,24 +445,37 @@ function TutorPage() {
       if (gameOver) {
         // Update game state
         let status = '';
+        let result = '';
+        
         if (isCheckmate) {
+          const turn = typeof chessAny.turn === 'function' ? chessAny.turn() : 'w';
+          const winner = turn === 'w' ? 'Black' : 'White';
           status = 'Checkmate!';
+          result = `${winner} won by checkmate`;
         } else if (isDraw) {
           status = 'Draw!';
+          result = 'Game drawn';
         } else if (isStalemate) {
           status = 'Stalemate!';
+          result = 'Game drawn by stalemate';
         } else if (isThreefoldRepetition) {
           status = 'Draw by repetition!';
+          result = 'Game drawn by repetition';
         } else if (typeof chessAny.insufficient_material === 'function' ? 
           chessAny.insufficient_material() : false) {
           status = 'Draw by insufficient material!';
+          result = 'Game drawn by insufficient material';
         }
         
-        // Update the state
+        // First disable the board to prevent evaluation API calls
+        setDisableBoard(true);
+        setBoardKey(prev => prev + 1);
+        
+        // Then update the rest of the state
         setGameState('saving');
         setGameStatus(status);
+        setGameResult(result);
         setIsGameOver(true);
-        setDisableBoard(true);
       } else if (typeof chessAny.in_check === 'function' && chessAny.in_check()) {
         // In check but game not over
         setGameState('playing');
@@ -469,9 +497,11 @@ function TutorPage() {
     setGameStartTime(new Date());
     setGameState('playing');
     setGameStatus('');
+    setGameResult('');
     setIsGameOver(false);
     setDisableBoard(false);
     setNeedsReset(false);
+    setShowGameEndModal(false);
     toast.success('New game started!');
   };
   
@@ -587,11 +617,17 @@ function TutorPage() {
     // Store the current player side 
     const currentColor = playerSide;
     
+    // Immediately disable the board and increment board key to force re-render
+    // and prevent any pending evaluation calls
+    setDisableBoard(true);
+    setBoardKey(prev => prev + 1);
+    
     // Set game over state
     setGameState('saving');
-    setGameStatus(`${currentColor === 'white' ? 'White' : 'Black'} resigned`);
+    const resignMessage = `${currentColor === 'white' ? 'White' : 'Black'} resigned`;
+    setGameStatus('Resignation');
+    setGameResult(resignMessage);
     setIsGameOver(true);
-    setDisableBoard(true);
     
     // Close menu
     setMenuOpen(false);
@@ -624,7 +660,7 @@ function TutorPage() {
   return (
     <>
       <Head>
-        <title>Chess Tutor</title>
+        <title>KnightVision</title>
       </Head>
       <div className="w-full max-w-3xl flex flex-col items-center justify-center">
         <div className="relative w-full aspect-square" style={{ maxWidth: '600px' }}>
@@ -754,7 +790,7 @@ function TutorPage() {
               - Skill level 0 (approx. 1350 ELO) makes it suitable for beginners
             */}
             <Chessboard 
-              key={`board-${playerSide}-${gameState}-${boardKey}`}
+              key={`board-${playerSide}-${gameState}-${isGameOver}-${tutorMode}-${boardKey}`}
               fen={fen} 
               onMove={handleMove}
               orientation={orientation}
@@ -765,11 +801,83 @@ function TutorPage() {
           </div>
         </div>
         
-        {gameStatus && tutorMode === 'playing' && (
-          <div className="mt-4 px-6 py-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg shadow-lg">
-            <p className="text-center font-medium text-gray-800">{gameStatus}</p>
+        {/* Game End Modal */}
+        <Modal
+          isOpen={showGameEndModal}
+          onClose={() => {
+            setShowGameEndModal(false);
+            setGameState('resetting');
+            setNeedsReset(true);
+          }}
+          title="Game Over"
+          size="sm"
+          primaryButton={{
+            label: "New Game",
+            onClick: resetGame,
+            variant: "primary"
+          }}
+          contentClassName="pb-6"
+        >
+          <div className="flex flex-col items-center space-y-5 py-4">
+            {/* Chess piece icon/graphic */}
+            <div className="relative w-20 h-20 mb-2">
+              {gameStatus.toLowerCase().includes('checkmate') ? (
+                // King icon for checkmate
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-full h-full text-indigo-400">
+                  <path d="M19 22H5v-2h14v2M17.2 8.4c-1-1.2-1.6-2.7-1.8-4.3-.3-1.8-2.9-1.8-3.2 0-.3 1.6-.8 3.1-1.8 4.3-.9 1.1-1.6 2.3-2.1 3.6-.2.6.5 1.2 1.1.9 1.5-.7 2.3-.6 3.4-1.3-.7 1.5-1.1 3.1-1.1 4.8 0 2.1 1.6 1.6 2.4 0 .8 1.6 2.4 2.1 2.4 0 0-1.7-.4-3.3-1.1-4.8 1.1.7 1.9.6 3.4 1.3.6.3 1.3-.2 1.1-.9-.6-1.3-1.3-2.5-2.2-3.6z" />
+                </svg>
+              ) : gameStatus.toLowerCase().includes('stalemate') || gameStatus.toLowerCase().includes('draw') ? (
+                // Two kings for draw/stalemate
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" fill="currentColor" className="w-full h-full text-amber-400">
+                  <path d="M406.1 61.65c9.369-9.371 9.369-24.57 0-33.94-9.369-9.371-24.57-9.371-33.94 0L345.9 54.06l-26.34-26.35c-9.369-9.371-24.57-9.371-33.94 0-9.369 9.371-9.369 24.57 0 33.94L312 87.99l-26.34 26.35c-9.369 9.371-9.369 24.57 0 33.94 9.369 9.371 24.57 9.371 33.94 0L345.9 121.9l26.34 26.35c9.369 9.371 24.57 9.371 33.94 0 9.369-9.371 9.369-24.57 0-33.94L379.9 87.99l26.2-26.34zm-278.7 0c9.369-9.371 9.369-24.57 0-33.94-9.369-9.371-24.57-9.371-33.94 0L67.12 54.06l-26.35-26.35c-9.369-9.371-24.57-9.371-33.94 0-9.369 9.371-9.369 24.57 0 33.94L33.18 87.99l-26.35 26.35c-9.369 9.371-9.369 24.57 0 33.94 9.369 9.371 24.57 9.371 33.94 0L67.12 121.9l26.35 26.35c9.369 9.371 24.57 9.371 33.94 0 9.369-9.371 9.369-24.57 0-33.94L101.1 87.99l26.3-26.34zM576 385.1c0-9.181-5.119-16.95-12.72-21.09C613.1 305.5 640 236.4 640 160c0-123.5-100.3-224-223.8-224C323.8 89.43 256 177.6 256 285.6c0 35.58 9.421 69.25 26.72 99.26C276.1 389.1 271 396.7 271 405.9c0 11.71 9.331 21.04 20.95 21.04h304c11.67 0 21.05-9.328 21.05-21.04zm-186.1-235.7l-42.95-62.1s-3.348 .2682-4.42 .2959c-1.143 .0371-5.686 .3066-5.686 .3066l35.04 32.19-18.93 41.02c59.61 .4678 64.95 71.32 64.95 71.32l-111.1 .18c.5078-117.9 83.77-84.63 83.77-84.63zM224 448c-44.18 0-80-35.82-80-80s35.82-80 80-80c.166 0 .332 .002 .4988 .0039l-16.84-15.93c-10.41-9.582-18.64-20.67-24.24-33.64-16.29-37.54-50.68-103.4-103.8-137.4l26.21 88.17c5.07 17.04-4.359 35.2-21.22 40.34-17.03 5.146-34.89-4.416-39.94-21.47l-39.78-133.1c-5.068-17.05 4.359-35.19 21.22-40.34 17.08-5.174 34.98 4.348 40 21.3 8.312 27.95 42.15 60.65 71.11 87.55 41.98 37.84 86.18 78.4 86.18 136.6 0 6.385-.3418 12.37-.9382 18.35 17 5.54 31.7 16.45 41.9 31.11 10.19-14.6 24.92-25.55 41.9-31.11-.5937-5.955-.9273-12.05-.9273-18.37 0-76.93 73.78-125.8 136.1-163l39.31-19.66c-2.157-11.69-3.133-23.75-3.133-36.1 0-108.1 88.31-196.8 196.8-196.8 14.24 0 25.71 11.55 25.71 25.81 0 15.21-13.32 25.8-25.71 25.8-80.14 0-145.3 65.14-145.3 145.3 0 16.38 2.717 32.52 8.141 47.96l41.83-21.07c32.76-19.07 60.53-35.18 89.2-35.18 63.28 0 114.6 51.47 114.6 114.9 0 13.95-2.482 27.29-7.033 39.66 7.568 4.141 12.68 12 12.68 21.03 0 13.48-10.76 24.24-24.24 24.24h-145.4C183.7 448 224 407.7 224 448zM517.6 188.9c-20.95 0-46.7 15.2-74.45 31.69l-76.34 38.35c-45.87 27.23-88.4 58.12-94.72 96.23l263.2-.5059c6.541-45.05-30.7-165.8-17.69-165.8L517.6 188.9z"/>
+                </svg>
+              ) : (
+                // Flag icon for resignation
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-full h-full text-red-400">
+                  <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6z" />
+                </svg>
+              )}
+            </div>
+
+            {/* Game result information */}
+            <div className="text-center bg-gray-800 p-4 rounded-lg shadow-inner w-full border border-gray-700">
+              <div className="text-2xl font-bold mb-3 text-white">
+                {gameStatus.toLowerCase() === 'resignation' ? 'Game Resigned' : gameStatus}
+              </div>
+              <div className="text-lg text-gray-300">{gameResult}</div>
+            </div>
+            
+            {/* Game save status */}
+            <div className="w-full px-2">
+              {finalMoveCount < 8 ? (
+                <div className="flex items-center justify-center space-x-2 bg-amber-900/30 text-amber-400 p-3 rounded-md">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span>Game was too short to be saved (minimum 8 moves required).</span>
+                </div>
+              ) : (
+                <div className={`flex items-center justify-center space-x-2 p-3 rounded-md ${gameSaved ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                  {gameSaved ? (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span>Game saved successfully!</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      <span>Game could not be saved.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </Modal>
       </div>
     </>
   );

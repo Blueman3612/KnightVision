@@ -52,7 +52,7 @@ const Login = () => {
   return (
     <>
       <Head>
-        <title>Sign in | KnightVision</title>
+        <title>KnightVision | Sign in</title>
       </Head>
       <div className="min-h-screen flex flex-col justify-center">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">

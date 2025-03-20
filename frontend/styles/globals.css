@@ -46,6 +46,78 @@ cg-board {
   overflow: hidden;
 }
 
+/* Drawing styles for arrows and circles */
+cg-board {
+  position: relative;
+}
+
+cg-container {
+  position: relative;
+}
+
+/* SVG container for drawings */
+cg-container svg {
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Arrow styles - more specific selectors for better targeting */
+cg-container svg line {
+  stroke-width: 8px !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+/* Make sure the arrow line with marker maintains the width */
+cg-container svg line[marker-end] {
+  stroke-width: 8px !important; 
+}
+
+/* Target all SVG elements in cg-container to ensure minimal size */
+cg-container svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+/* Target the arrow marker specifically - larger marker to match line */
+cg-container svg marker[id^="arrowhead"] {
+  markerWidth: 8 !important;
+  markerHeight: 8 !important;
+  refX: 0.5 !important; 
+  refY: 4 !important;
+  orient: auto !important;
+}
+
+/* Style the arrowhead path properly with a simple triangle */
+cg-container svg marker[id^="arrowhead"] path {
+  fill: #15781B;
+  stroke: none;
+  d: path("M0,0 L0,4 L4,2 Z");
+}
+
+/* Specific styling for the green arrow marker */
+cg-container svg marker#arrowhead-green {
+  markerWidth: 8 !important;
+  markerHeight: 8 !important;
+  refX: 0.5 !important;
+  refY: 4 !important;
+  overflow: visible;
+}
+
+/* Circle styles */
+cg-container svg circle {
+  opacity: 0.7;
+  fill: none;
+  stroke-width: 4px !important;
+  r: 0.45 !important; /* Slightly larger circles */
+}
+
 .cg-wrap piece {
   position: absolute;
   top: 0;

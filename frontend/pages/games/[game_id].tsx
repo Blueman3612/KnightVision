@@ -3,10 +3,10 @@ import { useRouter } from 'next/router';
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react';
 import NextHead from 'next/head';
 import { Chess } from 'chess.js';
-import Chessboard from '../components/Chessboard';
-import { Button } from '../components/ui';
-import Tooltip from '../components/ui/Tooltip';
-import { gameApi } from '../lib/api';
+import Chessboard from '../../components/Chessboard';
+import { Button } from '../../components/ui';
+import Tooltip from '../../components/ui/Tooltip';
+import { gameApi } from '../../lib/api';
 
 interface GameData {
   id: string;
@@ -23,6 +23,7 @@ interface GameData {
 }
 
 interface MoveAnnotation {
+  id: string;
   move_number: number;
   move_san: string;
   move_uci: string;
@@ -35,6 +36,15 @@ interface MoveAnnotation {
   classification: string;
   is_best_move: boolean;
   is_book_move: boolean;
+}
+
+interface TacticalMotif {
+  id: string;
+  annotation_id: string;
+  move_number: number;
+  motif_type: string;
+  pieces_involved: string[];
+  strength: number;
 }
 
 const AnalyzePage = () => {
@@ -53,6 +63,10 @@ const AnalyzePage = () => {
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [moveAnnotations, setMoveAnnotations] = useState<MoveAnnotation[]>([]);
+  const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
+  const [hasEnhancedAnalysis, setHasEnhancedAnalysis] = useState(false);
+  const [tacticalMotifs, setTacticalMotifs] = useState<TacticalMotif[]>([]);
+  const [moveToEnhancedAnnotationMap, setMoveToEnhancedAnnotationMap] = useState<Map<number, string>>(new Map());
   
   // Menu state
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -84,6 +98,75 @@ const AnalyzePage = () => {
     
     fetchMoveAnnotations();
   }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+  
+  // Fetch tactical motifs for the current game
+  useEffect(() => {
+    const fetchTacticalMotifs = async () => {
+      if (!gameData?.id || !session?.user?.id) return;
+      
+      try {
+        // First get all enhanced move annotation IDs for this game
+        const { data: enhancedAnnotationData, error: enhancedAnnotationError } = await supabase
+          .from('enhanced_move_annotations')
+          .select('id, move_number')
+          .eq('game_id', gameData.id);
+          
+        if (enhancedAnnotationError) throw enhancedAnnotationError;
+        
+        if (!enhancedAnnotationData || enhancedAnnotationData.length === 0) {
+          setTacticalMotifs([]);
+          return;
+        }
+        
+        // Get annotation IDs as an array
+        const enhancedAnnotationIds = enhancedAnnotationData.map((a: { id: string }) => a.id);
+        
+        // Create a map of move numbers to enhanced annotation IDs for quick lookup
+        const moveToEnhancedAnnotationMap = new Map<number, string>(
+          enhancedAnnotationData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
+        );
+        
+        // Then fetch tactical motifs for these annotation IDs
+        const { data, error } = await supabase
+          .from('tactical_motifs')
+          .select('*')
+          .in('annotation_id', enhancedAnnotationIds);
+          
+        if (error) throw error;
+        
+        setTacticalMotifs(data || []);
+        
+        // Store the move number to annotation ID mapping in state
+        setMoveToEnhancedAnnotationMap(moveToEnhancedAnnotationMap);
+      } catch (error) {
+        console.error('Error fetching tactical motifs:', error);
+      }
+    };
+    
+    fetchTacticalMotifs();
+  }, [gameData?.id, session?.user?.id, supabase]);
+  
+  // Check if the game has enhanced analysis
+  useEffect(() => {
+    const checkEnhancedAnalysis = async () => {
+      if (!gameData?.id || !session?.user?.id) return;
+      
+      try {
+        const { data, error, count } = await supabase
+          .from('enhanced_move_annotations')
+          .select('*', { count: 'exact', head: true })
+          .eq('game_id', gameData.id);
+          
+        if (error) throw error;
+        
+        setHasEnhancedAnalysis(!!count && count > 0);
+      } catch (error) {
+        console.error('Error checking enhanced annotations:', error);
+      }
+    };
+    
+    checkEnhancedAnalysis();
+  }, [gameData?.id, session?.user?.id, supabase]);
   
   // Set evaluation based on position and annotations when position changes
   useEffect(() => {
@@ -118,29 +201,23 @@ const AnalyzePage = () => {
     }
   }, [currentFen, moveIndex, moveAnnotations, gameData?.analyzed]);
   
-  // Fetch game data when component mounts or gameId changes
+  // Fetch game data when component mounts or game_id changes
   useEffect(() => {
     const fetchGame = async () => {
       if (!session?.user?.id) return;
       
       try {
-        // If no gameId provided, fetch most recent game
-        const { gameId } = router.query;
+        // Get game_id directly from router params
+        const { game_id } = router.query;
         
-        const query = supabase
+        if (!game_id) return;
+        
+        const { data, error } = await supabase
           .from('games')
           .select('*')
-          .eq('user_id', session.user.id);
-          
-        if (gameId) {
-          query.eq('id', gameId);
-        } else {
-          query.order('game_date', { ascending: false })
-               .order('created_at', { ascending: false })
-               .limit(1);
-        }
-        
-        const { data, error } = await query.single();
+          .eq('user_id', session.user.id)
+          .eq('id', game_id)
+          .single();
         
         if (error) throw error;
         if (!data) {
@@ -181,7 +258,7 @@ const AnalyzePage = () => {
     };
     
     fetchGame();
-  }, [router.query.gameId, session?.user?.id, supabase]);
+  }, [router.query.game_id, session?.user?.id, supabase]);
   
   // Navigation functions
   const goToMove = (index: number) => {
@@ -311,6 +388,63 @@ const AnalyzePage = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [menuOpen]);
+  
+  // Trigger deep analysis for the current game
+  const triggerDeepAnalysis = async () => {
+    if (!gameData?.id || !session?.user?.id) return;
+    
+    try {
+      setIsDeepAnalyzing(true);
+      const data = await gameApi.post(`/analysis/${gameData.id}/enhanced-annotate`);
+      
+      // Refresh the move annotations after analysis is complete
+      const { data: annotationsData, error } = await supabase
+        .from('move_annotations')
+        .select('*')
+        .eq('game_id', gameData.id)
+        .order('move_number', { ascending: true });
+        
+      if (error) throw error;
+      setMoveAnnotations(annotationsData || []);
+      
+      // Update the game's analyzed state
+      setGameData(prev => prev ? {...prev, analyzed: true} : null);
+      
+      // Check for enhanced annotations
+      const { data: enhancedData, error: enhancedError, count } = await supabase
+        .from('enhanced_move_annotations')
+        .select('*', { count: 'exact' })
+        .eq('game_id', gameData.id);
+        
+      if (enhancedError) throw enhancedError;
+      
+      setHasEnhancedAnalysis(!!count && count > 0);
+      
+      if (enhancedData && enhancedData.length > 0) {
+        // Create a map of move numbers to enhanced annotation IDs
+        const moveToAnnotationMap = new Map<number, string>(
+          enhancedData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
+        );
+        setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
+        
+        // Get enhanced annotation IDs to fetch tactical motifs
+        const enhancedAnnotationIds = enhancedData.map((a: { id: string }) => a.id);
+        
+        // Fetch tactical motifs after analysis
+        const { data: motifsData, error: motifsError } = await supabase
+          .from('tactical_motifs')
+          .select('*')
+          .in('annotation_id', enhancedAnnotationIds);
+          
+        if (motifsError) throw motifsError;
+        setTacticalMotifs(motifsData || []);
+      }
+    } catch (error) {
+      console.error('Error triggering deep analysis:', error);
+    } finally {
+      setIsDeepAnalyzing(false);
+    }
+  };
   
   if (!session) {
     return null; // Will redirect to login
@@ -549,6 +683,24 @@ const AnalyzePage = () => {
                     <span className="text-amber-400 text-xs">This game hasn't been analyzed yet.</span>
                   </div>
                 )}
+                
+                {/* Deep Analysis Button */}
+                <div className="mt-3">
+                  <Button
+                    onClick={triggerDeepAnalysis}
+                    disabled={isDeepAnalyzing || hasEnhancedAnalysis}
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    leftIcon={
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    }
+                  >
+                    {isDeepAnalyzing ? 'Analyzing...' : hasEnhancedAnalysis ? 'Already Deep Analyzed' : 'Run Deep Analysis'}
+                  </Button>
+                </div>
               </div>
             </div>
             
@@ -571,6 +723,16 @@ const AnalyzePage = () => {
                       
                       // Only detect blunders
                       const isBlunder = annotation?.classification === 'blunder';
+                      
+                      // Get enhanced annotation ID for this move
+                      const enhancedAnnotationId = moveToEnhancedAnnotationMap.get(index + 1);
+                      
+                      // Check for tactical motifs
+                      const motif = enhancedAnnotationId ? tacticalMotifs.find(
+                        m => m.annotation_id === enhancedAnnotationId
+                      ) : null;
+                      const hasFork = motif?.motif_type === 'fork';
+                      const hasPin = motif?.motif_type === 'pin';
                         
                       return (
                         <Button
@@ -609,6 +771,52 @@ const AnalyzePage = () => {
                                 }}
                               >
                                 ??
+                              </span>
+                            </Tooltip>
+                          )}
+                          
+                          {/* Fork indicator */}
+                          {hasFork && (
+                            <Tooltip
+                              content="Fork"
+                              position="top"
+                              offset={4}
+                            >
+                              <span 
+                                className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-yellow-500 to-yellow-600 align-text-bottom"
+                                style={{ 
+                                  fontSize: '10px', 
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  border: '1px solid #1A202C'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                  <path d="M13.28 7.78l3.22-3.22v2.69a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.69l-3.22 3.22a.75.75 0 001.06 1.06zM2 17.25v-4.5a.75.75 0 011.5 0v2.69l3.22-3.22a.75.75 0 011.06 1.06L4.56 16.5h2.69a.75.75 0 010 1.5h-4.5a.75.75 0 01-.75-.75z" />
+                                </svg>
+                              </span>
+                            </Tooltip>
+                          )}
+                          
+                          {/* Pin indicator */}
+                          {hasPin && (
+                            <Tooltip
+                              content="Pin"
+                              position="top"
+                              offset={4}
+                            >
+                              <span 
+                                className="inline-flex items-center justify-center ml-1 w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 align-text-bottom"
+                                style={{ 
+                                  fontSize: '10px', 
+                                  color: 'white',
+                                  fontWeight: 'bold',
+                                  border: '1px solid #1A202C'
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                  <path fillRule="evenodd" d="M10 2a.75.75 0 01.75.75v.258a33.186 33.186 0 016.668.83.75.75 0 01-.336 1.461 31.28 31.28 0 00-1.103-.232l1.702 7.545a.75.75 0 01-.387.832A4.981 4.981 0 0115 14c-.825 0-1.606-.2-2.294-.556a.75.75 0 01-.387-.832l1.77-7.849a31.743 31.743 0 00-3.339-.254v11.505a20.01 20.01 0 013.78.501.75.75 0 11-.339 1.462A18.558 18.558 0 0010 17.5c-1.442 0-2.845.165-4.191.477a.75.75 0 01-.338-1.462 20.01 20.01 0 013.779-.501V5.298a31.755 31.755 0 00-3.339.254l1.77 7.85a.75.75 0 01-.387.831A4.981 4.981 0 015 14a4.982 4.982 0 01-2.294-.556.75.75 0 01-.387-.832l1.702-7.545a31.28 31.28 0 00-1.103.232.75.75 0 11-.336-1.462 33.196 33.196 0 016.668-.829V2.75A.75.75 0 0110 2z" clipRule="evenodd" />
+                                </svg>
                               </span>
                             </Tooltip>
                           )}
@@ -698,6 +906,7 @@ export function Head() {
   return (
     <>
       <style>{customStyles}</style>
+      <title>KnightVision | Analysis</title>
     </>
   );
 } 

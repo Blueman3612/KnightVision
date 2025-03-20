@@ -104,8 +104,8 @@ const Profile = () => {
   return (
     <>
       <Head>
-        <title>Chess Tutor - Profile</title>
-        <meta name="description" content="Chess Tutor Profile Page" />
+        <title>KnightVision | Profile</title>
+        <meta name="description" content="KnightVision Profile Page" />
       </Head>
       
       <div className="w-full max-w-4xl px-4 py-8">
