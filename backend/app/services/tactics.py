@@ -406,7 +406,7 @@ class TacticsService:
                             break
                     else:
                         # This is the second piece we've found
-                        if piece_at_square.color != piece.color:
+                        if piece_at_square.color == piece.color:
                             # Not a pin, both pieces same color as attacker
                             break
                         else:
