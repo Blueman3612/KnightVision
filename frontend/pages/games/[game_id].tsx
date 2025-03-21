@@ -121,10 +121,41 @@ const AnalyzePage = () => {
         // Get annotation IDs as an array
         const enhancedAnnotationIds = enhancedAnnotationData.map((a: { id: string }) => a.id);
         
-        // Create a map of move numbers to enhanced annotation IDs for quick lookup
-        const moveToEnhancedAnnotationMap = new Map<number, string>(
-          enhancedAnnotationData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
-        );
+        // Create a map that properly handles half-move indices - since we don't have color,
+        // we need to use a different approach to map annotations to moves
+        const moveToAnnotationMap = new Map<number, string>();
+        
+        // Define type for move annotations
+        type MoveAnnotation = {
+          move_number: number;
+          color: string;
+        };
+        
+        // Fetch corresponding move annotations to determine colors
+        const { data: moveAnnotations, error: moveAnnotationsError } = await supabase
+          .from('move_annotations')
+          .select('move_number, color')
+          .eq('game_id', gameData.id)
+          .order('move_number', { ascending: true });
+          
+        if (moveAnnotationsError) throw moveAnnotationsError;
+        
+        // Create mapping of move number to index in the moves array
+        enhancedAnnotationData.forEach((annotation: { id: string, move_number: number }) => {
+          // Find corresponding move annotation to get color
+          const moveAnnotation = moveAnnotations?.find((m: MoveAnnotation) => m.move_number === annotation.move_number);
+          
+          if (moveAnnotation) {
+            // Calculate the half-move index based on move number and color
+            // FLIPPED: Black's move at move_number N is at index (N-1)*2
+            // FLIPPED: White's move at move_number N is at index (N-1)*2 + 1
+            const color = moveAnnotation.color;
+            const halfMoveIndex = (annotation.move_number - 1) * 2 + (color === 'white' ? 1 : 0);
+            moveToAnnotationMap.set(halfMoveIndex, annotation.id);
+          } else {
+            console.warn(`No move annotation found for move number ${annotation.move_number}`);
+          }
+        });
         
         // Then fetch tactical motifs for these annotation IDs
         const { data, error } = await supabase
@@ -136,8 +167,8 @@ const AnalyzePage = () => {
         
         setTacticalMotifs(data || []);
         
-        // Store the move number to annotation ID mapping in state
-        setMoveToEnhancedAnnotationMap(moveToEnhancedAnnotationMap);
+        // Store the move index to annotation ID mapping in state
+        setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
       } catch (error) {
         console.error('Error fetching tactical motifs:', error);
       }
@@ -353,12 +384,6 @@ const AnalyzePage = () => {
     return formatted;
   }, []);
   
-  // Add useEffect to respond to orientation changes
-  useEffect(() => {
-    console.log('Orientation changed (useEffect):', orientation);
-    // No other actions needed - just making sure React sees this dependency
-  }, [orientation]);
-  
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -421,10 +446,38 @@ const AnalyzePage = () => {
       setHasEnhancedAnalysis(!!count && count > 0);
       
       if (enhancedData && enhancedData.length > 0) {
-        // Create a map of move numbers to enhanced annotation IDs
-        const moveToAnnotationMap = new Map<number, string>(
-          enhancedData.map((a: { id: string, move_number: number }) => [a.move_number, a.id])
-        );
+        // Create a map that properly handles half-move indices
+        const moveToAnnotationMap = new Map<number, string>();
+        
+        // Define type for move annotations
+        type MoveAnnotation = {
+          move_number: number;
+          color: string;
+        };
+        
+        // Get the move annotations to determine colors
+        const { data: moveAnnotations, error: moveAnnotationsError } = await supabase
+          .from('move_annotations')
+          .select('move_number, color')
+          .eq('game_id', gameData.id)
+          .order('move_number', { ascending: true });
+          
+        if (moveAnnotationsError) throw moveAnnotationsError;
+        
+        enhancedData.forEach((annotation: { id: string, move_number: number }) => {
+          // Find corresponding move annotation to get color
+          const moveAnnotation = moveAnnotations?.find((m: MoveAnnotation) => m.move_number === annotation.move_number);
+          
+          if (moveAnnotation) {
+            // Calculate the half-move index based on move number and color
+            // FLIPPED: Black's move at move_number N is at index (N-1)*2
+            // FLIPPED: White's move at move_number N is at index (N-1)*2 + 1
+            const color = moveAnnotation.color;
+            const halfMoveIndex = (annotation.move_number - 1) * 2 + (color === 'white' ? 1 : 0);
+            moveToAnnotationMap.set(halfMoveIndex, annotation.id);
+          }
+        });
+        
         setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
         
         // Get enhanced annotation IDs to fetch tactical motifs
@@ -725,7 +778,7 @@ const AnalyzePage = () => {
                       const isBlunder = annotation?.classification === 'blunder';
                       
                       // Get enhanced annotation ID for this move
-                      const enhancedAnnotationId = moveToEnhancedAnnotationMap.get(index + 1);
+                      const enhancedAnnotationId = moveToEnhancedAnnotationMap.get(index);
                       
                       // Check for tactical motifs
                       const motif = enhancedAnnotationId ? tacticalMotifs.find(
