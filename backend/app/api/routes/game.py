@@ -313,7 +313,13 @@ async def annotate_game(
             fen_before = board.fen()
             try:
                 position_before = await stockfish_service.evaluate_position(fen_before)
-                evaluation_before = position_before["evaluation"]
+                # Convert evaluation to white's perspective if it's black's turn
+                if not board.turn:  # False means it's black's turn
+                    logging.info(f"Move {move_number} ({color}): Converting evaluation_before from {position_before['evaluation']} to {-position_before['evaluation']} (black to move)")
+                    evaluation_before = -position_before["evaluation"]
+                else:
+                    logging.info(f"Move {move_number} ({color}): Keeping evaluation_before as {position_before['evaluation']} (white to move)")
+                    evaluation_before = position_before["evaluation"]
             except Exception as e:
                 logging.error(f"Error evaluating position before move {move_uci}: {str(e)}")
                 raise HTTPException(
@@ -328,7 +334,13 @@ async def annotate_game(
             fen_after = board.fen()
             try:
                 position_after = await stockfish_service.evaluate_position(fen_after)
-                evaluation_after = position_after["evaluation"]
+                # Convert evaluation to white's perspective if it's black's turn
+                if not board.turn:  # False means it's black's turn
+                    logging.info(f"Move {move_number} ({color}) after: Converting evaluation_after from {position_after['evaluation']} to {-position_after['evaluation']} (black to move)")
+                    evaluation_after = -position_after["evaluation"]
+                else:
+                    logging.info(f"Move {move_number} ({color}) after: Keeping evaluation_after as {position_after['evaluation']} (white to move)")
+                    evaluation_after = position_after["evaluation"]
             except Exception as e:
                 logging.error(f"Error evaluating position after move {move_uci}: {str(e)}")
                 raise HTTPException(
@@ -336,16 +348,20 @@ async def annotate_game(
                     detail=f"Engine error during position evaluation: {str(e)}"
                 )
             
-            # Calculate evaluation change (from the perspective of the player making the move)
-            if color == "black":
-                # For black, a positive change means the position got better for black
-                evaluation_change = -evaluation_after - (-evaluation_before)
-            else:
-                # For white, a positive change means the position got better for white
-                evaluation_change = evaluation_after - evaluation_before
+            # Calculate evaluation change (always from white's perspective for storage)
+            evaluation_change = evaluation_after - evaluation_before
+            logging.info(f"Move {move_number} ({color}): Evaluation change from {evaluation_before} to {evaluation_after} = {evaluation_change} (white's perspective)")
             
-            # Classify the move based on evaluation change
-            classification = classify_move(evaluation_change)
+            # For classification, adjust based on whose move it was
+            if color == "black":
+                classification_change = -evaluation_change  # Negate for black's perspective
+                logging.info(f"Move {move_number} ({color}): Classification change = {classification_change} (black's perspective)")
+            else:
+                classification_change = evaluation_change
+                logging.info(f"Move {move_number} ({color}): Classification change = {classification_change} (white's perspective)")
+            
+            # Classify the move based on the player's perspective change
+            classification = classify_move(classification_change)
             
             # Check if this was the best move
             is_best_move = position_before.get("best_move") == move_uci
