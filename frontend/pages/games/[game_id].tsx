@@ -20,10 +20,12 @@ interface GameData {
   game_date?: string;
   user_color?: 'white' | 'black';
   analyzed: boolean;
+  enhanced_analyzed: boolean;
 }
 
-interface MoveAnnotation {
+interface EnhancedMoveAnnotation {
   id: string;
+  game_id: string;
   move_number: number;
   move_san: string;
   move_uci: string;
@@ -36,6 +38,7 @@ interface MoveAnnotation {
   classification: string;
   is_best_move: boolean;
   is_book_move: boolean;
+  analysis_depth: number;
 }
 
 interface TacticalMotif {
@@ -62,7 +65,7 @@ const AnalyzePage = () => {
   // Evaluation state
   const [evaluation, setEvaluation] = useState<number | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
-  const [moveAnnotations, setMoveAnnotations] = useState<MoveAnnotation[]>([]);
+  const [enhancedMoveAnnotations, setEnhancedMoveAnnotations] = useState<EnhancedMoveAnnotation[]>([]);
   const [isDeepAnalyzing, setIsDeepAnalyzing] = useState(false);
   const [hasEnhancedAnalysis, setHasEnhancedAnalysis] = useState(false);
   const [tacticalMotifs, setTacticalMotifs] = useState<TacticalMotif[]>([]);
@@ -76,28 +79,41 @@ const AnalyzePage = () => {
   // Chess.js instance for move parsing
   const chessRef = useRef(new Chess('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'));
   
-  // Fetch move annotations for the current game
+  // Fetch enhanced move annotations for the current game
   useEffect(() => {
-    const fetchMoveAnnotations = async () => {
-      if (!gameData?.id || !session?.user?.id || !gameData.analyzed) return;
+    const fetchEnhancedMoveAnnotations = async () => {
+      if (!gameData?.id || !session?.user?.id || !gameData.enhanced_analyzed) return;
       
       try {
         const { data, error } = await supabase
-          .from('move_annotations')
+          .from('enhanced_move_annotations')
           .select('*')
           .eq('game_id', gameData.id)
           .order('move_number', { ascending: true });
           
         if (error) throw error;
         
-        setMoveAnnotations(data || []);
+        setEnhancedMoveAnnotations(data || []);
+        
+        // Create mapping of move indexes to enhanced annotation IDs
+        if (data && data.length > 0) {
+          const moveToAnnotationMap = new Map<number, string>();
+          
+          data.forEach((annotation: EnhancedMoveAnnotation) => {
+            const color = annotation.color;
+            const halfMoveIndex = (annotation.move_number - 1) * 2 + (color === 'white' ? 0 : 1);
+            moveToAnnotationMap.set(halfMoveIndex, annotation.id);
+          });
+          
+          setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
+        }
       } catch (error) {
-        console.error('Error fetching move annotations:', error);
+        console.error('Error fetching enhanced move annotations:', error);
       }
     };
     
-    fetchMoveAnnotations();
-  }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+    fetchEnhancedMoveAnnotations();
+  }, [gameData?.id, gameData?.enhanced_analyzed, session?.user?.id, supabase]);
   
   // Fetch tactical motifs for the current game
   useEffect(() => {
@@ -108,7 +124,7 @@ const AnalyzePage = () => {
         // First get all enhanced move annotation IDs for this game
         const { data: enhancedAnnotationData, error: enhancedAnnotationError } = await supabase
           .from('enhanced_move_annotations')
-          .select('id, move_number')
+          .select('id, move_number, color')
           .eq('game_id', gameData.id);
           
         if (enhancedAnnotationError) throw enhancedAnnotationError;
@@ -121,40 +137,14 @@ const AnalyzePage = () => {
         // Get annotation IDs as an array
         const enhancedAnnotationIds = enhancedAnnotationData.map((a: { id: string }) => a.id);
         
-        // Create a map that properly handles half-move indices - since we don't have color,
-        // we need to use a different approach to map annotations to moves
+        // Create a map that properly handles half-move indices
         const moveToAnnotationMap = new Map<number, string>();
         
-        // Define type for move annotations
-        type MoveAnnotation = {
-          move_number: number;
-          color: string;
-        };
-        
-        // Fetch corresponding move annotations to determine colors
-        const { data: moveAnnotations, error: moveAnnotationsError } = await supabase
-          .from('move_annotations')
-          .select('move_number, color')
-          .eq('game_id', gameData.id)
-          .order('move_number', { ascending: true });
-          
-        if (moveAnnotationsError) throw moveAnnotationsError;
-        
         // Create mapping of move number to index in the moves array
-        enhancedAnnotationData.forEach((annotation: { id: string, move_number: number }) => {
-          // Find corresponding move annotation to get color
-          const moveAnnotation = moveAnnotations?.find((m: MoveAnnotation) => m.move_number === annotation.move_number);
-          
-          if (moveAnnotation) {
-            // Calculate the half-move index based on move number and color
-            // FLIPPED: Black's move at move_number N is at index (N-1)*2
-            // FLIPPED: White's move at move_number N is at index (N-1)*2 + 1
-            const color = moveAnnotation.color;
-            const halfMoveIndex = (annotation.move_number - 1) * 2 + (color === 'white' ? 1 : 0);
-            moveToAnnotationMap.set(halfMoveIndex, annotation.id);
-          } else {
-            console.warn(`No move annotation found for move number ${annotation.move_number}`);
-          }
+        enhancedAnnotationData.forEach((annotation: { id: string, move_number: number, color: string }) => {
+          // Calculate the half-move index based on move number and color
+          const halfMoveIndex = (annotation.move_number - 1) * 2 + (annotation.color === 'white' ? 0 : 1);
+          moveToAnnotationMap.set(halfMoveIndex, annotation.id);
         });
         
         // Then fetch tactical motifs for these annotation IDs
@@ -201,8 +191,8 @@ const AnalyzePage = () => {
   
   // Set evaluation based on position and annotations when position changes
   useEffect(() => {
-    // If the game hasn't been analyzed, don't try to display evaluations
-    if (!gameData?.analyzed || !currentFen) {
+    // If the game hasn't been enhanced analyzed, don't try to display evaluations
+    if (!gameData?.enhanced_analyzed || !currentFen) {
       setEvaluation(null);
       return;
     }
@@ -211,15 +201,20 @@ const AnalyzePage = () => {
     let currentAnnotation = null;
     
     // Special case for starting position (moveIndex = -1)
-    if (moveIndex === -1 && moveAnnotations.length > 0) {
-      currentAnnotation = moveAnnotations[0];
-      setEvaluation(currentAnnotation.evaluation_before);
+    if (moveIndex === -1 && enhancedMoveAnnotations.length > 0) {
+      currentAnnotation = enhancedMoveAnnotations.find(a => a.move_number === 1 && a.color === 'white');
+      if (currentAnnotation) {
+        setEvaluation(currentAnnotation.evaluation_before);
+      } else {
+        setEvaluation(null);
+      }
       return;
     }
     
-    // For any other position, find the annotation by FEN
-    if (moveIndex >= 0 && moveIndex < moveAnnotations.length) {
-      currentAnnotation = moveAnnotations[moveIndex];
+    // For any other position, find the annotation by move index
+    const annotationId = moveToEnhancedAnnotationMap.get(moveIndex);
+    if (annotationId) {
+      currentAnnotation = enhancedMoveAnnotations.find(a => a.id === annotationId);
       
       if (currentAnnotation) {
         // Use evaluation_after since we're viewing the position after the move
@@ -230,7 +225,7 @@ const AnalyzePage = () => {
     } else {
       setEvaluation(null);
     }
-  }, [currentFen, moveIndex, moveAnnotations, gameData?.analyzed]);
+  }, [currentFen, moveIndex, enhancedMoveAnnotations, moveToEnhancedAnnotationMap, gameData?.enhanced_analyzed]);
   
   // Fetch game data when component mounts or game_id changes
   useEffect(() => {
@@ -336,6 +331,39 @@ const AnalyzePage = () => {
   const goToNextMove = () => goToMove(moveIndex + 1);
   const goToEnd = () => goToMove(moves.length - 1);
   
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle navigation keys when not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          goToPrevMove();
+          break;
+        case 'ArrowRight':
+          goToNextMove();
+          break;
+        case 'ArrowUp':
+          goToStart();
+          break;
+        case 'ArrowDown':
+          goToEnd();
+          break;
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [moveIndex, moves.length]); // Include dependencies for the navigation functions
+  
   // Format move number (e.g., "1." for white's first move)
   const formatMoveNumber = (index: number) => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
@@ -422,60 +450,35 @@ const AnalyzePage = () => {
       setIsDeepAnalyzing(true);
       const data = await gameApi.post(`/analysis/${gameData.id}/enhanced-annotate`);
       
-      // Refresh the move annotations after analysis is complete
-      const { data: annotationsData, error } = await supabase
-        .from('move_annotations')
+      // Refresh the enhanced move annotations after analysis is complete
+      const { data: enhancedData, error } = await supabase
+        .from('enhanced_move_annotations')
         .select('*')
         .eq('game_id', gameData.id)
         .order('move_number', { ascending: true });
         
       if (error) throw error;
-      setMoveAnnotations(annotationsData || []);
+      setEnhancedMoveAnnotations(enhancedData || []);
       
       // Update the game's analyzed state
-      setGameData(prev => prev ? {...prev, analyzed: true} : null);
+      setGameData(prev => prev ? {...prev, analyzed: true, enhanced_analyzed: true} : null);
       
       // Check for enhanced annotations
-      const { data: enhancedData, error: enhancedError, count } = await supabase
+      const { count } = await supabase
         .from('enhanced_move_annotations')
-        .select('*', { count: 'exact' })
+        .select('*', { count: 'exact', head: true })
         .eq('game_id', gameData.id);
         
-      if (enhancedError) throw enhancedError;
-      
       setHasEnhancedAnalysis(!!count && count > 0);
       
       if (enhancedData && enhancedData.length > 0) {
         // Create a map that properly handles half-move indices
         const moveToAnnotationMap = new Map<number, string>();
         
-        // Define type for move annotations
-        type MoveAnnotation = {
-          move_number: number;
-          color: string;
-        };
-        
-        // Get the move annotations to determine colors
-        const { data: moveAnnotations, error: moveAnnotationsError } = await supabase
-          .from('move_annotations')
-          .select('move_number, color')
-          .eq('game_id', gameData.id)
-          .order('move_number', { ascending: true });
-          
-        if (moveAnnotationsError) throw moveAnnotationsError;
-        
-        enhancedData.forEach((annotation: { id: string, move_number: number }) => {
-          // Find corresponding move annotation to get color
-          const moveAnnotation = moveAnnotations?.find((m: MoveAnnotation) => m.move_number === annotation.move_number);
-          
-          if (moveAnnotation) {
-            // Calculate the half-move index based on move number and color
-            // FLIPPED: Black's move at move_number N is at index (N-1)*2
-            // FLIPPED: White's move at move_number N is at index (N-1)*2 + 1
-            const color = moveAnnotation.color;
-            const halfMoveIndex = (annotation.move_number - 1) * 2 + (color === 'white' ? 1 : 0);
-            moveToAnnotationMap.set(halfMoveIndex, annotation.id);
-          }
+        enhancedData.forEach((annotation: EnhancedMoveAnnotation) => {
+          // Calculate the half-move index based on move number and color
+          const halfMoveIndex = (annotation.move_number - 1) * 2 + (annotation.color === 'white' ? 0 : 1);
+          moveToAnnotationMap.set(halfMoveIndex, annotation.id);
         });
         
         setMoveToEnhancedAnnotationMap(moveToAnnotationMap);
@@ -548,8 +551,8 @@ const AnalyzePage = () => {
                 </div>
               </div>
               
-              {/* Evaluation bar - only display if game has been analyzed */}
-              {gameData?.analyzed && (
+              {/* Evaluation bar - only display if game has been enhanced analyzed */}
+              {gameData?.enhanced_analyzed && (
                 <div 
                   className="absolute top-0 bottom-0 w-8 flex flex-col z-10"
                   style={{ 
@@ -728,12 +731,12 @@ const AnalyzePage = () => {
                     )}
                   </span>
                 </div>
-                {!gameData?.analyzed && (
+                {!gameData?.enhanced_analyzed && (
                   <div className="flex items-center mt-3 py-2 px-3 bg-amber-900/30 rounded-md border border-amber-800/50">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <span className="text-amber-400 text-xs">This game hasn't been analyzed yet.</span>
+                    <span className="text-amber-400 text-xs">This game hasn't been enhanced analyzed yet.</span>
                   </div>
                 )}
                 
@@ -770,15 +773,15 @@ const AnalyzePage = () => {
                 >
                   <div className="grid grid-cols-2 gap-1.5">
                     {moves.map((move, index) => {
-                      // Get corresponding move annotation if available
-                      const annotation = gameData?.analyzed && moveAnnotations.length > index ? 
-                        moveAnnotations[index] : null;
-                      
-                      // Only detect blunders
-                      const isBlunder = annotation?.classification === 'blunder';
-                      
                       // Get enhanced annotation ID for this move
                       const enhancedAnnotationId = moveToEnhancedAnnotationMap.get(index);
+                      
+                      // Find the enhanced annotation for this move
+                      const enhancedAnnotation = enhancedAnnotationId ? 
+                        enhancedMoveAnnotations.find(a => a.id === enhancedAnnotationId) : null;
+                      
+                      // Only detect blunders
+                      const isBlunder = enhancedAnnotation?.classification === 'blunder';
                       
                       // Check for tactical motifs
                       const motif = enhancedAnnotationId ? tacticalMotifs.find(
