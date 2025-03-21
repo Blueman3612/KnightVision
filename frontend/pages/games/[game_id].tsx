@@ -331,6 +331,39 @@ const AnalyzePage = () => {
   const goToNextMove = () => goToMove(moveIndex + 1);
   const goToEnd = () => goToMove(moves.length - 1);
   
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle navigation keys when not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+          goToPrevMove();
+          break;
+        case 'ArrowRight':
+          goToNextMove();
+          break;
+        case 'ArrowUp':
+          goToStart();
+          break;
+        case 'ArrowDown':
+          goToEnd();
+          break;
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [moveIndex, moves.length]); // Include dependencies for the navigation functions
+  
   // Format move number (e.g., "1." for white's first move)
   const formatMoveNumber = (index: number) => {
     return `${Math.floor(index / 2) + 1}${index % 2 === 0 ? '.' : '...'}`;
