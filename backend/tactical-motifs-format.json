@@ -1,0 +1,222 @@
+[
+  {
+    "id": "e23a0f23-d76b-44bd-9c08-20ae058a9939",
+    "annotation_id": "b2c92c8b-16a0-441e-97e5-ac402d713b9a",
+    "motif_type": "fork",
+    "piece": "n",
+    "piece_square": "d4",
+    "targets": [
+      "b3",
+      "f3"
+    ],
+    "move": "f5d4",
+    "description": "n fork from d4 targeting B on b3, Q on f3",
+    "created_at": "2025-03-21 15:06:01.3717+00"
+  },
+  {
+    "id": "44dbb32e-41d4-4737-b718-187d1c756912",
+    "annotation_id": "30430d4e-e5da-49de-b198-c83c18fb60d3",
+    "motif_type": "fork",
+    "piece": "Q",
+    "piece_square": "g7",
+    "targets": [
+      "f6",
+      "h8"
+    ],
+    "move": "g4g7",
+    "description": "Q fork from g7 targeting p on f6, r on h8",
+    "created_at": "2025-03-21 15:06:02.508074+00"
+  },
+  {
+    "id": "ba6f8e8d-1328-4250-acdd-7a0189f7529f",
+    "annotation_id": "2c41c671-d359-4f74-8382-32abe765c547",
+    "motif_type": "pin",
+    "piece": "Q",
+    "piece_square": "h8",
+    "targets": [
+      "h7"
+    ],
+    "move": "g7h8",
+    "description": "Q creates pin(s) from h8: p on h7 pinned to P on h2",
+    "created_at": "2025-03-21 15:06:02.746158+00"
+  },
+  {
+    "id": "615165dd-f335-4688-9a52-bfae56ee5c42",
+    "annotation_id": "3e4375b8-5841-429d-8972-a2913c0d60f0",
+    "motif_type": "fork",
+    "piece": "n",
+    "piece_square": "e4",
+    "targets": [
+      "d2",
+      "f2"
+    ],
+    "move": "f6e4",
+    "description": "n fork from e4 targeting K on d2, P on f2",
+    "created_at": "2025-03-21 15:11:40.673747+00"
+  },
+  {
+    "id": "895fa6cf-27d9-45fd-b320-2cf88fe26e49",
+    "annotation_id": "c9e18132-cd9a-4950-bcf8-0bcfd84727db",
+    "motif_type": "pin",
+    "piece": "r",
+    "piece_square": "e7",
+    "targets": [
+      "e5"
+    ],
+    "move": "e8e7",
+    "description": "r creates pin(s) from e7: N on e5 pinned to n on e4",
+    "created_at": "2025-03-21 15:11:41.069779+00"
+  },
+  {
+    "id": "47485427-04e3-4de8-b5dc-1d7964fc4899",
+    "annotation_id": "625d5f98-2241-40f4-891f-f8150c070136",
+    "motif_type": "fork",
+    "piece": "N",
+    "piece_square": "c6",
+    "targets": [
+      "a7",
+      "e7"
+    ],
+    "move": "e5c6",
+    "description": "N fork from c6 targeting p on a7, r on e7",
+    "created_at": "2025-03-21 15:11:41.255505+00"
+  },
+  {
+    "id": "e1025b1c-4f81-4f1e-acff-688d5bf7dd0c",
+    "annotation_id": "abb7167b-27dd-48fc-bbf7-359bdf0d272a",
+    "motif_type": "fork",
+    "piece": "N",
+    "piece_square": "d8",
+    "targets": [
+      "e6",
+      "f7"
+    ],
+    "move": "c6d8",
+    "description": "N fork from d8 targeting r on e6, p on f7",
+    "created_at": "2025-03-21 15:11:41.72466+00"
+  },
+  {
+    "id": "48a21ce9-6771-4356-a9ef-a1f6c504a146",
+    "annotation_id": "a15181a9-29fd-4a22-9824-16fec07d338c",
+    "motif_type": "pin",
+    "piece": "r",
+    "piece_square": "e8",
+    "targets": [
+      "d8"
+    ],
+    "move": "e6e8",
+    "description": "r creates pin(s) from e8: N on d8 pinned to b on c8",
+    "created_at": "2025-03-21 15:11:41.889611+00"
+  },
+  {
+    "id": "61312048-30ab-4d4e-89a8-bfe343dc9222",
+    "annotation_id": "da0fe97a-9e97-4dd0-bff8-fb5d2de4420f",
+    "motif_type": "pin",
+    "piece": "b",
+    "piece_square": "b7",
+    "targets": [
+      "c6"
+    ],
+    "move": "c8b7",
+    "description": "b creates pin(s) from b7: N on c6 pinned to p on d5",
+    "created_at": "2025-03-21 15:11:42.141738+00"
+  },
+  {
+    "id": "2a13a36c-0bc6-421c-9fb4-971b78de00bd",
+    "annotation_id": "ade1fa57-2a65-4b05-87c5-949ff969c3ff",
+    "motif_type": "fork",
+    "piece": "B",
+    "piece_square": "c6",
+    "targets": [
+      "d5",
+      "d7",
+      "a8"
+    ],
+    "move": "b5c6",
+    "description": "B fork from c6 targeting p on d5, n on d7, r on a8",
+    "created_at": "2025-03-21 15:11:42.490281+00"
+  },
+  {
+    "id": "6941a634-bc6b-4674-8ded-dce100c1cae5",
+    "annotation_id": "4a952542-f3dd-4bc4-b729-e59f2dc8e25e",
+    "motif_type": "pin",
+    "piece": "B",
+    "piece_square": "d5",
+    "targets": [
+      "e4"
+    ],
+    "move": "c6d5",
+    "description": "B creates pin(s) from d5: n on e4 pinned to P on f3",
+    "created_at": "2025-03-21 15:11:42.733293+00"
+  },
+  {
+    "id": "eb2dcefe-d6d4-4706-8f2c-ecb578bf7d93",
+    "annotation_id": "91b1fee7-94f9-4149-a338-de2e0e13b92c",
+    "motif_type": "fork",
+    "piece": "B",
+    "piece_square": "c7",
+    "targets": [
+      "b6",
+      "d8"
+    ],
+    "move": "f4c7",
+    "description": "B fork from c7 targeting n on b6, r on d8",
+    "created_at": "2025-03-21 15:11:43.647341+00"
+  },
+  {
+    "id": "b538cdf8-ce8a-4fff-9489-9f2bef1d403d",
+    "annotation_id": "9ed638fa-dbc1-4b8e-8e80-23f2b198e474",
+    "motif_type": "fork",
+    "piece": "n",
+    "piece_square": "d6",
+    "targets": [
+      "e4",
+      "f5",
+      "f7"
+    ],
+    "move": "c4d6",
+    "description": "n fork from d6 targeting P on e4, P on f5, B on f7",
+    "created_at": "2025-03-21 15:11:46.454316+00"
+  },
+  {
+    "id": "8a779564-4c00-428d-bb37-b1c96a9f90c7",
+    "annotation_id": "8d87464d-0f36-4316-b4d3-15796d815e80",
+    "motif_type": "fork",
+    "piece": "P",
+    "piece_square": "f6",
+    "targets": [
+      "e5",
+      "g5"
+    ],
+    "move": "f5f6",
+    "description": "P fork from f6 targeting p on e5, p on g5",
+    "created_at": "2025-03-21 15:11:47.13196+00"
+  },
+  {
+    "id": "e8ceb567-8545-464b-953e-beb964448eec",
+    "annotation_id": "c1b5ac8d-78f1-486a-91c4-a6a9ce12ea33",
+    "motif_type": "fork",
+    "piece": "n",
+    "piece_square": "e6",
+    "targets": [
+      "c5",
+      "f8"
+    ],
+    "move": "d4e6",
+    "description": "n fork from e6 targeting K on c5, Q on f8",
+    "created_at": "2025-03-21 15:11:47.800946+00"
+  },
+  {
+    "id": "14d32328-8ecb-4cf6-8839-2aa136e077f7",
+    "annotation_id": "d8393aad-e747-40d2-b98a-ff49e51d02d7",
+    "motif_type": "pin",
+    "piece": "q",
+    "piece_square": "f4",
+    "targets": [
+      "g4"
+    ],
+    "move": "c1f4",
+    "description": "q creates pin(s) from f4: P on g4 pinned to p on h4",
+    "created_at": "2025-03-21 15:11:49.332402+00"
+  }
+]

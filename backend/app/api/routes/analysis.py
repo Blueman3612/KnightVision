@@ -285,12 +285,17 @@ async def enhanced_annotate_game(
                 else:
                     move_improvement = annotation.move_improvement or ""
                 
+                # Determine the color of the player making this move
+                board = chess.Board(annotation.fen_before)
+                color = "white" if board.turn == chess.WHITE else "black"
+                
                 # Convert annotation to dictionary for storage
                 annotation_dict = {
                     "game_id": game_id,
                     "move_uci": annotation.move_uci,
                     "move_san": annotation.move_san,
                     "move_number": annotation.move_number,
+                    "color": color,
                     "fen_before": annotation.fen_before,
                     "fen_after": annotation.fen_after,
                     "evaluation_before": annotation.evaluation_before,
