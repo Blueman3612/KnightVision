@@ -463,7 +463,7 @@ class StockfishService:
                 temp_board.push(move)
 
                 # Evaluate with engine from pool
-                task = self.evaluate_position(temp_board.fen(), None, j + 1)
+                task = self.evaluate_position(temp_board.fen(), 12, j + 1)
                 tasks.append((move, task))
 
             # Process this batch
