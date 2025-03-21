@@ -1,9 +1,10 @@
-from supabase import create_client, Client
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import os
 import logging
+import os
 from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from supabase import Client, create_client
 
 from app.core.config import settings
 
@@ -12,10 +13,11 @@ logger = logging.getLogger(__name__)
 # Security scheme for JWT authentication
 security = HTTPBearer()
 
+
 def get_supabase_client() -> Client:
     """
     Get a Supabase client instance.
-    
+
     Returns:
         Client: Supabase client
     """
@@ -25,23 +27,26 @@ def get_supabase_client() -> Client:
         logger.error(f"Failed to create Supabase client: {str(e)}")
         raise RuntimeError(f"Failed to create Supabase client: {str(e)}")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> str:
     """
     Get the current authenticated user from the JWT token.
-    
+
     Args:
         credentials: HTTP Authorization credentials
-        
+
     Returns:
         str: User ID
     """
     token = credentials.credentials
     supabase = get_supabase_client()
-    
+
     try:
         # Verify the token and get user data
         response = supabase.auth.get_user(token)
-        
+
         if response and response.user:
             return response.user.id
         else:
@@ -56,4 +61,4 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
-        ) 
+        )

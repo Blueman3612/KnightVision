@@ -8,8 +8,8 @@
 - Local development server: `python -m uvicorn app.main:app --reload`
 - Format code: `black .`
 - Sort imports: `isort .`
-- Type check: `mypy .`
-- Lint code: `black . && isort . && mypy .`
+- Type check: `mypy --ignore-missing-imports .`
+- Lint code: `black . && isort . && mypy --ignore-missing-imports .`
 
 ## Code Style Guidelines
 - PEP 8 compliant with Black formatter (version 23.3.0)
@@ -24,4 +24,4 @@
 
 ## Project Structure
 FastAPI application for chess analysis with Stockfish integration.
-Standard evaluation depth of 12 used across all position analysis for consistency.
+Standard evaluation depth of 20 used across all position analysis for consistency.

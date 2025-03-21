@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
 import os
-from dotenv import load_dotenv
 
-from app.api.routes import game, user, auth, health, analysis
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes import analysis, auth, game, health, user
 from app.core.config import settings
 
 # Load environment variables
@@ -33,7 +34,8 @@ app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(game.router, prefix="/games", tags=["Games"])
 app.include_router(analysis.router, prefix="/analysis", tags=["Analysis"])
 
+
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint for the Chess Tutor API."""
-    return {"message": "Welcome to the Chess Tutor API!"} 
+    return {"message": "Welcome to the Chess Tutor API!"}
