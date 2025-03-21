@@ -302,8 +302,14 @@ class TacticsService:
             if len(valid_targets) >= 2:
                 # We have a fork - create detailed description
                 target_descriptions = []
+                valid_target_squares = []  # Keep track of squares with valid targets
+
                 for target_square in valid_targets:
                     target_piece = board_after.piece_at(target_square)
+                    if not target_piece:
+                        # Skip if somehow there's no piece (shouldn't happen, but just in case)
+                        continue
+
                     piece_symbol = (
                         target_piece.symbol().upper()
                         if target_piece.color == chess.WHITE
@@ -312,6 +318,11 @@ class TacticsService:
                     target_descriptions.append(
                         f"{piece_symbol} on {chess.square_name(target_square)}"
                     )
+                    valid_target_squares.append(target_square)
+
+                # Make sure we still have at least 2 valid targets
+                if len(valid_target_squares) < 2:
+                    return None
 
                 piece_symbol = (
                     piece.symbol().upper()
@@ -323,7 +334,7 @@ class TacticsService:
                     motif_type="fork",
                     piece=piece_symbol,
                     piece_square=chess.square_name(move.to_square),
-                    targets=[chess.square_name(sq) for sq in valid_targets],
+                    targets=[chess.square_name(sq) for sq in valid_target_squares],
                     move=move.uci(),
                     description=f"{piece_symbol} fork from {chess.square_name(move.to_square)} targeting {', '.join(target_descriptions)}",
                 )
@@ -477,18 +488,18 @@ class TacticsService:
                     valuable_value = PIECE_VALUES[valuable_piece.piece_type]
 
                     # For a pin:
-                    # - Pinned piece must have fewer legal moves than before
-                    # - Pinned piece cannot take the pinner
-                    # - Valuable piece must be more valuable than pinned piece
-                    # - Pinned piece value <= pinner piece value
+                    # - Pinned piece cannot take the pinner (essential)
+                    # - There is a valuable piece behind the pinned piece
+                    # - Either the pinned piece has fewer legal moves OR
+                    # - The valuable piece is more valuable than the pinned piece
 
                     is_pin = (
-                        moves_after < moves_before  # Fewer legal moves
-                        and not can_take_pinner  # Cannot take pinner
-                        and valuable_value
-                        > pinned_value  # Valuable piece is more valuable
-                        and pinned_value
-                        <= pinner_value  # Classic pin material relationship
+                        not can_take_pinner  # Cannot take pinner (essential)
+                        and valuable_value > 0  # There is something behind
+                        and (
+                            moves_after < moves_before  # Fewer legal moves
+                            or valuable_value > pinned_value  # Valuable piece is more valuable
+                        )
                     )
 
                     if is_pin:
@@ -502,11 +513,18 @@ class TacticsService:
             if pinned_pieces:
                 target_descriptions = []
 
+                valid_pins = []
+                valid_targets = []
+
                 for pinned_square, valuable_square in zip(
                     pinned_pieces, valuable_pieces_behind
                 ):
                     pinned_piece = board_after.piece_at(pinned_square)
                     valuable_piece = board_after.piece_at(valuable_square)
+
+                    # Make sure both pieces exist
+                    if not pinned_piece or not valuable_piece:
+                        continue
 
                     pinned_symbol = (
                         pinned_piece.symbol().upper()
@@ -523,6 +541,14 @@ class TacticsService:
                         f"{pinned_symbol} on {chess.square_name(pinned_square)} pinned to {valuable_symbol} on {chess.square_name(valuable_square)}"
                     )
 
+                    # Keep track of valid pins
+                    valid_pins.append((pinned_square, valuable_square))
+                    valid_targets.append(pinned_square)
+
+                # Make sure we still have at least one valid pin
+                if not valid_pins:
+                    return None
+
                 piece_symbol = (
                     piece.symbol().upper()
                     if piece.color == chess.WHITE
@@ -533,7 +559,7 @@ class TacticsService:
                     motif_type="pin",
                     piece=piece_symbol,
                     piece_square=chess.square_name(move.to_square),
-                    targets=[chess.square_name(sq) for sq in pinned_pieces],
+                    targets=[chess.square_name(sq) for sq in valid_targets],
                     move=move.uci(),
                     description=f"{piece_symbol} creates pin(s) from {chess.square_name(move.to_square)}: {'; '.join(target_descriptions)}",
                 )
@@ -705,21 +731,20 @@ class TacticsService:
                     behind_value = PIECE_VALUES[behind_piece.piece_type]
 
                     # For a skewer:
-                    # - First piece must have fewer legal moves than before
-                    # - The skewered piece CAN take the attacker
-                    # - The skewered piece has no good moves to squares not controlled by attacker
-                    # - Skewered piece is more valuable than the attacker
+                    # - The skewered piece CAN take the attacker (essential)
+                    # - There is a piece behind to be attacked (essential)
+                    # - Either the skewered piece has fewer legal moves OR
+                    # - The skewered piece is more valuable than the attacker OR
+                    # - The piece behind has value (can be captured after the skewered piece moves)
 
                     is_skewer = (
-                        moves_after < moves_before  # Fewer legal moves
-                        and can_take_attacker  # Can take the attacker
+                        can_take_attacker  # Can take the attacker (essential)
+                        and behind_value > 0  # There is something behind
                         and (
-                            moves_to_safety == 0 or moves_to_safety < moves_before
-                        )  # Few or no safe moves
-                        and skewered_value
-                        > attacker_value  # Skewered piece is more valuable
-                        and behind_value
-                        < skewered_value  # Piece behind is less valuable
+                            moves_after < moves_before  # Fewer legal moves
+                            or skewered_value > attacker_value  # Skewered piece is more valuable
+                            or behind_value < skewered_value  # Behind piece is less valuable
+                        )
                     )
 
                     if is_skewer:
@@ -732,12 +757,18 @@ class TacticsService:
             # Create tactical motif for all detected skewers
             if skewered_pieces:
                 target_descriptions = []
+                valid_skewers = []
+                valid_targets = []
 
                 for skewered_square, behind_square in zip(
                     skewered_pieces, pieces_behind
                 ):
                     skewered_piece = board_after.piece_at(skewered_square)
                     behind_piece = board_after.piece_at(behind_square)
+
+                    # Make sure both pieces exist
+                    if not skewered_piece or not behind_piece:
+                        continue
 
                     skewered_symbol = (
                         skewered_piece.symbol().upper()
@@ -754,6 +785,14 @@ class TacticsService:
                         f"{skewered_symbol} on {chess.square_name(skewered_square)} skewered with {behind_symbol} on {chess.square_name(behind_square)}"
                     )
 
+                    # Keep track of valid skewers
+                    valid_skewers.append((skewered_square, behind_square))
+                    valid_targets.append(skewered_square)
+
+                # Make sure we still have at least one valid skewer
+                if not valid_skewers:
+                    return None
+
                 piece_symbol = (
                     piece.symbol().upper()
                     if piece.color == chess.WHITE
@@ -764,7 +803,7 @@ class TacticsService:
                     motif_type="skewer",
                     piece=piece_symbol,
                     piece_square=chess.square_name(move.to_square),
-                    targets=[chess.square_name(sq) for sq in skewered_pieces],
+                    targets=[chess.square_name(sq) for sq in valid_targets],
                     move=move.uci(),
                     description=f"{piece_symbol} creates skewer(s) from {chess.square_name(move.to_square)}: {'; '.join(target_descriptions)}",
                 )
@@ -893,36 +932,44 @@ class TacticsService:
                             checker_square = square
                             break
 
-                if checker_piece:
+                if checker_piece and checker_square:
                     # Get descriptive info for the tactical motif
                     king_square_name = chess.square_name(king_square)
                     move_uci = move.uci()
                     from_square_name = chess.square_name(move.from_square)
                     to_square_name = chess.square_name(move.to_square)
+                    checker_square_name = chess.square_name(checker_square)
 
-                    piece_symbol = (
-                        piece.symbol().upper()
-                        if piece.color == chess.WHITE
-                        else piece.symbol().lower()
-                    )
-                    checker_symbol = (
-                        checker_piece.symbol().upper()
-                        if checker_piece.color == chess.WHITE
-                        else checker_piece.symbol().lower()
-                    )
+                    try:
+                        piece_symbol = (
+                            piece.symbol().upper()
+                            if piece.color == chess.WHITE
+                            else piece.symbol().lower()
+                        )
+                        checker_symbol = (
+                            checker_piece.symbol().upper()
+                            if checker_piece.color == chess.WHITE
+                            else checker_piece.symbol().lower()
+                        )
 
-                    return TacticalMotif(
-                        motif_type="discovered_check",
-                        piece=piece_symbol,
-                        piece_square=to_square_name,
-                        targets=[king_square_name],
-                        move=move_uci,
-                        description=(
-                            f"{piece_symbol} moves from {from_square_name} to "
-                            f"{to_square_name}, revealing check from "
-                            f"{checker_symbol} on {chess.square_name(checker_square)}"
-                        ),
-                    )
+                        return TacticalMotif(
+                            motif_type="discovered_check",
+                            piece=piece_symbol,
+                            piece_square=to_square_name,
+                            targets=[king_square_name],
+                            move=move_uci,
+                            description=(
+                                f"{piece_symbol} moves from {from_square_name} to "
+                                f"{to_square_name}, revealing check from "
+                                f"{checker_symbol} on {checker_square_name}"
+                            ),
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error creating discovered check description: {e}"
+                        )
+                        # If we can't create the description, don't return the motif
+                        return None
 
             return None
 
@@ -938,9 +985,10 @@ class TacticsService:
         is_best_move: bool = True,
     ) -> List[TacticalMotif]:
         """
-        Analyze a move for tactical patterns. According to best practices, we only
-        identify tactical patterns on Stockfish's best moves, as suboptimal tactical
-        opportunities aren't prioritized for teaching purposes.
+        Analyze a move for tactical patterns and return all detected tactics.
+        According to best practices, we only identify tactical patterns on
+        Stockfish's best moves, as suboptimal tactical opportunities aren't
+        prioritized for teaching purposes.
 
         Args:
             board_before: Board position before move
@@ -949,7 +997,7 @@ class TacticsService:
             is_best_move: Whether this move is Stockfish's recommended best move (default: True)
 
         Returns:
-            List of detected tactical motifs
+            List of all detected tactical motifs
         """
         # If this isn't the best move, we don't analyze it for tactics
         # This follows our updated specification that focuses exclusively on optimal moves
@@ -962,40 +1010,57 @@ class TacticsService:
             control_before = self.calculate_square_control(board_before)
             control_after = self.calculate_square_control(board_after)
 
-            # Check for each tactical pattern
+            # Check for each tactical pattern - accumulate all tactics found
             tactics = []
 
-            # Check for fork
-            fork = self.detect_fork(
-                board_before, board_after, move, control_before, control_after
-            )
+            # IMPORTANT: Detect all tactical motifs, even if one type fails
+            # Each detection function is wrapped in its own try/except block to isolate failures
+
+            # Function to safely detect a tactic and handle exceptions
+            def detect_safely(tactic_type, detection_function):
+                try:
+                    tactic = detection_function(
+                        board_before, board_after, move, control_before, control_after
+                    )
+                    if tactic:
+                        logger.info(
+                            f"{tactic_type.capitalize()} detected in move {move.uci()}"
+                        )
+                        return tactic
+                    return None
+                except Exception as e:
+                    logger.error(f"Error detecting {tactic_type}: {str(e)}")
+                    logger.error(f"Stack trace for {tactic_type} detection error:", exc_info=True)
+                    return None
+
+            # Detect fork
+            fork = detect_safely("fork", self.detect_fork)
             if fork:
-                logger.info(f"Fork detected in move {move.uci()}")
                 tactics.append(fork)
 
-            # Check for pin
-            pin = self.detect_pin(
-                board_before, board_after, move, control_before, control_after
-            )
+            # Detect pin
+            pin = detect_safely("pin", self.detect_pin)
             if pin:
-                logger.info(f"Pin detected in move {move.uci()}")
                 tactics.append(pin)
 
-            # Check for skewer
-            skewer = self.detect_skewer(
-                board_before, board_after, move, control_before, control_after
-            )
+            # Detect skewer
+            skewer = detect_safely("skewer", self.detect_skewer)
             if skewer:
-                logger.info(f"Skewer detected in move {move.uci()}")
                 tactics.append(skewer)
 
-            # Check for discovered check
-            discovered_check = self.detect_discovered_check(
-                board_before, board_after, move, control_before, control_after
+            # Detect discovered check
+            discovered_check = detect_safely(
+                "discovered check", self.detect_discovered_check
             )
             if discovered_check:
-                logger.info(f"Discovered check detected in move {move.uci()}")
                 tactics.append(discovered_check)
+
+            # Log summary of all tactics found
+            if tactics:
+                tactic_types = [t.motif_type for t in tactics]
+                logger.info(
+                    f"Move {move.uci()} has {len(tactics)} tactics: {tactic_types}"
+                )
 
             return tactics
 

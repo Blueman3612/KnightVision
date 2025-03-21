@@ -91,6 +91,8 @@
 - [x] Fix chess.Board.attacks() method compatibility with newer python-chess
 - [x] Fix tactical motif detection with proper attackers() usage
 - [x] Fix discovered check detection algorithm
+- [x] Improve detection of all tactical motifs in a single position
+- [x] Fix defensive error handling in tactic detection to ensure all valid tactics are found
 
 ## Phase 4: Performance Improvements
 

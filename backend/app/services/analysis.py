@@ -374,13 +374,22 @@ class AnalysisService:
 
                 # Detect tactical motifs for this move
                 try:
+                    # Only analyze best moves as determined by Stockfish
                     tactical_motifs = tactics_service.analyze_move_for_tactics(
-                        board_copy_before, board_copy_after, move
+                        board_copy_before, board_copy_after, move, is_best_move=(is_best_move)
                     )
+                    
+                    # Log all detected motifs for debugging
+                    if tactical_motifs:
+                        tactic_types = [t.motif_type for t in tactical_motifs]
+                        logger.info(
+                            f"Move {move_number} ({color}): Detected {len(tactical_motifs)} tactical motifs: {tactic_types}"
+                        )
                 except Exception as e:
                     logger.error(
                         f"Error detecting tactics for move {move_number} {color}: {e}"
                     )
+                    logger.error("Stack trace for tactical analysis error:", exc_info=True)
                     tactical_motifs = []
 
                 # Create move annotation
