@@ -419,13 +419,15 @@ async def annotate_game(
             detail=f"Error annotating game: {str(e)}"
         )
 
+from app.api.routes.analysis import enhanced_annotate_game
+
 @router.post("/process-unannotated", response_model=BatchAnnotationResponse)
 async def process_unannotated_games(
     request: BatchAnnotationRequest,
     user_id: str = Depends(get_current_user)
 ):
     """
-    Process a batch of unannotated games.
+    Process a batch of unannotated games using enhanced analysis.
     
     Args:
         request: Batch processing request with limit
@@ -444,8 +446,8 @@ async def process_unannotated_games(
     supabase = get_supabase_client()
     
     try:
-        # Get unannotated games
-        games_response = supabase.table("games").select("id").eq("analyzed", False).limit(request.limit).execute()
+        # Get games that haven't been enhanced analyzed
+        games_response = supabase.table("games").select("id").eq("enhanced_analyzed", False).limit(request.limit).execute()
         
         if len(games_response.data) == 0:
             return BatchAnnotationResponse(
@@ -461,8 +463,8 @@ async def process_unannotated_games(
             game_id = game_data["id"]
             
             try:
-                # Use the annotate_game endpoint for each game
-                await annotate_game(game_id=game_id, user_id=user_id)
+                # Use the enhanced_annotate_game endpoint for each game
+                await enhanced_annotate_game(game_id=game_id, user_id=user_id)
                 processed_game_ids.append(game_id)
             except HTTPException as e:
                 logging.warning(f"Skipped processing game {game_id}: {e.detail}")
@@ -475,7 +477,7 @@ async def process_unannotated_games(
                 continue
         
         if len(failed_game_ids) > 0:
-            logging.info(f"Batch processing completed with {len(processed_game_ids)} successes and {len(failed_game_ids)} failures")
+            logging.info(f"Batch enhanced analysis completed with {len(processed_game_ids)} successes and {len(failed_game_ids)} failures")
         
         return BatchAnnotationResponse(
             processed_games=len(processed_game_ids),
