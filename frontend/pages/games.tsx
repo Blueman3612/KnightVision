@@ -537,7 +537,6 @@ const GamesPage = () => {
       // Don't trigger again if analysis is already running - just update the UI
       // Allow override with forceRetry for stuck detection
       if (isAnnotationRunning && !forceRetry) {
-        // Remove: console.log('Analysis already running...');
         setTimeout(() => checkAnnotationStatus(), 500);
         return;
       }
@@ -547,11 +546,17 @@ const GamesPage = () => {
       const accessToken = sessionData?.session?.access_token;
       
       if (!accessToken) {
-        // Remove: console.error('No access token available...');
+        console.error('Cannot trigger game analysis: No access token available');
         return;
       }
       
-      // Remove: console.log(forceRetry ? 'Forcing analysis...' : 'Triggering game analysis...');
+      // Verify token is well-formed
+      if (!accessToken.match(/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]*$/)) {
+        console.error('Invalid access token format');
+        return;
+      }
+      
+      console.log(`Triggering game analysis with token: ${accessToken.substring(0, 15)}...`);
       
       // Make sure subscription is active
       if (!subscription || !subscriptionReady) {
@@ -560,22 +565,21 @@ const GamesPage = () => {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       
-      // Call the API
+      // Call the API with explicit token
       try {
         setIsAnnotationRunning(true); // Set as running before API call
         await gameApi.processUnannotatedGames(session.user.id, accessToken, forceRetry);
-        // Remove: console.log('Analysis API call successful');
+        console.log('Analysis API call completed');
       } catch (apiError) {
-        // Remove: console.error('Error calling analysis API:', apiError);
+        console.error('Error calling analysis API:', apiError);
       }
       
       // Force a status check
       setTimeout(() => {
-        // Remove: console.log('Refreshing game status after API call');
         checkAnnotationStatus();
       }, 500);
     } catch (err) {
-      // Remove: console.error('Error triggering game analysis:', err);
+      console.error('Error triggering game analysis:', err);
     }
   };
 

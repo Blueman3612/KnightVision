@@ -39,6 +39,19 @@ const api = axios.create({
 
 // Add request logging and error handling
 api.interceptors.request.use((config: AxiosConfig) => {
+  // Add debug logging for the process-unannotated endpoint
+  if (config.url?.includes('process-unannotated')) {
+    console.log('Outgoing request to process-unannotated:');
+    console.log('- Headers:', JSON.stringify({
+      ...config.headers,
+      // Only show partial auth token for security
+      Authorization: config.headers?.Authorization 
+        ? `${config.headers.Authorization.substring(0, 20)}...` 
+        : undefined
+    }));
+    console.log('- URL:', config.url);
+    console.log('- Method:', config.method);
+  }
   return config;
 });
 
@@ -66,6 +79,11 @@ api.interceptors.response.use(
 api.interceptors.request.use(async (config: AxiosConfig) => {
   // Only run on client side
   if (typeof window !== 'undefined') {
+    // Skip if Authorization header already exists
+    if (config.headers?.Authorization) {
+      return config;
+    }
+    
     try {
       // Try to get the current session token directly from supabase
       // This is the most reliable approach
@@ -157,17 +175,38 @@ export const gameApi = {
       
       // Use provided access token if available
       if (accessToken) {
-        headers['Authorization'] = `Bearer ${accessToken}`;
+        // Ensure token is properly formatted with Bearer prefix
+        headers['Authorization'] = accessToken.startsWith('Bearer ') 
+          ? accessToken 
+          : `Bearer ${accessToken}`;
+        
+        console.log('Using explicit Authorization header:', headers['Authorization'].substring(0, 20) + '...');
+      } else {
+        console.log('No explicit access token provided for processUnannotatedGames');
       }
       
-      const response = await api.post('/games/process-unannotated', 
-        { 
-          user_id: userId,
-          force_retry: forceRetry
-        },
-        { headers }
-      );
-      return response.data;
+      // For this critical endpoint, use a direct fetch call to bypass any interceptor issues
+      try {
+        const response = await fetch(`${apiUrl}/games/process-unannotated`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ 
+            user_id: userId,
+            force_retry: forceRetry
+          })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`API Error: ${response.status}`, errorText);
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        return await response.json();
+      } catch (fetchError) {
+        console.error('❌ Fetch error in processUnannotatedGames:', fetchError);
+        throw fetchError;
+      }
     } catch (error: any) {
       console.error('❌ Error processing unannotated games:', error);
       if (error.response) {
