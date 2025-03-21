@@ -20,6 +20,7 @@ interface GameData {
   game_date?: string;
   user_color?: 'white' | 'black';
   analyzed: boolean;
+  enhanced_analyzed: boolean;
 }
 
 interface EnhancedMoveAnnotation {
@@ -81,7 +82,7 @@ const AnalyzePage = () => {
   // Fetch enhanced move annotations for the current game
   useEffect(() => {
     const fetchEnhancedMoveAnnotations = async () => {
-      if (!gameData?.id || !session?.user?.id || !gameData.analyzed) return;
+      if (!gameData?.id || !session?.user?.id || !gameData.enhanced_analyzed) return;
       
       try {
         const { data, error } = await supabase
@@ -112,7 +113,7 @@ const AnalyzePage = () => {
     };
     
     fetchEnhancedMoveAnnotations();
-  }, [gameData?.id, gameData?.analyzed, session?.user?.id, supabase]);
+  }, [gameData?.id, gameData?.enhanced_analyzed, session?.user?.id, supabase]);
   
   // Fetch tactical motifs for the current game
   useEffect(() => {
@@ -190,8 +191,8 @@ const AnalyzePage = () => {
   
   // Set evaluation based on position and annotations when position changes
   useEffect(() => {
-    // If the game hasn't been analyzed, don't try to display evaluations
-    if (!gameData?.analyzed || !currentFen) {
+    // If the game hasn't been enhanced analyzed, don't try to display evaluations
+    if (!gameData?.enhanced_analyzed || !currentFen) {
       setEvaluation(null);
       return;
     }
@@ -224,7 +225,7 @@ const AnalyzePage = () => {
     } else {
       setEvaluation(null);
     }
-  }, [currentFen, moveIndex, enhancedMoveAnnotations, moveToEnhancedAnnotationMap, gameData?.analyzed]);
+  }, [currentFen, moveIndex, enhancedMoveAnnotations, moveToEnhancedAnnotationMap, gameData?.enhanced_analyzed]);
   
   // Fetch game data when component mounts or game_id changes
   useEffect(() => {
@@ -427,7 +428,7 @@ const AnalyzePage = () => {
       setEnhancedMoveAnnotations(enhancedData || []);
       
       // Update the game's analyzed state
-      setGameData(prev => prev ? {...prev, analyzed: true} : null);
+      setGameData(prev => prev ? {...prev, analyzed: true, enhanced_analyzed: true} : null);
       
       // Check for enhanced annotations
       const { count } = await supabase
@@ -517,8 +518,8 @@ const AnalyzePage = () => {
                 </div>
               </div>
               
-              {/* Evaluation bar - only display if game has been analyzed */}
-              {gameData?.analyzed && (
+              {/* Evaluation bar - only display if game has been enhanced analyzed */}
+              {gameData?.enhanced_analyzed && (
                 <div 
                   className="absolute top-0 bottom-0 w-8 flex flex-col z-10"
                   style={{ 
@@ -697,12 +698,12 @@ const AnalyzePage = () => {
                     )}
                   </span>
                 </div>
-                {!gameData?.analyzed && (
+                {!gameData?.enhanced_analyzed && (
                   <div className="flex items-center mt-3 py-2 px-3 bg-amber-900/30 rounded-md border border-amber-800/50">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-400 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
-                    <span className="text-amber-400 text-xs">This game hasn't been analyzed yet.</span>
+                    <span className="text-amber-400 text-xs">This game hasn't been enhanced analyzed yet.</span>
                   </div>
                 )}
                 
