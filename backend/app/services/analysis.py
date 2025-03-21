@@ -245,6 +245,16 @@ class AnalysisService:
                 # Check if this was the best move
                 is_best_move = position_before.best_move == move_uci if position_before.best_move else False
                 
+                # Get the best move at depth 20
+                best_move_depth20 = None
+                try:
+                    # Calculate best move at depth 20 for the position before the move
+                    best_move_result = await stockfish_service.get_best_move_at_depth(fen_before, 20)
+                    best_move_depth20 = best_move_result["best_move"]
+                    logger.info(f"Move {move_number} ({color}): Best move at depth 20 is {best_move_depth20}")
+                except Exception as e:
+                    logger.error(f"Error calculating best move at depth 20 for move {move_number} {color}: {e}")
+                
                 # Detect tactical motifs for this move
                 try:
                     tactical_motifs = tactics_service.analyze_move_for_tactics(board_copy_before, board_copy_after, move)
@@ -265,6 +275,7 @@ class AnalysisService:
                     classification=classification,
                     is_best_move=is_best_move,
                     is_book_move=False,  # Not implementing book detection yet
+                    best_move=best_move_depth20,  # Best move calculated at depth 20
                     tactical_motifs=tactical_motifs,
                     square_control_before=square_control_before,
                     square_control_after=square_control_after

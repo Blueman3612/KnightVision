@@ -304,6 +304,7 @@ async def enhanced_annotate_game(
                     "classification": annotation.classification,
                     "is_best_move": annotation.is_best_move,
                     "is_book_move": annotation.is_book_move,
+                    "best_move": annotation.best_move,
                     "move_improvement": move_improvement,
                     # Convert square control to JSON
                     "square_control_before": {

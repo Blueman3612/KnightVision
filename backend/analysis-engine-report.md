@@ -58,55 +58,72 @@ This report provides an assessment of the current Knight Vision chess analysis e
 
 ## Implementation Plan
 
-### Phase 1: Core Engine Refactoring
+### Phase 1: Essential Functionality Fixes
 
-1. **Standardize Stockfish Integration**
-   - Implement a proper wrapper using python-chess engine module
+1. **API Route Standardization**
+   - Remove non-functional `/analysis/game` route
+   - Fix database inconsistency in `/analysis/game/{game_id}`
+   - Create a consistent naming convention for all API endpoints
+   - Ensure each endpoint has clear, focused responsibilities
+
+2. **Core Stockfish Integration**
+   - Implement proper wrapper using python-chess engine module
    - Use standardized analysis parameters (depth=12 as defined)
-   - Handle engine lifecycle properly (initialization and cleanup)
+   - Ensure proper engine initialization and cleanup
+   - Verify basic position evaluation is working correctly
 
-2. **NAG Implementation**
+3. **Standard NAG Implementation**
    - Use standard python-chess NAG constants for move annotations
-   - Map evaluation thresholds to appropriate NAG values:
+   - Implement simple threshold-based evaluation to NAG mapping:
      ```python
-     def evaluation_to_nag(prev_eval, current_eval, threshold_map):
+     def evaluation_to_nag(prev_eval, current_eval):
          """Convert evaluation change to appropriate NAG"""
          eval_change = current_eval - prev_eval
-         # Map based on thresholds
-         return appropriate_nag
+         
+         # Simple threshold-based classification
+         if eval_change < -200:
+             return chess.pgn.NAG_BLUNDER
+         elif eval_change < -100:
+             return chess.pgn.NAG_MISTAKE
+         # etc.
      ```
 
-3. **API Route Cleanup**
-   - Remove non-functional `/analysis/game` route
-   - Fix or document the database inconsistency in `/analysis/game/{game_id}`
-   - Standardize API naming conventions and functionality
+4. **Database Integration Fixes**
+   - Fix database write operations for analysis results
+   - Ensure proper relationships between games, moves, and annotations
+   - Add validation to prevent inconsistent data states
 
-### Phase 2: Enhanced Features
+### Phase 2: Feature Completeness
 
-1. **Tactical Detection Improvements**
-   - Refine algorithms for tactical motif detection using python-chess's built-in attack maps
-   - Implement comprehensive test cases with known tactical positions
+1. **Tactical Motif Detection (Only on Stockfish's Best Moves)**
+   - Implement tactics detection that exclusively analyzes Stockfish's best move recommendations
+   - Detect if the best move creates a fork, pin, skewer, or discovered check
+   - Focus only on optimal tactical opportunities identified by Stockfish
+   - Avoid annotating suboptimal tactical possibilities that don't lead to concrete advantages
 
-2. **Square Control Optimization**
-   - Leverage python-chess's attack maps for more efficient implementation
-   - Optimize the calculation of control metrics
+2. **Square Control Analysis**
+   - Implement the 8x8 grid for tracking piece influence
+   - Calculate control metrics for both players
+   - Provide visual representation of control (optional)
 
-3. **Database Integration**
-   - Implement proper database transactions for storing analysis results
-   - Create clear relationships between games, moves, and analysis results
+3. **Player Weakness Analysis**
+   - Categorize mistakes by type (tactical, positional, etc.)
+   - Generate weakness reports based on game analysis
+   - Suggest improvement areas based on detected patterns
 
-### Phase 3: Performance and Scalability
+### Phase 3: Performance and Scalability (After Functionality is Working)
 
 1. **Asynchronous Analysis**
-   - Implement asynchronous analysis for better performance
+   - Convert synchronous operations to asynchronous where appropriate
    - Support batch analysis of multiple positions
 
-2. **Caching System**
+2. **Caching and Optimization**
    - Implement position hash-based caching to avoid redundant analysis
-   - Consider time-based invalidation for cache entries
+   - Optimize heavy calculations for square control metrics
+   - Add incremental updates for position changes
 
 3. **Parallel Processing**
-   - Support multiple Stockfish instances for parallel analysis
+   - Support multiple engine instances for parallel analysis
    - Implement work distribution for analyzing different parts of games
 
 ## Code Implementation Recommendations
@@ -123,6 +140,7 @@ class AnalysisService:
         self.stockfish_path = stockfish_path
         self.evaluation_depth = evaluation_depth
         self.engine = None
+        self.tactics_service = TacticsService()
     
     async def initialize(self):
         """Initialize the Stockfish engine"""
@@ -135,7 +153,28 @@ class AnalysisService:
             board, 
             chess.engine.Limit(depth=self.evaluation_depth)
         )
-        return self._process_analysis_result(board, result)
+        
+        # Get Stockfish's best move
+        best_move = result.get("pv")[0] if "pv" in result and result["pv"] else None
+        
+        analysis_result = self._process_analysis_result(board, result)
+        
+        # Only analyze tactics for Stockfish's best move
+        if best_move:
+            tactics = self._analyze_tactics_for_best_move(board, best_move)
+            analysis_result["tactics"] = tactics
+            
+        return analysis_result
+    
+    def _analyze_tactics_for_best_move(self, board, move):
+        """Analyze if Stockfish's best move creates tactical opportunities"""
+        tactics = {
+            "fork": self.tactics_service.detect_fork(board, move),
+            "pin": self.tactics_service.detect_pin(board, move),
+            "skewer": self.tactics_service.detect_skewer(board, move),
+            "discovered_check": self.tactics_service.detect_discovered_check(board, move)
+        }
+        return tactics
     
     async def analyze_move(self, board, move):
         """Analyze a specific move"""
@@ -229,6 +268,25 @@ class TacticsService:
         # A fork attacks at least two pieces
         return attacked_pieces >= 2
     
+    def detect_pin(self, board, move):
+        """Detect if a move creates a pin"""
+        # Implementation for detecting pins when playing Stockfish's best move
+        # Similar to fork detection but checking for line alignment and piece restriction
+        # ...
+        pass
+    
+    def detect_skewer(self, board, move):
+        """Detect if a move creates a skewer"""
+        # Implementation for detecting skewers when playing Stockfish's best move
+        # ...
+        pass
+    
+    def detect_discovered_check(self, board, move):
+        """Detect if a move creates a discovered check"""
+        # Implementation for detecting discovered checks when playing Stockfish's best move
+        # ...
+        pass
+    
     def _get_piece_value(self, piece_type):
         """Get standard piece value"""
         values = {
@@ -244,4 +302,4 @@ class TacticsService:
 
 ## Conclusion
 
-The Knight Vision chess analysis engine has a solid foundation but requires standardization and refinement to follow best practices. By implementing the recommended changes, particularly around python-chess integration and NAG standards, the analysis quality and consistency will significantly improve. The phased approach allows for iterative improvements while ensuring core functionality remains stable.
+The Knight Vision chess analysis engine has a solid foundation but requires immediate focus on fixing core functionality issues before addressing performance. By focusing tactical analysis exclusively on Stockfish's best moves, we ensure we only highlight optimal tactical opportunities rather than suboptimal ones that don't lead to concrete advantages. This approach aligns with the goal of providing high-quality, actionable insights to players. The function-first implementation plan will provide a stable foundation that can later be enhanced for scalability and speed.

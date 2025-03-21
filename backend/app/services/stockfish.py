@@ -167,6 +167,44 @@ class StockfishService:
                     "best_move": analysis.get("pv", [None])[0].uci() if "pv" in analysis and analysis["pv"] else None,
                 }
         
+    async def get_best_move_at_depth(self, fen: str, depth: int = 20) -> Dict:
+        """
+        Get the best move for a position at a specific depth.
+        
+        Args:
+            fen: FEN notation of the current position
+            depth: Search depth (defaults to 20)
+            
+        Returns:
+            Dict containing the best move and evaluation
+        """
+        engine = await self._get_engine()
+        board = chess.Board(fen)
+        
+        # Set engine to maximum skill level
+        await engine.configure({"Skill Level": 20})
+        
+        # Analyze position at specified depth
+        limit = chess.engine.Limit(depth=depth)
+        analysis = await engine.analyse(board, limit)
+        
+        # Extract score
+        score = analysis["score"].relative.score(mate_score=10000)
+        
+        # Extract best move if available
+        best_move = None
+        if "pv" in analysis and analysis["pv"]:
+            best_move = analysis["pv"][0].uci()
+            
+        return {
+            "fen": fen,
+            "best_move": best_move,
+            "evaluation": score / 100.0,  # Convert centipawns to pawns
+            "depth": depth,
+            "is_mate": analysis["score"].relative.is_mate(),
+            "mate_in": analysis["score"].relative.mate()
+        }
+    
     async def get_even_move(self, fen: str, eval_change: float, skill_level: int = 20, move_time: float = 1.0) -> Dict:
         """
         Find a move that attempts to restore the previous evaluation difference rather than 

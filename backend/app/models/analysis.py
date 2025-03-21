@@ -45,6 +45,7 @@ class MoveAnalysis(BaseModel):
     classification: str
     is_best_move: bool
     is_book_move: bool
+    best_move: Optional[str] = None  # Stockfish's calculated best move at depth 20
     tactical_motifs: List[TacticalMotif] = Field(default_factory=list)
     square_control_before: SquareControl
     square_control_after: SquareControl

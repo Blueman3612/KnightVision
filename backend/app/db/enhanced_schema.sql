@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS enhanced_move_annotations (
     classification VARCHAR(10) NOT NULL, -- "blunder", "mistake", "inaccuracy", "good", "great", "excellent"
     is_best_move BOOLEAN NOT NULL,
     is_book_move BOOLEAN NOT NULL DEFAULT FALSE,
+    best_move VARCHAR(5), -- Stockfish's calculated best move in UCI notation at depth 20
     square_control_before JSONB NOT NULL,
     square_control_after JSONB NOT NULL,
     move_improvement TEXT,
