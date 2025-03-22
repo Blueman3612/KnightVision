@@ -11,11 +11,17 @@ from fastapi.background import BackgroundTasks
 from app.api.routes import analysis, auth, game, health, lessons, user
 from app.core.config import settings
 from app.db.supabase import get_supabase_client
+from app.services.queue_service import analysis_queue
+from app.worker import start_workers
 
 # Load environment variables
 load_dotenv()
 
 # Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -92,14 +98,54 @@ async def reset_stale_processing_flags():
         logger.info("Stale flag cleanup task was cancelled")
 
 
+# Store worker tasks here for proper cleanup on shutdown
+worker_tasks = []
+
 # Start background tasks
 @app.on_event("startup")
 async def startup_event():
     """Start background tasks when the application starts."""
+    global worker_tasks
+    
     # Start the task to reset stale processing flags
     asyncio.create_task(reset_stale_processing_flags())
     
-    # Start the game processing worker monitor
+    # Initialize Redis queue with retry logic
+    redis_ready = False
+    retry_attempts = 5
+    retry_delay = 5  # seconds
+    
+    for attempt in range(1, retry_attempts + 1):
+        try:
+            logger.info(f"Initializing Redis queue (attempt {attempt}/{retry_attempts})...")
+            await analysis_queue.init()
+            logger.info("✓ Redis queue initialized successfully")
+            redis_ready = True
+            break
+        except Exception as e:
+            logger.error(f"Failed to initialize queue system (attempt {attempt}): {e}")
+            if attempt < retry_attempts:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                # Increase delay for next attempt
+                retry_delay *= 1.5
+            else:
+                logger.error("All Redis connection attempts failed!")
+                logger.exception("Final stack trace for queue initialization error:")
+    
+    # Only start workers if Redis is ready
+    if redis_ready:
+        try:
+            logger.info(f"Starting {settings.WORKER_COUNT} analysis workers...")
+            worker_tasks = await start_workers(settings.WORKER_COUNT)
+            logger.info(f"✓ Started {len(worker_tasks)} analysis workers successfully")
+        except Exception as e:
+            logger.error(f"Failed to start analysis workers: {e}")
+            logger.exception("Stack trace for worker startup error:")
+    else:
+        logger.warning("Redis connection failed - analysis workers will not be started!")
+    
+    # Start the legacy game processing worker monitor
     try:
         # Import first to check if module exists
         from app.api.routes import game
@@ -107,7 +153,7 @@ async def startup_event():
         # Create and start the monitor task
         monitor_task = asyncio.create_task(game._ensure_worker_running())
         monitor_task.set_name("game_worker_monitor")
-        logger.info("Started game processing worker monitor")
+        logger.info("Started legacy game processing worker monitor")
     except Exception as e:
         logger.warning(f"Could not start game processing worker monitor: {e}")
         logger.exception("Stack trace for monitor start error:")
@@ -116,19 +162,35 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up resources when the application shuts down."""
+    global worker_tasks
+    
     logger.info("Application shutting down, cleaning up resources")
     
-    # If there's a game processing queue in the game routes module, cancel its worker task
+    # Cancel all analysis worker tasks
+    for i, task in enumerate(worker_tasks):
+        if not task.done():
+            logger.info(f"Cancelling analysis worker task {i}")
+            task.cancel()
+    
+    # Close Redis connection
+    try:
+        logger.info("Closing Redis connection")
+        await analysis_queue.close()
+        logger.info("Redis connection closed")
+    except Exception as e:
+        logger.warning(f"Error closing Redis connection: {e}")
+    
+    # If there's a game processing queue in the game routes module, cancel its worker task (legacy)
     try:
         # Import the module, not just the variable
         from app.api.routes import game
 
         if hasattr(game, '_processing_task') and game._processing_task and not game._processing_task.done():
-            logger.info("Cancelling game processing worker task")
+            logger.info("Cancelling legacy game processing worker task")
             game._processing_task.cancel()
-            logger.info("Game processing worker task cancelled")
+            logger.info("Legacy game processing worker task cancelled")
         else:
-            logger.info("No active game processing worker task to cancel")
+            logger.info("No active legacy game processing worker task to cancel")
             
         # Set worker_alive to False to prevent any automatic restarts
         if hasattr(game, '_worker_alive'):

@@ -22,6 +22,9 @@ WORKDIR /app
 # Copy requirements file
 COPY requirements.txt .
 
+# Install setuptools without upgrading pip (which is system managed)
+RUN pip3 install --no-cache-dir setuptools wheel
+
 # Install dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 

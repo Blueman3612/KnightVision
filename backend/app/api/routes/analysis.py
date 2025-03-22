@@ -21,10 +21,132 @@ class PositionAnalysisRequest(BaseModel):
 
     fen: str = Field(..., description="FEN notation of the position to evaluate")
     depth: Optional[int] = Field(None, description="Search depth (defaults to 20)")
+    
+    
+class AnalysisStatusResponse(BaseModel):
+    """Response model for analysis status."""
+    
+    game_id: str
+    status: str  # queued, processing, completed, error
+    phase: Optional[str] = None  # waiting, initial, intermediate, complete
+    progress: Optional[int] = None  # 0-100
+    queue_position: Optional[int] = None
+    queue_length: Optional[int] = None
+    estimated_wait_time: Optional[int] = None  # seconds
+    error: Optional[str] = None
 
 
 # GameAnalysisRequest removed as its endpoint was removed
 # Use the /game/{game_id} endpoint with authentication instead
+
+
+@router.get("/status/{game_id}", response_model=AnalysisStatusResponse)
+async def get_analysis_status(
+    game_id: str,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Get the status of an analysis job.
+    
+    Args:
+        game_id: ID of the game to check status for
+        user_id: Current authenticated user
+        
+    Returns:
+        AnalysisStatusResponse: Current status of the analysis job
+    """
+    # Validate user authentication
+    if not user_id:
+        raise HTTPException(
+            status_code=401, detail="Authentication required to check analysis status"
+        )
+    
+    supabase = get_supabase_client()
+    
+    # Import queue service
+    from app.services.queue_service import analysis_queue
+    
+    try:
+        # Get the game from the database to check ownership
+        game_response = supabase.table("games").select("*").eq("id", game_id).execute()
+        
+        if len(game_response.data) == 0:
+            raise HTTPException(
+                status_code=404, detail=f"Game with ID {game_id} not found"
+            )
+            
+        game = game_response.data[0]
+        
+        # Check if game belongs to the user
+        if game.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="You don't have permission to check status of this game",
+            )
+        
+        # Get status from Redis
+        status = await analysis_queue.get_status(game_id)
+        
+        if status:
+            # Get current queue length for context
+            queue_length = await analysis_queue.get_queue_length()
+            
+            # Calculate estimated wait time (very rough estimation)
+            estimated_wait = None
+            if status.get("status") == "queued":
+                # Rough estimate: 20 seconds per game in queue ahead of this one
+                queue_position = queue_length  # This is approximate
+                estimated_wait = queue_position * 20
+            
+            return AnalysisStatusResponse(
+                game_id=game_id,
+                status=status.get("status", "unknown"),
+                phase=status.get("phase"),
+                progress=status.get("progress", 0),
+                queue_position=queue_length,
+                queue_length=queue_length,
+                estimated_wait_time=estimated_wait,
+                error=status.get("error"),
+            )
+        
+        # If we don't have Redis status, check the database
+        if game.get("enhanced_analyzed", False):
+            return AnalysisStatusResponse(
+                game_id=game_id,
+                status="completed",
+                phase="complete",
+                progress=100,
+                queue_position=0,
+                queue_length=await analysis_queue.get_queue_length(),
+            )
+        
+        if game.get("processing", False):
+            return AnalysisStatusResponse(
+                game_id=game_id,
+                status="processing",
+                phase="unknown",
+                progress=50,  # We don't know the exact progress
+                queue_length=await analysis_queue.get_queue_length(),
+            )
+        
+        # If we have no status at all, it's not being analyzed
+        return AnalysisStatusResponse(
+            game_id=game_id,
+            status="not_queued",
+            phase=None,
+            progress=0,
+            queue_length=await analysis_queue.get_queue_length(),
+        )
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error checking analysis status for game {game_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error checking analysis status: {str(e)}"
+        )
 
 
 @router.post("/position", response_model=PositionAnalysis)
@@ -167,6 +289,9 @@ async def enhanced_annotate_game(
         )
 
     supabase = get_supabase_client()
+    
+    # Import queue service
+    from app.services.queue_service import analysis_queue
 
     try:
         # Get the game from the database
@@ -185,8 +310,16 @@ async def enhanced_annotate_game(
                 status_code=403,
                 detail="You don't have permission to annotate this game",
             )
-
-        # If the game is already analyzed and we just want status, return existing data
+            
+        # Check for existing analysis results in Redis
+        result = await analysis_queue.get_result(game_id)
+        
+        # If we have complete results in Redis, return them
+        if result and result.get("phase") == "complete":
+            logger.info(f"Found complete analysis results in Redis for game {game_id}")
+            return GameAnalysisResult(**result.get("data", {}))
+            
+        # If the game is already analyzed and we just want status, return existing data from DB
         if game.get("enhanced_analyzed", False) and not wait_for_analysis:
             # Get the enhanced annotations
             annotations_response = (
@@ -207,59 +340,40 @@ async def enhanced_annotate_game(
                     # We'll set other fields in the original retrieval code
                 )
 
-        # Check if the game is already being processed
-        if game.get("processing", False) and not wait_for_analysis:
-            # Game is being processed, return early with status
-            return GameAnalysisResult(
-                game_id=game_id,
-                status="processing",
-                message="Game is currently being analyzed",
-            )
-
-        # For non-waiting requests, mark as processing and queue for background processing
+        # For non-waiting requests, queue for processing and return immediately
         if not wait_for_analysis:
-            # Check if processing is already happening (for race condition protection)
-            # Check again since race conditions can happen between the initial check and here
-            game_check = supabase.table("games").select("processing").eq("id", game_id).execute()
-            if game_check.data and game_check.data[0].get("processing", False):
-                logger.info(f"Game {game_id} already being processed, returning processing status")
+            # Check if already in queue or being processed
+            status = await analysis_queue.get_status(game_id)
+            if status:
+                # Return current status with progress info
                 return GameAnalysisResult(
                     game_id=game_id,
-                    status="processing",
-                    message="Game is currently being analyzed",
+                    status=status.get("status", "processing"),
+                    message=f"Game is {status.get('status')} - {status.get('phase')} phase ({status.get('progress')}%)",
+                    progress=status.get("progress", 0),
+                    phase=status.get("phase", "waiting"),
                 )
             
-            try:
-                # Mark game as processing with atomicity check
-                update_result = supabase.table("games").update({"processing": True}).eq(
-                    "id", game_id
-                ).eq("processing", False).execute()
-                
-                # If no rows were updated, someone else started processing
-                if not update_result.data or len(update_result.data) == 0:
-                    logger.warning(f"Game {game_id} was being processed by another request (race condition)")
-                    return GameAnalysisResult(
-                        game_id=game_id,
-                        status="processing",
-                        message="Game is currently being analyzed by another request",
-                    )
-                
-                logger.info(f"Successfully marked game {game_id} as processing")
-            except Exception as e:
-                logger.error(f"Error marking game {game_id} as processing: {e}")
-                # Continue with queuing even if marking fails - worst case is double processing
-
-            # Import the process_game_async function here to avoid circular imports
-            from app.api.routes.game import process_game_async
-
-            # Queue game for processing in background
-            await process_game_async(game_id, user_id)
-            logger.info(f"Successfully queued game {game_id} for background processing")
-
-            # Return immediate response with status
+            # Check for intermediate results
+            if result and result.get("phase") == "initial":
+                # We have initial results, return them with status
+                initial_data = result.get("data", {})
+                initial_data["status"] = "processing"
+                initial_data["message"] = "Initial analysis available, full analysis in progress"
+                initial_data["progress"] = 25
+                return GameAnalysisResult(**initial_data)
+            
+            # Add to queue with priority based on user status
+            is_premium = False  # TODO: implement premium user check
+            priority = 10 if is_premium else 0
+            
+            await analysis_queue.add_job(game_id, user_id, priority)
+            logger.info(f"Added game {game_id} to analysis queue with priority {priority}")
+            
+            # Return immediate response
             return GameAnalysisResult(
                 game_id=game_id,
-                status="processing",
+                status="queued",
                 message="Game has been queued for analysis and will be processed soon",
             )
 

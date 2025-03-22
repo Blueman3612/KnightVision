@@ -92,5 +92,7 @@ class GameAnalysisResult(BaseModel):
         default=True
     )  # Flag indicating if database transaction was successful
     transaction_error: Optional[str] = None  # Error message if transaction failed
-    status: str = "complete"  # Status: "processing" or "complete"
+    status: str = "complete"  # Status: "processing", "queued", or "complete"
     message: Optional[str] = None  # Optional status message
+    progress: Optional[int] = None  # Progress percentage (0-100)
+    phase: Optional[str] = None  # Analysis phase (waiting, initial, intermediate, complete)
