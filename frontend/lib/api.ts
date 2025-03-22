@@ -1,5 +1,6 @@
 import axios from 'axios';
 import supabase from './supabase';
+import { SessionResponse } from '@supabase/auth-helpers-react';
 
 // Typecasting to avoid TS errors
 type AxiosConfig = any;
@@ -75,63 +76,83 @@ api.interceptors.response.use(
   }
 );
 
+// Create a module-level variable to cache the token once we get it
+let cachedAuthToken: string | null = null;
+
+// Function to get or refresh the auth token
+const getAuthToken = async (retry = true): Promise<string | null> => {
+  try {
+    // If we have a cached token, use it
+    if (cachedAuthToken) {
+      return cachedAuthToken;
+    }
+
+    // Try to get the session from Supabase
+    const { data: session } = await supabase.auth.getSession();
+    
+    // Using our custom SessionResponse type which matches our implementation
+    const sessionData = session as unknown as SessionResponse;
+    
+    if (sessionData?.access_token) {
+      // Cache the token for future use
+      cachedAuthToken = sessionData.access_token;
+      return cachedAuthToken;
+    } 
+    
+    // If we get here and retry is true, we'll try one more time after a short delay
+    if (retry) {
+      console.log('🔄 No token found, retrying after delay...');
+      // Wait a bit and try again
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return getAuthToken(false); // Don't retry again to prevent infinite loops
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('❌ Error getting auth token:', err);
+    return null;
+  }
+};
+
+// Listen for auth state changes to update our cached token
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      cachedAuthToken = session?.access_token || null;
+      console.log('🔑 Auth token updated');
+    } else if (event === 'SIGNED_OUT') {
+      cachedAuthToken = null;
+      console.log('🔒 Auth token cleared');
+    }
+  });
+}
+
 // Add auth token to requests if available
 api.interceptors.request.use(async (config: AxiosConfig) => {
   // Only run on client side
   if (typeof window !== 'undefined') {
-    // Skip if Authorization header already exists
-    if (config.headers?.Authorization) {
-      return config;
-    }
-    
     try {
-      // Try to get the current session token directly from supabase
-      // This is the most reliable approach
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.access_token) {
-          config.headers = config.headers || {};
-          config.headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-          return config;
-        }
-      } catch (sessionError) {
-        console.warn('Could not get Supabase session:', sessionError);
-      }
+      // Initialize headers object if not exists
+      config.headers = config.headers || {};
       
-      // Fallback to localStorage methods
-      // The token storage location has changed in newer Supabase versions
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/^https?:\/\//, '') || '';
-      const tokenStr = localStorage.getItem('sb-' + supabaseUrl + '-auth-token');
+      // Log request URL for debugging (remove in production)
+      console.log(`🔄 API Request to: ${config.url}`);
       
-      if (tokenStr) {
-        try {
-          const token = JSON.parse(tokenStr);
-          if (token?.access_token) {
-            config.headers = config.headers || {};
-            config.headers.Authorization = `Bearer ${token.access_token}`;
-            return config;
-          }
-        } catch (parseError) {
-          console.warn('Error parsing token from localStorage:', parseError);
-        }
-      }
+      // Get auth token with retry mechanism
+      const token = await getAuthToken();
       
-      // Try fallback to older format
-      const oldToken = localStorage.getItem('supabase.auth.token');
-      if (oldToken) {
-        try {
-          const parsedToken = JSON.parse(oldToken);
-          if (parsedToken?.access_token) {
-            config.headers = config.headers || {};
-            config.headers.Authorization = `Bearer ${parsedToken.access_token}`;
-            return config;
-          }
-        } catch (parseError) {
-          console.warn('Error parsing legacy token from localStorage:', parseError);
-        }
+      if (token) {
+        // Set the Authorization header with the Bearer token
+        config.headers.Authorization = `Bearer ${token}`;
+        
+        // Log for debugging (remove in production)
+        console.log('✅ Auth token added to request');
+      } else {
+        // Log warning if no token found
+        console.warn('⚠️ No auth token available after retry');
       }
     } catch (err) {
-      console.error('Error setting auth token:', err);
+      console.error('❌ Error setting auth token:', err);
     }
   }
   return config;
@@ -154,7 +175,13 @@ export const gameApi = {
   // Generic post method for custom API endpoints
   post: async (endpoint: string, data?: any) => {
     try {
-      const response = await api.post(endpoint, data);
+      // Ensure endpoint starts with a slash for consistency
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      
+      // Log the API call for debugging
+      console.log(`📡 API POST request to: ${normalizedEndpoint}`);
+      
+      const response = await api.post(normalizedEndpoint, data || {});
       return response.data;
     } catch (error: any) {
       console.error(`❌ Error in API post to ${endpoint}:`, error);
@@ -167,46 +194,17 @@ export const gameApi = {
   },
 
   // Process unannotated games 
-  processUnannotatedGames: async (userId: string, accessToken?: string, forceRetry: boolean = false) => {
+  processUnannotatedGames: async (forceRetry: boolean = false, limit: number = 10) => {
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+      // Create proper payload matching API expectations - only send needed parameters
+      const payload = { 
+        limit: limit,
+        force_retry: forceRetry
       };
       
-      // Use provided access token if available
-      if (accessToken) {
-        // Ensure token is properly formatted with Bearer prefix
-        headers['Authorization'] = accessToken.startsWith('Bearer ') 
-          ? accessToken 
-          : `Bearer ${accessToken}`;
-        
-        console.log('Using explicit Authorization header:', headers['Authorization'].substring(0, 20) + '...');
-      } else {
-        console.log('No explicit access token provided for processUnannotatedGames');
-      }
-      
-      // For this critical endpoint, use a direct fetch call to bypass any interceptor issues
-      try {
-        const response = await fetch(`${apiUrl}/games/process-unannotated`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify({ 
-            user_id: userId,
-            force_retry: forceRetry
-          })
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`API Error: ${response.status}`, errorText);
-          throw new Error(`API error: ${response.status}`);
-        }
-        
-        return await response.json();
-      } catch (fetchError) {
-        console.error('❌ Fetch error in processUnannotatedGames:', fetchError);
-        throw fetchError;
-      }
+      // Let the Axios interceptor handle authentication - no custom headers needed
+      const response = await api.post('/games/process-unannotated', payload);
+      return response.data;
     } catch (error: any) {
       console.error('❌ Error processing unannotated games:', error);
       if (error.response) {
