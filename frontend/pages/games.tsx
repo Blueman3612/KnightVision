@@ -542,17 +542,6 @@ const GamesPage = () => {
         return;
       }
       
-      // Get the session access token to use directly
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      
-      if (!accessToken) {
-        // Remove: console.error('No access token available...');
-        return;
-      }
-      
-      // Remove: console.log(forceRetry ? 'Forcing analysis...' : 'Triggering game analysis...');
-      
       // Make sure subscription is active
       if (!subscription || !subscriptionReady) {
         await setupRealtimeSubscription();
@@ -560,10 +549,11 @@ const GamesPage = () => {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       
-      // Call the API
+      // Call the API with proper parameters
+      // No need to manually fetch the access token - the axios interceptor will handle it
       try {
         setIsAnnotationRunning(true); // Set as running before API call
-        await gameApi.processUnannotatedGames(session.user.id, accessToken, forceRetry);
+        await gameApi.processUnannotatedGames(session.user.id, undefined, forceRetry, 17);
         // Remove: console.log('Analysis API call successful');
       } catch (apiError) {
         // Remove: console.error('Error calling analysis API:', apiError);

@@ -130,6 +130,14 @@ declare module '@supabase/auth-helpers-react' {
     access_token: string;
     refresh_token: string;
   }
+  
+  // Added SessionResponse type to match the structure used in our api.ts getAuthToken function
+  export interface SessionResponse {
+    access_token: string;
+    refresh_token?: string;
+    user?: any;
+  }
+  
   export function useSession(): Session | null;
   export function useSupabaseClient(): any;
   export interface SessionContextProviderProps {

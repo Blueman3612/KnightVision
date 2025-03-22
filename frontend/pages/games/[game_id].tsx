@@ -447,8 +447,12 @@ const AnalyzePage = () => {
     if (!gameData?.id || !session?.user?.id) return;
     
     try {
+      console.log(`🔍 Starting deep analysis for game ${gameData.id}`);
       setIsDeepAnalyzing(true);
+      
+      // Use API endpoint with leading slash to ensure consistency
       const data = await gameApi.post(`/analysis/${gameData.id}/enhanced-annotate`);
+      console.log('✅ Enhanced analysis completed successfully');
       
       // Refresh the enhanced move annotations after analysis is complete
       const { data: enhancedData, error } = await supabase
@@ -459,6 +463,7 @@ const AnalyzePage = () => {
         
       if (error) throw error;
       setEnhancedMoveAnnotations(enhancedData || []);
+      console.log(`Found ${enhancedData?.length || 0} enhanced annotations`);
       
       // Update the game's analyzed state
       setGameData(prev => prev ? {...prev, analyzed: true, enhanced_analyzed: true} : null);
