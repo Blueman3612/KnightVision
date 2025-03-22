@@ -142,17 +142,23 @@ async def analyze_game_by_id(
 
 @router.post("/{game_id}/enhanced-annotate", response_model=GameAnalysisResult)
 async def enhanced_annotate_game(
-    game_id: str, user_id: str = Depends(get_current_user)
+    game_id: str,
+    user_id: str = Depends(get_current_user),
+    wait_for_analysis: bool = False,
 ):
     """
     Analyze and annotate a specific chess game with enhanced tactical and positional metrics.
 
+    By default, returns a quick response and processes the game in the background to prevent timeouts.
+    To wait for full analysis results, set wait_for_analysis=true query parameter.
+
     Args:
         game_id: ID of the game to annotate
         user_id: Current authenticated user
+        wait_for_analysis: If False (default), returns immediately with status. If True, waits for full analysis.
 
     Returns:
-        GameAnalysisResult: The enhanced annotated game
+        GameAnalysisResult: Either a processing status or the complete enhanced annotated game
     """
     # Validate user authentication
     if not user_id:
@@ -178,6 +184,56 @@ async def enhanced_annotate_game(
             raise HTTPException(
                 status_code=403,
                 detail="You don't have permission to annotate this game",
+            )
+
+        # If the game is already analyzed and we just want status, return existing data
+        if game.get("enhanced_analyzed", False) and not wait_for_analysis:
+            # Get the enhanced annotations
+            annotations_response = (
+                supabase.table("enhanced_move_annotations")
+                .select("*")
+                .eq("game_id", game_id)
+                .order("id")
+                .execute()
+            )
+
+            if len(annotations_response.data) > 0:
+                # Game is already analyzed, return complete data
+                return GameAnalysisResult(
+                    game_id=game_id,
+                    status="complete",
+                    message="Game has already been analyzed",
+                    total_moves=len(annotations_response.data),
+                    # We'll set other fields in the original retrieval code
+                )
+
+        # Check if the game is already being processed
+        if game.get("processing", False) and not wait_for_analysis:
+            # Game is being processed, return early with status
+            return GameAnalysisResult(
+                game_id=game_id,
+                status="processing",
+                message="Game is currently being analyzed",
+            )
+
+        # For non-waiting requests, mark as processing and queue for background processing
+        if not wait_for_analysis:
+            # Mark game as processing
+            supabase.table("games").update({"processing": True}).eq(
+                "id", game_id
+            ).execute()
+
+            # Import the process_game_async function here to avoid circular imports
+            from app.api.routes.game import process_game_async
+
+            # Queue game for processing in background
+            await process_game_async(game_id, user_id)
+
+            # Return immediate response with status
+            return GameAnalysisResult(
+                game_id=game_id,
+                status="processing",
+                message="Game has been queued for analysis and will be processed soon",
             )
 
         # Check if the game is already enhanced analyzed

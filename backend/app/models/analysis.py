@@ -75,8 +75,8 @@ class GameAnalysisResult(BaseModel):
     """Complete game analysis with tactical and positional insights."""
 
     game_id: str
-    total_moves: int
-    annotations: List[MoveAnalysis]
+    total_moves: int = 0
+    annotations: List[MoveAnalysis] = []
     player_weaknesses: Dict[str, List[int]] = Field(
         default_factory=lambda: {
             "tactical": [],
@@ -92,3 +92,5 @@ class GameAnalysisResult(BaseModel):
         default=True
     )  # Flag indicating if database transaction was successful
     transaction_error: Optional[str] = None  # Error message if transaction failed
+    status: str = "complete"  # Status: "processing" or "complete"
+    message: Optional[str] = None  # Optional status message

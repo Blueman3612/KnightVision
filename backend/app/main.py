@@ -98,3 +98,19 @@ async def startup_event():
     """Start background tasks when the application starts."""
     # Start the task to reset stale processing flags
     asyncio.create_task(reset_stale_processing_flags())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources when the application shuts down."""
+    logger.info("Application shutting down, cleaning up resources")
+    # If there's a game processing queue in the game routes module, cancel its worker task
+    try:
+        from app.api.routes.game import _processing_task
+
+        if _processing_task and not _processing_task.done():
+            logger.info("Cancelling game processing worker task")
+            _processing_task.cancel()
+            logger.info("Game processing worker task cancelled")
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Could not access game processing task: {e}")

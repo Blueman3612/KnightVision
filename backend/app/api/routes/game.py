@@ -513,8 +513,10 @@ async def _process_games_worker():
                 logging.info(f"Processing game {game_id} from queue")
                 supabase = get_supabase_client()
 
-                # Process the game
-                await enhanced_annotate_game(game_id=game_id, user_id=user_id)
+                # Process the game with wait_for_analysis=True to ensure full processing
+                await enhanced_annotate_game(
+                    game_id=game_id, user_id=user_id, wait_for_analysis=True
+                )
                 logging.info(f"Successfully processed game {game_id}")
             except Exception as e:
                 logging.error(f"Error processing game {game_id}: {str(e)}")
@@ -555,14 +557,24 @@ async def process_game_async(game_id: str, user_id: str, supabase=None):
     """
     global _processing_task
 
+    logging.info(f"Received request to queue game {game_id} for user {user_id}")
+
     # Start the worker task if it's not running
     if _processing_task is None or _processing_task.done():
+        logging.info("Starting new game processing worker task")
         _processing_task = asyncio.create_task(_process_games_worker())
+        _processing_task.set_name(f"game_worker_{id(_processing_task)}")
+        logging.info(f"Created worker task: {_processing_task.get_name()}")
+    else:
+        logging.info(
+            f"Using existing worker task, status: {'running' if not _processing_task.done() else 'completed'}"
+        )
 
     # Add the game to the queue
     await _processing_queue.put((game_id, user_id))
+    queue_size = _processing_queue.qsize()
     logging.info(
-        f"Game {game_id} added to processing queue, position {_processing_queue.qsize()}"
+        f"Game {game_id} added to processing queue, current queue size: {queue_size}"
     )
 
 
