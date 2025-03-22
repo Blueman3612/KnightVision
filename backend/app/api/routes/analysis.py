@@ -7,8 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.db.supabase import get_current_user, get_supabase_client
-from app.models.analysis import (GameAnalysisResult, MoveAnalysis,
-                                 PositionAnalysis)
+from app.models.analysis import GameAnalysisResult, MoveAnalysis, PositionAnalysis
 from app.services.analysis import analysis_service
 
 # Configure logging
@@ -453,11 +452,14 @@ async def enhanced_annotate_game(
                 logger.error(f"Failed to store player weakness report: {w_err}")
                 # Continue with updating game status rather than failing the whole transaction
 
-            # Phase 4: Mark the game as enhanced analyzed
+            # Phase 4: Mark the game as enhanced analyzed and clear processing flag
             logger.info(f"Updating game {game_id} status to enhanced_analyzed=True")
-            supabase.table("games").update({"enhanced_analyzed": True}).eq(
-                "id", game_id
-            ).execute()
+            supabase.table("games").update(
+                {
+                    "enhanced_analyzed": True,
+                    "processing": False,  # Clear processing flag on success
+                }
+            ).eq("id", game_id).execute()
 
             # If we got here without exceptions, the transaction was successful
             successful_transaction = True
@@ -492,6 +494,19 @@ async def enhanced_annotate_game(
                     )
                 except Exception as cleanup_err:
                     logger.error(f"Failed to clean up orphaned data: {cleanup_err}")
+
+            # Always reset the processing flag if the transaction failed
+            try:
+                supabase.table("games").update({"processing": False}).eq(
+                    "id", game_id
+                ).execute()
+                logger.info(
+                    f"Reset processing flag for game {game_id} after failed transaction"
+                )
+            except Exception as flag_err:
+                logger.error(
+                    f"Failed to reset processing flag for game {game_id}: {flag_err}"
+                )
 
         # Add transaction status to the result for client-side error handling
         analysis_result.transaction_successful = successful_transaction

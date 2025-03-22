@@ -498,7 +498,8 @@ class TacticsService:
                         and valuable_value > 0  # There is something behind
                         and (
                             moves_after < moves_before  # Fewer legal moves
-                            or valuable_value > pinned_value  # Valuable piece is more valuable
+                            or valuable_value
+                            > pinned_value  # Valuable piece is more valuable
                         )
                     )
 
@@ -742,8 +743,10 @@ class TacticsService:
                         and behind_value > 0  # There is something behind
                         and (
                             moves_after < moves_before  # Fewer legal moves
-                            or skewered_value > attacker_value  # Skewered piece is more valuable
-                            or behind_value < skewered_value  # Behind piece is less valuable
+                            or skewered_value
+                            > attacker_value  # Skewered piece is more valuable
+                            or behind_value
+                            < skewered_value  # Behind piece is less valuable
                         )
                     )
 
@@ -1030,7 +1033,9 @@ class TacticsService:
                     return None
                 except Exception as e:
                     logger.error(f"Error detecting {tactic_type}: {str(e)}")
-                    logger.error(f"Stack trace for {tactic_type} detection error:", exc_info=True)
+                    logger.error(
+                        f"Stack trace for {tactic_type} detection error:", exc_info=True
+                    )
                     return None
 
             # Detect fork

@@ -56,7 +56,9 @@ class StockfishService:
                     # Verify engine is working with a simple command
                     # Different python-chess versions have different ways to access engine options
                     # We'll just log basic initialization success without trying to get version info
-                    logger.info(f"Stockfish engine initialized successfully with {self.threads} threads")
+                    logger.info(
+                        f"Stockfish engine initialized successfully with {self.threads} threads"
+                    )
                 except Exception as config_err:
                     logger.error(
                         f"Engine initialized but configuration failed: {config_err}"

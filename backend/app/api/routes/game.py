@@ -518,37 +518,71 @@ async def process_unannotated_games(
     supabase = get_supabase_client()
 
     try:
-        # Get games that haven't been enhanced analyzed
-        games_response = (
+        # First, query for games that need processing
+        # We need to do this in two steps since limit() is not available on update operations
+        query_response = (
             supabase.table("games")
             .select("id")
             .eq("enhanced_analyzed", False)
+            .eq("processing", False)  # Only select games not already being processed
             .limit(request.limit)
             .execute()
         )
 
-        if len(games_response.data) == 0:
+        # Now mark these games as processing one by one
+        games_to_process = []
+        for game in query_response.data:
+            game_id = game["id"]
+            # Mark this game as processing
+            update_response = (
+                supabase.table("games")
+                .update({"processing": True})
+                .eq("id", game_id)
+                .eq("enhanced_analyzed", False)
+                .eq(
+                    "processing", False
+                )  # Only update if it's still not being processed
+                .execute()
+            )
+
+            # Check if the update worked (someone else might have started processing it)
+            if update_response.data and len(update_response.data) > 0:
+                games_to_process.append(update_response.data[0])
+
+        if len(games_to_process) == 0:
             return BatchAnnotationResponse(processed_games=0, game_ids=[])
+
+        logging.info(f"Locked {len(games_to_process)} games for processing")
 
         processed_game_ids = []
         failed_game_ids = []
 
         # Process each game
-        for game_data in games_response.data:
+        for game_data in games_to_process:
             game_id = game_data["id"]
 
             try:
                 # Use the enhanced_annotate_game endpoint for each game
                 await enhanced_annotate_game(game_id=game_id, user_id=user_id)
                 processed_game_ids.append(game_id)
+                logging.info(f"Successfully processed game {game_id}")
             except HTTPException as e:
                 logging.warning(f"Skipped processing game {game_id}: {e.detail}")
                 failed_game_ids.append({"id": game_id, "reason": e.detail})
+
+                # Reset the processing flag for failed games
+                supabase.table("games").update({"processing": False}).eq(
+                    "id", game_id
+                ).execute()
                 continue
             except Exception as e:
                 logging.error(f"Error processing game {game_id}: {str(e)}")
                 failed_game_ids.append({"id": game_id, "reason": str(e)})
-                # Continue with the next game
+
+                # Reset the processing flag for failed games
+                supabase.table("games").update({"processing": False}).eq(
+                    "id", game_id
+                ).execute()
                 continue
 
         if len(failed_game_ids) > 0:

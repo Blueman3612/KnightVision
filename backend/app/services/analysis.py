@@ -4,12 +4,22 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import chess
 import chess.pgn
-from chess.pgn import (NAG_BLUNDER, NAG_BRILLIANT_MOVE, NAG_DUBIOUS_MOVE,
-                       NAG_GOOD_MOVE, NAG_MISTAKE, NAG_SPECULATIVE_MOVE)
+from chess.pgn import (
+    NAG_BLUNDER,
+    NAG_BRILLIANT_MOVE,
+    NAG_DUBIOUS_MOVE,
+    NAG_GOOD_MOVE,
+    NAG_MISTAKE,
+    NAG_SPECULATIVE_MOVE,
+)
 
-from app.models.analysis import (GameAnalysisResult, MoveAnalysis,
-                                 PositionAnalysis, SquareControl,
-                                 TacticalMotif)
+from app.models.analysis import (
+    GameAnalysisResult,
+    MoveAnalysis,
+    PositionAnalysis,
+    SquareControl,
+    TacticalMotif,
+)
 from app.services.stockfish import stockfish_service
 from app.services.tactics import tactics_service
 
@@ -376,9 +386,12 @@ class AnalysisService:
                 try:
                     # Only analyze best moves as determined by Stockfish
                     tactical_motifs = tactics_service.analyze_move_for_tactics(
-                        board_copy_before, board_copy_after, move, is_best_move=(is_best_move)
+                        board_copy_before,
+                        board_copy_after,
+                        move,
+                        is_best_move=(is_best_move),
                     )
-                    
+
                     # Log all detected motifs for debugging
                     if tactical_motifs:
                         tactic_types = [t.motif_type for t in tactical_motifs]
@@ -389,7 +402,9 @@ class AnalysisService:
                     logger.error(
                         f"Error detecting tactics for move {move_number} {color}: {e}"
                     )
-                    logger.error("Stack trace for tactical analysis error:", exc_info=True)
+                    logger.error(
+                        "Stack trace for tactical analysis error:", exc_info=True
+                    )
                     tactical_motifs = []
 
                 # Create move annotation
