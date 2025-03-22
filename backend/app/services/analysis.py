@@ -212,6 +212,7 @@ class AnalysisService:
     ) -> GameAnalysisResult:
         """
         Analyze a complete game with enhanced tactical and positional insights.
+        Uses a tiered analysis approach to optimize performance.
 
         Args:
             pgn: PGN notation of the game
@@ -234,6 +235,18 @@ class AnalysisService:
             board = game.board()
             annotations = []
             move_number = 1
+            
+            # Track previous quick evaluation for detecting big changes
+            prev_quick_eval = None
+            
+            # Set default full depth
+            full_depth = depth or 20
+            quick_depth = 10  # Reduced depth for quick scans
+            
+            # Track positions needing deep analysis
+            critical_positions = []
+            moves_to_analyze = []
+            quick_scan_results = {}  # Store quick scan results
 
             # Player weaknesses tracking
             player_weaknesses = {
@@ -242,46 +255,158 @@ class AnalysisService:
                 "opening": [],  # List of opening mistakes (first 10-15 moves)
                 "endgame": [],  # List of endgame mistakes
             }
-
-            # Critical positions tracking
-            critical_positions = []
-
-            # Process each move in the game
+            
+            logger.info(f"Starting two-phase game analysis for game {game_id}")
+            
+            # PHASE 1: Quick scan to identify critical positions
+            logger.info("PHASE 1: Quick scanning positions to identify critical ones")
+            move_data = []  # Store move data for phase 2
+            
+            temp_board = chess.Board()
+            quick_scan_move_number = 1
+            
+            # First pass - scan all positions at lower depth
             for node in game.mainline():
                 move = node.move
-                move_san = board.san(move)
+                move_san = temp_board.san(move)
                 move_uci = move.uci()
-                color = "white" if board.turn == chess.WHITE else "black"
-
-                logger.info(f"Analyzing move {move_number} ({color}): {move_san}")
-
+                color = "white" if temp_board.turn == chess.WHITE else "black"
+                
                 # Get position before the move
-                fen_before = board.fen()
+                fen_before = temp_board.fen()
+                position_type = "standard"
+                
+                # Classify position using quick heuristics
+                from app.services.stockfish import is_capture_position, is_check_position, is_central_move, get_game_phase
+                
+                # Check if this is a critical position based on move characteristics
+                if is_capture_position(temp_board, move):
+                    position_type = "critical"
+                elif is_check_position(temp_board, move):
+                    position_type = "critical"
+                elif get_game_phase(temp_board) == "opening" and quick_scan_move_number <= 10:
+                    position_type = "important"  # Opening theory
+                elif get_game_phase(temp_board) == "endgame":
+                    position_type = "critical"  # Endgames need accuracy
+                
+                # Do quick evaluation for standard positions
+                if position_type == "standard" and prev_quick_eval is not None:
+                    try:
+                        # Quick scan at lower depth
+                        quick_result = await stockfish_service.evaluate_position(fen_before, quick_depth)
+                        current_eval = quick_result["evaluation"]
+                        
+                        # Convert to proper perspective
+                        if not temp_board.turn:  # Black to move
+                            current_eval = -current_eval
+                            
+                        # Check for significant evaluation change
+                        if abs(current_eval - prev_quick_eval) >= 0.7:  # 0.7 pawns threshold
+                            position_type = "critical"
+                            
+                        # Update for next iteration
+                        prev_quick_eval = current_eval
+                        
+                        # Store result for reuse
+                        quick_scan_results[fen_before] = quick_result
+                    except Exception as e:
+                        logger.error(f"Error in quick scan for move {quick_scan_move_number}: {e}")
+                        # Default to critical if we can't evaluate
+                        position_type = "critical"
+                else:
+                    # If it's the first move or already critical, do a quick scan
+                    try:
+                        quick_result = await stockfish_service.evaluate_position(fen_before, quick_depth)
+                        current_eval = quick_result["evaluation"]
+                        
+                        # Convert to proper perspective
+                        if not temp_board.turn:  # Black to move
+                            current_eval = -current_eval
+                            
+                        prev_quick_eval = current_eval
+                        quick_scan_results[fen_before] = quick_result
+                    except Exception as e:
+                        logger.error(f"Error in initial quick scan for move {quick_scan_move_number}: {e}")
+                
+                # Push move to advance board
+                temp_board.push(move)
+                fen_after = temp_board.fen()
+                
+                # Store move data for phase 2
+                move_data.append({
+                    "move": move,
+                    "move_san": move_san,
+                    "move_number": quick_scan_move_number,
+                    "color": color,
+                    "fen_before": fen_before,
+                    "fen_after": fen_after,
+                    "position_type": position_type
+                })
+                
+                # Track critical positions for phase 2
+                if position_type in ["critical", "important"]:
+                    critical_positions.append(quick_scan_move_number)
+                
+                # Increment move number for black's move
+                if color == "black":
+                    quick_scan_move_number += 1
+            
+            logger.info(f"Quick scan complete - found {len(critical_positions)} critical positions out of {len(move_data)} moves")
+            
+            # PHASE 2: Detailed analysis of critical positions
+            logger.info("PHASE 2: Detailed analysis of critical positions")
+            
+            # Reset board for full analysis
+            board = game.board()
+            move_number = 1
+            
+            # Process each move with appropriate depth
+            for move_info in move_data:
+                move = move_info["move"]
+                move_san = move_info["move_san"]
+                move_number = move_info["move_number"]
+                color = move_info["color"]
+                fen_before = move_info["fen_before"]
+                fen_after = move_info["fen_after"]
+                position_type = move_info["position_type"]
+
+                # Determine appropriate depth
+                position_depth = full_depth if position_type in ["critical", "important"] else quick_depth
+                logger.info(f"Analyzing move {move_number} ({color}): {move_san} - {'CRITICAL' if position_type == 'critical' else position_type} position at depth {position_depth}")
 
                 # Get enhanced position analysis before the move
                 try:
-                    position_before = await self.analyze_position(fen_before, depth)
-                    # Convert evaluation to white's perspective if it's black's turn
-                    if not board.turn:  # False means it's black's turn
-                        logger.info(
-                            f"Move {move_number} ({color}): Converting evaluation from {position_before.evaluation} to {-position_before.evaluation} (black to move)"
+                    # Check if we already have a quick scan result we can use
+                    if position_depth == quick_depth and fen_before in quick_scan_results:
+                        position_before = PositionAnalysis(
+                            fen=fen_before,
+                            evaluation=quick_scan_results[fen_before]["evaluation"],
+                            depth=quick_scan_results[fen_before]["depth"],
+                            is_mate=quick_scan_results[fen_before]["is_mate"],
+                            mate_in=quick_scan_results[fen_before]["mate_in"],
+                            best_move=quick_scan_results[fen_before]["best_move"],
+                            square_control=tactics_service.calculate_square_control(chess.Board(fen_before)),
+                            tactical_motifs=[],
+                            critical_squares=[],
                         )
+                    else:
+                        # Full analysis needed
+                        position_before = await self.analyze_position(fen_before, position_depth)
+                    
+                    # Convert evaluation to white's perspective if it's black's turn
+                    board_before = chess.Board(fen_before)
+                    if not board_before.turn:  # False means it's black's turn
                         evaluation_before = -position_before.evaluation
                     else:
-                        logger.info(
-                            f"Move {move_number} ({color}): Keeping evaluation as {position_before.evaluation} (white to move)"
-                        )
                         evaluation_before = position_before.evaluation
+                    
                     square_control_before = position_before.square_control
+                    
                 except Exception as e:
-                    logger.error(
-                        f"Error analyzing position before move {move_number} {color}: {e}"
-                    )
+                    logger.error(f"Error analyzing position before move {move_number} {color}: {e}")
                     # Use a default position analysis for error recovery
                     default_board = chess.Board(fen_before)
-                    default_control = tactics_service.calculate_square_control(
-                        default_board
-                    )
+                    default_control = tactics_service.calculate_square_control(default_board)
                     position_before = PositionAnalysis(
                         fen=fen_before,
                         evaluation=0.0,  # Neutral evaluation
@@ -292,40 +417,44 @@ class AnalysisService:
                     evaluation_before = 0.0
                     square_control_before = default_control
 
-                # Create copies of the board for before and after
+                # Create copies of the board for tactics analysis
                 board_copy_before = chess.Board(fen_before)
-
-                # Make the move
-                board.push(move)
-
-                # Get position after the move
-                fen_after = board.fen()
                 board_copy_after = chess.Board(fen_after)
 
                 # Get enhanced position analysis after the move
                 try:
-                    position_after = await self.analyze_position(fen_after, depth)
-                    # Convert evaluation to white's perspective if it's black's turn
-                    if not board_copy_after.turn:  # False means it's black's turn
-                        logger.info(
-                            f"Move {move_number} ({color}) after: Converting evaluation from {position_after.evaluation} to {-position_after.evaluation} (black to move)"
+                    # Check if we already have this position analyzed (might be from a previous 'before' state)
+                    position_depth_after = full_depth if position_type in ["critical", "important"] else quick_depth
+                    
+                    if position_depth_after == quick_depth and fen_after in quick_scan_results:
+                        position_after = PositionAnalysis(
+                            fen=fen_after,
+                            evaluation=quick_scan_results[fen_after]["evaluation"],
+                            depth=quick_scan_results[fen_after]["depth"],
+                            is_mate=quick_scan_results[fen_after]["is_mate"],
+                            mate_in=quick_scan_results[fen_after]["mate_in"],
+                            best_move=quick_scan_results[fen_after]["best_move"],
+                            square_control=tactics_service.calculate_square_control(chess.Board(fen_after)),
+                            tactical_motifs=[],
+                            critical_squares=[],
                         )
+                    else:
+                        position_after = await self.analyze_position(fen_after, position_depth_after)
+                    
+                    # Convert evaluation to white's perspective if it's black's turn
+                    board_after = chess.Board(fen_after)
+                    if not board_after.turn:  # False means it's black's turn
                         evaluation_after = -position_after.evaluation
                     else:
-                        logger.info(
-                            f"Move {move_number} ({color}) after: Keeping evaluation as {position_after.evaluation} (white to move)"
-                        )
                         evaluation_after = position_after.evaluation
+                        
                     square_control_after = position_after.square_control
+                    
                 except Exception as e:
-                    logger.error(
-                        f"Error analyzing position after move {move_number} {color}: {e}"
-                    )
+                    logger.error(f"Error analyzing position after move {move_number} {color}: {e}")
                     # Use a default position analysis for error recovery
                     default_board = chess.Board(fen_after)
-                    default_control = tactics_service.calculate_square_control(
-                        default_board
-                    )
+                    default_control = tactics_service.calculate_square_control(default_board)
                     position_after = PositionAnalysis(
                         fen=fen_after,
                         evaluation=0.0,  # Neutral evaluation
@@ -344,72 +473,54 @@ class AnalysisService:
 
                 # For classification, adjust based on whose move it was
                 if color == "black":
-                    classification_change = (
-                        -evaluation_change
-                    )  # Negate for black's perspective
-                    logger.info(
-                        f"Move {move_number} ({color}): Classification change = {classification_change} (black's perspective)"
-                    )
+                    classification_change = -evaluation_change  # Negate for black's perspective
                 else:
                     classification_change = evaluation_change
-                    logger.info(
-                        f"Move {move_number} ({color}): Classification change = {classification_change} (white's perspective)"
-                    )
 
                 # Classify the move
                 classification = classify_move(classification_change)
 
                 # Check if this was the best move
-                is_best_move = (
-                    position_before.best_move == move_uci
-                    if position_before.best_move
-                    else False
-                )
+                is_best_move = position_before.best_move == move.uci() if position_before.best_move else False
 
-                # Get the best move at depth 20
+                # Get best move (preferably from position_before but calculate if needed)
                 best_move_depth20 = None
-                try:
-                    # Calculate best move at depth 20 for the position before the move
-                    best_move_result = await stockfish_service.get_best_move_at_depth(
-                        fen_before, 20
-                    )
-                    best_move_depth20 = best_move_result["best_move"]
-                    logger.info(
-                        f"Move {move_number} ({color}): Best move at depth 20 is {best_move_depth20}"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Error calculating best move at depth 20 for move {move_number} {color}: {e}"
-                    )
-
-                # Detect tactical motifs for this move
-                try:
-                    # Only analyze best moves as determined by Stockfish
-                    tactical_motifs = tactics_service.analyze_move_for_tactics(
-                        board_copy_before,
-                        board_copy_after,
-                        move,
-                        is_best_move=(is_best_move),
-                    )
-
-                    # Log all detected motifs for debugging
-                    if tactical_motifs:
-                        tactic_types = [t.motif_type for t in tactical_motifs]
-                        logger.info(
-                            f"Move {move_number} ({color}): Detected {len(tactical_motifs)} tactical motifs: {tactic_types}"
+                if position_type in ["critical", "important"]:
+                    # For critical positions, always compute best move at depth 20 if not already done
+                    if not position_before.best_move or position_before.depth < 18:
+                        try:
+                            best_move_result = await stockfish_service.get_best_move_at_depth(fen_before, 20)
+                            best_move_depth20 = best_move_result["best_move"]
+                        except Exception as e:
+                            logger.error(f"Error calculating best move at depth 20 for move {move_number}: {e}")
+                    else:
+                        best_move_depth20 = position_before.best_move
+                else:
+                    # For standard positions, use what we have
+                    best_move_depth20 = position_before.best_move
+                
+                # Tactical motif detection - only analyze critical positions at full detail
+                tactical_motifs = []
+                if position_type in ["critical", "important"]:
+                    try:
+                        tactical_motifs = tactics_service.analyze_move_for_tactics(
+                            board_copy_before,
+                            board_copy_after,
+                            move,
+                            is_best_move=is_best_move,
                         )
-                except Exception as e:
-                    logger.error(
-                        f"Error detecting tactics for move {move_number} {color}: {e}"
-                    )
-                    logger.error(
-                        "Stack trace for tactical analysis error:", exc_info=True
-                    )
-                    tactical_motifs = []
+                        
+                        # Log detected motifs
+                        if tactical_motifs:
+                            tactic_types = [t.motif_type for t in tactical_motifs]
+                            logger.info(f"Move {move_number} ({color}): Detected {len(tactical_motifs)} tactical motifs: {tactic_types}")
+                    except Exception as e:
+                        logger.error(f"Error detecting tactics for move {move_number} {color}: {e}")
+                        tactical_motifs = []
 
                 # Create move annotation
                 move_analysis = MoveAnalysis(
-                    move_uci=move_uci,
+                    move_uci=move.uci(),
                     move_san=move_san,
                     move_number=move_number,
                     fen_before=fen_before,
@@ -429,13 +540,11 @@ class AnalysisService:
                 # Track player weaknesses
                 if classification in ["mistake", "blunder"]:
                     # Determine the phase of the game
-                    piece_count = len(board.piece_map())
-
-                    if move_number <= 10:
-                        # Opening phase
+                    game_phase = get_game_phase(board_copy_before)
+                    
+                    if game_phase == "opening":
                         player_weaknesses["opening"].append(move_number)
-                    elif piece_count <= 10:
-                        # Endgame phase (10 or fewer pieces)
+                    elif game_phase == "endgame":
                         player_weaknesses["endgame"].append(move_number)
 
                     # Check if it's a tactical mistake
@@ -445,18 +554,14 @@ class AnalysisService:
                         # Positional weakness
                         player_weaknesses["positional"].append(move_number)
 
-                # Track critical positions (large evaluation swings)
-                if abs(evaluation_change) >= 1.5:
-                    critical_positions.append(move_number)
-
                 # Add to annotations
                 annotations.append(move_analysis)
-
-                # Increment move number when it's black's turn
-                if color == "black":
-                    move_number += 1
+                
+                # Move the board forward
+                board.push(move)
 
             # Create game analysis result
+            logger.info(f"Game analysis complete - analyzed {len(annotations)} moves ({len(critical_positions)} critical positions)")
             game_analysis = GameAnalysisResult(
                 game_id=game_id,
                 total_moves=len(annotations),

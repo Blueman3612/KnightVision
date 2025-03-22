@@ -231,6 +231,28 @@ class StockfishService:
 
             # Cache miss, need to analyze the position
             self._cache_misses += 1
+            
+            # Check if we have a lower depth cached result that we can return
+            # This helps when we need quick approximate evaluations
+            if search_depth > 12:  # Don't use this shortcut for already shallow depths
+                # Try to find a cached lower depth result
+                for lower_depth in [12, 14, 16]:  # Try various lower depths
+                    if lower_depth >= search_depth:
+                        continue  # Skip if not actually lower
+                        
+                    lower_cache_key = f"{normalized_fen}_{lower_depth}"
+                    if lower_cache_key in self._position_cache:
+                        lower_result = self._position_cache[lower_cache_key]
+                        logger.debug(
+                            f"Using lower depth cached result (depth {lower_depth}) for requested depth {search_depth}"
+                        )
+                        
+                        # Mark as approximate result
+                        lower_result["approximate"] = True
+                        lower_result["requested_depth"] = search_depth
+                        
+                        # Don't cache this as a full depth result, but return it
+                        return lower_result
 
             if engine_index == 0:
                 # Use main engine
@@ -255,6 +277,7 @@ class StockfishService:
                         "is_mate": analysis["score"].relative.is_mate(),
                         "mate_in": analysis["score"].relative.mate(),
                         "best_move": best_move,
+                        "approximate": False,  # This is a full depth result
                     }
 
                     # Store in cache
@@ -293,6 +316,7 @@ class StockfishService:
                             "is_mate": analysis["score"].relative.is_mate(),
                             "mate_in": analysis["score"].relative.mate(),
                             "best_move": best_move,
+                            "approximate": False,  # This is a full depth result
                         }
 
                         # Store in cache
@@ -587,6 +611,56 @@ class StockfishService:
         engine = await self._get_engine()
         await engine.configure({"Skill Level": skill_level})
 
+
+# Helper functions for position classification
+def is_capture_position(board: chess.Board, move: chess.Move) -> bool:
+    """Check if the move is a capture."""
+    return board.is_capture(move)
+
+def is_check_position(board: chess.Board, move: chess.Move) -> bool:
+    """Check if the move gives check."""
+    board_copy = board.copy()
+    board_copy.push(move)
+    return board_copy.is_check()
+
+def is_central_move(board: chess.Board, move: chess.Move) -> bool:
+    """Check if the move is to a central square."""
+    to_file = chess.square_file(move.to_square)
+    to_rank = chess.square_rank(move.to_square)
+    return 2 <= to_file <= 5 and 3 <= to_rank <= 4
+
+def get_game_phase(board: chess.Board) -> str:
+    """Determine the game phase based on material."""
+    piece_count = len(board.piece_map())
+    if piece_count >= 26:  # Most pieces still on board
+        return "opening"
+    elif piece_count >= 14:
+        return "middlegame" 
+    else:
+        return "endgame"
+
+def get_adaptive_depth(board: chess.Board, move_number: int) -> int:
+    """Determine appropriate depth based on position characteristics."""
+    # Base depth - more conservative than fully tiered
+    base_depth = 18
+    
+    # Game phase adjustments
+    game_phase = get_game_phase(board)
+    
+    # Opening phase - lower depth (theory-based)
+    if game_phase == "opening" and move_number <= 8:
+        return 14
+    
+    # Early middlegame - still important
+    if game_phase == "middlegame" and move_number < 20:
+        return 18
+    
+    # Endgame - higher depth
+    if game_phase == "endgame":
+        return 20
+    
+    # Default to base depth
+    return base_depth
 
 # Create a single instance for reuse
 stockfish_service = StockfishService()
