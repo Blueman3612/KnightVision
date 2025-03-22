@@ -37,6 +37,7 @@ interface DBChessGame {
   pgn: string;
   result: string;
   analyzed: boolean;
+  enhanced_analyzed: boolean; // Add new field
   created_at: string;
   event?: string;
   site?: string;
@@ -241,7 +242,7 @@ const GamesPage = () => {
       // Get games that are not yet analyzed
       const { data, error } = await supabase
         .from('games')
-        .select('id, analyzed, created_at')
+        .select('id, enhanced_analyzed, created_at')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: true }); // Use FIFO order: oldest first
         
@@ -257,12 +258,12 @@ const GamesPage = () => {
       
       // Process all games
       data.forEach(game => {
-        statusMap[game.id] = game.analyzed;
-        newGameStatusMap[game.id] = game.analyzed ? 'analyzed' : 'queued';
+        statusMap[game.id] = game.enhanced_analyzed;
+        newGameStatusMap[game.id] = game.enhanced_analyzed ? 'analyzed' : 'queued';
       });
       
       // Find unanalyzed games
-      const unanalyzedGames = data.filter(game => !game.analyzed);
+      const unanalyzedGames = data.filter(game => !game.enhanced_analyzed);
       const isRunning = unanalyzedGames.length > 0;
       
       // Set first unanalyzed game as active if we have unanalyzed games
@@ -337,9 +338,9 @@ const GamesPage = () => {
         let hasChanges = false;
         const updated = prev.map(game => {
           const serverAnalyzed = statusMap[game.id];
-          if (serverAnalyzed !== undefined && serverAnalyzed !== game.analyzed) {
+          if (serverAnalyzed !== undefined && serverAnalyzed !== game.enhanced_analyzed) {
             hasChanges = true;
-            return { ...game, analyzed: serverAnalyzed };
+            return { ...game, enhanced_analyzed: serverAnalyzed };
           }
           return game;
         });
@@ -552,7 +553,7 @@ const GamesPage = () => {
       // No need to manually fetch the access token - the axios interceptor will handle it
       try {
         setIsAnnotationRunning(true); // Set as running before API call
-        await gameApi.processUnannotatedGames(session.user.id, undefined, forceRetry, 17);
+        await gameApi.processUnannotatedGames(forceRetry, 17);
         // Remove: console.log('Analysis API call successful');
       } catch (apiError) {
         console.error('Error calling analysis API:', apiError);
@@ -845,6 +846,7 @@ const GamesPage = () => {
       user_id: userId,
       pgn: game.pgn,
       analyzed: false,
+      enhanced_analyzed: false,
       unique_game_id: game.uniqueGameId,
       user_color: game.user_color,
     };
@@ -1462,7 +1464,7 @@ const GamesPage = () => {
   const generateGameCards = () => {
     // Pre-compute positions once for all games
     const unanalyzedGames = userGames
-      .filter(g => !g.analyzed)
+      .filter(g => !g.enhanced_analyzed)
       .sort((a, b) => {
         // Sort by created_at to match backend processing order
         const dateA = new Date(a.created_at).getTime();
@@ -1504,7 +1506,7 @@ const GamesPage = () => {
       }
       
       // Get game status with more precise logging
-      const gameStatus = gameStatusMap[game.id] || (game.analyzed ? 'analyzed' : 'queued');
+      const gameStatus = gameStatusMap[game.id] || (game.enhanced_analyzed ? 'analyzed' : 'queued');
       const isBeingAnalyzed = gameStatus === 'analyzing';
       
       // Unique key that includes both id and status to ensure rerendering when status changes
