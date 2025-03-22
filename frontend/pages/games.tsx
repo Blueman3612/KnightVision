@@ -330,8 +330,8 @@ const GamesPage = () => {
       setUserGames(prev => {
         // Always refetch game list if we have unanalyzed games to ensure proper order
         if (unanalyzedGames.length > 0) {
-          // Force a refresh of the game list on next render cycle
-          setTimeout(() => fetchUserGames(1), 0);
+          // Force a refresh of the game list on next render cycle, but preserve the current page
+          setTimeout(() => fetchUserGames(gamesPage), 0);
         }
         
         // Create a new array only if there are changes
