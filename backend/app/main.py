@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.background import BackgroundTasks
 
-from app.api.routes import analysis, auth, game, health, user
+from app.api.routes import analysis, auth, game, health, lessons, user
 from app.core.config import settings
 from app.db.supabase import get_supabase_client
 
@@ -41,6 +41,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(game.router, prefix="/games", tags=["Games"])
 app.include_router(analysis.router, prefix="/analysis", tags=["Analysis"])
+app.include_router(lessons.router, prefix="/lessons", tags=["Lessons"])
 
 
 @app.get("/", tags=["Root"])

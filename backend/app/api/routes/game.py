@@ -1,6 +1,7 @@
 import io
 import logging
 import uuid
+import asyncio
 from typing import Dict, List, Optional, Union
 
 import chess
@@ -495,6 +496,76 @@ async def annotate_game(game_id: str, user_id: str = Depends(get_current_user)):
 from app.api.routes.analysis import enhanced_annotate_game
 
 
+# Global processing queue and task
+_processing_queue = asyncio.Queue()
+_processing_task = None
+
+
+# Function to process games sequentially in the background
+async def _process_games_worker():
+    """Worker function that processes games one at a time."""
+    while True:
+        try:
+            # Get the next game to process
+            game_id, user_id = await _processing_queue.get()
+
+            try:
+                logging.info(f"Processing game {game_id} from queue")
+                supabase = get_supabase_client()
+
+                # Process the game
+                await enhanced_annotate_game(game_id=game_id, user_id=user_id)
+                logging.info(f"Successfully processed game {game_id}")
+            except Exception as e:
+                logging.error(f"Error processing game {game_id}: {str(e)}")
+            finally:
+                # Always clear the processing flag
+                try:
+                    supabase = get_supabase_client()
+                    supabase.table("games").update({"processing": False}).eq(
+                        "id", game_id
+                    ).execute()
+                except Exception as reset_err:
+                    logging.error(
+                        f"Error resetting processing flag for game {game_id}: {str(reset_err)}"
+                    )
+
+                # Mark this task as done in the queue
+                _processing_queue.task_done()
+
+        except asyncio.CancelledError:
+            # Handle cancellation gracefully
+            logging.info("Game processing worker cancelled")
+            break
+        except Exception as e:
+            logging.error(f"Error in game processing worker: {str(e)}")
+            # Sleep briefly to avoid tight loop in case of persistent errors
+            await asyncio.sleep(1)
+
+
+# Function to add a game to the processing queue
+async def process_game_async(game_id: str, user_id: str, supabase=None):
+    """
+    Queue a game for processing.
+
+    Args:
+        game_id: ID of the game to process
+        user_id: User ID for authentication
+        supabase: Supabase client (unused, kept for compatibility)
+    """
+    global _processing_task
+
+    # Start the worker task if it's not running
+    if _processing_task is None or _processing_task.done():
+        _processing_task = asyncio.create_task(_process_games_worker())
+
+    # Add the game to the queue
+    await _processing_queue.put((game_id, user_id))
+    logging.info(
+        f"Game {game_id} added to processing queue, position {_processing_queue.qsize()}"
+    )
+
+
 @router.post("/process-unannotated", response_model=BatchAnnotationResponse)
 async def process_unannotated_games(
     request: BatchAnnotationRequest, user_id: str = Depends(get_current_user)
@@ -554,44 +625,23 @@ async def process_unannotated_games(
 
         logging.info(f"Locked {len(games_to_process)} games for processing")
 
-        processed_game_ids = []
-        failed_game_ids = []
+        # Extract game IDs to return immediately
+        game_ids_to_process = [game_data["id"] for game_data in games_to_process]
 
-        # Process each game
+        # Instead of waiting, add games to the processing queue
         for game_data in games_to_process:
             game_id = game_data["id"]
+            # Add to the processing queue
+            await process_game_async(game_id, user_id)
+            logging.info(f"Added game {game_id} to processing queue")
 
-            try:
-                # Use the enhanced_annotate_game endpoint for each game
-                await enhanced_annotate_game(game_id=game_id, user_id=user_id)
-                processed_game_ids.append(game_id)
-                logging.info(f"Successfully processed game {game_id}")
-            except HTTPException as e:
-                logging.warning(f"Skipped processing game {game_id}: {e.detail}")
-                failed_game_ids.append({"id": game_id, "reason": e.detail})
+        logging.info(
+            f"Queued {len(game_ids_to_process)} games for asynchronous processing"
+        )
 
-                # Reset the processing flag for failed games
-                supabase.table("games").update({"processing": False}).eq(
-                    "id", game_id
-                ).execute()
-                continue
-            except Exception as e:
-                logging.error(f"Error processing game {game_id}: {str(e)}")
-                failed_game_ids.append({"id": game_id, "reason": str(e)})
-
-                # Reset the processing flag for failed games
-                supabase.table("games").update({"processing": False}).eq(
-                    "id", game_id
-                ).execute()
-                continue
-
-        if len(failed_game_ids) > 0:
-            logging.info(
-                f"Batch enhanced analysis completed with {len(processed_game_ids)} successes and {len(failed_game_ids)} failures"
-            )
-
+        # Return immediately with the list of games being processed
         return BatchAnnotationResponse(
-            processed_games=len(processed_game_ids), game_ids=processed_game_ids
+            processed_games=len(game_ids_to_process), game_ids=game_ids_to_process
         )
     except Exception as e:
         logging.error(f"Error in batch processing: {str(e)}")
