@@ -788,6 +788,9 @@ const AnalyzePage = () => {
                       // Only detect blunders
                       const isBlunder = enhancedAnnotation?.classification === 'blunder';
                       
+                      // Check if this is the best move
+                      const isBestMove = enhancedAnnotation?.is_best_move === true;
+                      
                       // Check for tactical motifs
                       const motif = enhancedAnnotationId ? tacticalMotifs.find(
                         m => m.annotation_id === enhancedAnnotationId
@@ -805,7 +808,9 @@ const AnalyzePage = () => {
                             text-left !py-1.5 !px-2.5 rounded-md transition-all duration-200
                             ${moveIndex === index 
                               ? '!bg-blue-600 hover:!bg-blue-700 shadow-sm' 
-                              : 'hover:!bg-gray-700/80'}
+                              : isBestMove 
+                                ? 'bg-gradient-to-r from-gray-800 via-green-800/30 to-gray-800 hover:!bg-gray-700/80'
+                                : 'hover:!bg-gray-700/80'}
                             ${index % 2 === 0 ? 'col-start-1' : 'col-start-2'}
                             whitespace-nowrap
                           `}
