@@ -295,6 +295,13 @@ class TacticsService:
                                     f"Value exception: {chess.square_name(move.to_square)} ({attacker_piece_value}) attacking {chess.square_name(target_square)} ({target_piece_value})"
                                 )
 
+                        # Special exception for the king: always consider it a valid target
+                        if target_piece.piece_type == chess.KING:
+                            favorable_target = True
+                            logger.debug(
+                                f"King exception: {chess.square_name(target_square)} is always a valid target"
+                            )
+
                         if favorable_target:
                             valid_targets.append(target_square)
 

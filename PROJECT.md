@@ -305,6 +305,7 @@ A fork occurs when a single piece simultaneously attacks two or more enemy piece
    - Attacker's control is greater than defender's control on that square, OR
    - Equal control but with lower material value at risk (e.g., pawn forks knight/bishop while defended by another pawn)
 4. **Value Exception**: Allow targets with unfavorable control ratios if the material exchange would favor the attacker (e.g., knight attacking a queen or rook, pawn attacking a bishop)
+5. **King Exception**: The opponent's king is always considered a valid target, regardless of square control metrics.
 
 **Example: Basic Knight Fork**
 ```
