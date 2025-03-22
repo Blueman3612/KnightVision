@@ -98,19 +98,43 @@ async def startup_event():
     """Start background tasks when the application starts."""
     # Start the task to reset stale processing flags
     asyncio.create_task(reset_stale_processing_flags())
+    
+    # Start the game processing worker monitor
+    try:
+        # Import first to check if module exists
+        from app.api.routes import game
+        
+        # Create and start the monitor task
+        monitor_task = asyncio.create_task(game._ensure_worker_running())
+        monitor_task.set_name("game_worker_monitor")
+        logger.info("Started game processing worker monitor")
+    except Exception as e:
+        logger.warning(f"Could not start game processing worker monitor: {e}")
+        logger.exception("Stack trace for monitor start error:")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up resources when the application shuts down."""
     logger.info("Application shutting down, cleaning up resources")
+    
     # If there's a game processing queue in the game routes module, cancel its worker task
     try:
-        from app.api.routes.game import _processing_task
+        # Import the module, not just the variable
+        from app.api.routes import game
 
-        if _processing_task and not _processing_task.done():
+        if hasattr(game, '_processing_task') and game._processing_task and not game._processing_task.done():
             logger.info("Cancelling game processing worker task")
-            _processing_task.cancel()
+            game._processing_task.cancel()
             logger.info("Game processing worker task cancelled")
-    except (ImportError, AttributeError) as e:
+        else:
+            logger.info("No active game processing worker task to cancel")
+            
+        # Set worker_alive to False to prevent any automatic restarts
+        if hasattr(game, '_worker_alive'):
+            game._worker_alive = False
+            logger.info("Set worker_alive flag to False")
+            
+    except Exception as e:
         logger.warning(f"Could not access game processing task: {e}")
+        logger.exception("Stack trace for shutdown error:")

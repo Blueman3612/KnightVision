@@ -218,16 +218,43 @@ async def enhanced_annotate_game(
 
         # For non-waiting requests, mark as processing and queue for background processing
         if not wait_for_analysis:
-            # Mark game as processing
-            supabase.table("games").update({"processing": True}).eq(
-                "id", game_id
-            ).execute()
+            # Check if processing is already happening (for race condition protection)
+            # Check again since race conditions can happen between the initial check and here
+            game_check = supabase.table("games").select("processing").eq("id", game_id).execute()
+            if game_check.data and game_check.data[0].get("processing", False):
+                logger.info(f"Game {game_id} already being processed, returning processing status")
+                return GameAnalysisResult(
+                    game_id=game_id,
+                    status="processing",
+                    message="Game is currently being analyzed",
+                )
+            
+            try:
+                # Mark game as processing with atomicity check
+                update_result = supabase.table("games").update({"processing": True}).eq(
+                    "id", game_id
+                ).eq("processing", False).execute()
+                
+                # If no rows were updated, someone else started processing
+                if not update_result.data or len(update_result.data) == 0:
+                    logger.warning(f"Game {game_id} was being processed by another request (race condition)")
+                    return GameAnalysisResult(
+                        game_id=game_id,
+                        status="processing",
+                        message="Game is currently being analyzed by another request",
+                    )
+                
+                logger.info(f"Successfully marked game {game_id} as processing")
+            except Exception as e:
+                logger.error(f"Error marking game {game_id} as processing: {e}")
+                # Continue with queuing even if marking fails - worst case is double processing
 
             # Import the process_game_async function here to avoid circular imports
             from app.api.routes.game import process_game_async
 
             # Queue game for processing in background
             await process_game_async(game_id, user_id)
+            logger.info(f"Successfully queued game {game_id} for background processing")
 
             # Return immediate response with status
             return GameAnalysisResult(

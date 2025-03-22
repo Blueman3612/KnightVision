@@ -2,6 +2,7 @@ import io
 import logging
 import uuid
 import asyncio
+import time
 from typing import Dict, List, Optional, Union
 
 import chess
@@ -496,53 +497,176 @@ async def annotate_game(game_id: str, user_id: str = Depends(get_current_user)):
 from app.api.routes.analysis import enhanced_annotate_game
 
 
-# Global processing queue and task
+# Global processing queue and tasks
 _processing_queue = asyncio.Queue()
 _processing_task = None
+_worker_alive = True
+_last_task_failure_time = 0
 
 
 # Function to process games sequentially in the background
 async def _process_games_worker():
     """Worker function that processes games one at a time."""
+    global _worker_alive
+    
+    logging.info("Game processing worker started")
+    _worker_alive = True
+    
+    # Keep track of consecutive errors
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+    
     while True:
         try:
+            # Reset consecutive errors if we get here
+            consecutive_errors = 0
+            
             # Get the next game to process
+            # This will wait indefinitely until a game is available
             game_id, user_id = await _processing_queue.get()
-
+            
+            # Log the queue size
+            queue_size = _processing_queue.qsize()
+            processing_start = time.time()
+            logging.info(f"Processing game {game_id} from queue. Queue size: {queue_size}")
+            
             try:
-                logging.info(f"Processing game {game_id} from queue")
+                # Double check that the game is marked as processing
                 supabase = get_supabase_client()
-
-                # Process the game with wait_for_analysis=True to ensure full processing
-                await enhanced_annotate_game(
+                game_check = supabase.table("games").select("processing").eq("id", game_id).execute()
+                
+                if not game_check.data or not game_check.data[0].get("processing", False):
+                    logging.warning(f"Game {game_id} is not marked as processing. Setting flag.")
+                    supabase.table("games").update({"processing": True}).eq("id", game_id).execute()
+                
+                # Process the game with wait_for_analysis=True to ensure full processing happens
+                # This is critical - it forces the game to be fully processed, not just queued
+                logging.info(f"Starting analysis for game {game_id}...")
+                result = await enhanced_annotate_game(
                     game_id=game_id, user_id=user_id, wait_for_analysis=True
                 )
-                logging.info(f"Successfully processed game {game_id}")
+                
+                # Calculate processing time
+                processing_time = time.time() - processing_start
+                logging.info(f"Successfully processed game {game_id} in {processing_time:.2f} seconds")
+                
+                # Log processing details
+                if hasattr(result, 'total_moves'):
+                    avg_time_per_move = processing_time / max(result.total_moves, 1)
+                    logging.info(
+                        f"Game {game_id}: {result.total_moves} moves analyzed at {avg_time_per_move:.2f} seconds per move"
+                    )
+                
             except Exception as e:
+                # Log but continue processing other games
                 logging.error(f"Error processing game {game_id}: {str(e)}")
+                logging.exception("Stack trace for error:")
             finally:
-                # Always clear the processing flag
+                # Always clear the processing flag regardless of success
                 try:
+                    # Get a fresh client to avoid connection issues
                     supabase = get_supabase_client()
-                    supabase.table("games").update({"processing": False}).eq(
+                    update_result = supabase.table("games").update({"processing": False}).eq(
                         "id", game_id
                     ).execute()
+                    logging.info(f"Reset processing flag for game {game_id}: {len(update_result.data)} rows updated")
                 except Exception as reset_err:
                     logging.error(
                         f"Error resetting processing flag for game {game_id}: {str(reset_err)}"
                     )
-
+                
                 # Mark this task as done in the queue
                 _processing_queue.task_done()
-
+                logging.info(f"Marked game {game_id} as done in queue. Remaining queue size: {_processing_queue.qsize()}")
+                
+                # Signal we're ready for the next game
+                logging.info(f"Worker ready for next game")
+                
         except asyncio.CancelledError:
-            # Handle cancellation gracefully
+            # Handle graceful shutdown
             logging.info("Game processing worker cancelled")
+            _worker_alive = False
             break
         except Exception as e:
-            logging.error(f"Error in game processing worker: {str(e)}")
-            # Sleep briefly to avoid tight loop in case of persistent errors
-            await asyncio.sleep(1)
+            # Handle unexpected errors but never exit the loop
+            consecutive_errors += 1
+            logging.error(f"Unexpected error in game processing worker: {str(e)}")
+            logging.exception("Stack trace for unexpected error:")
+            
+            # If we have too many consecutive errors, take a longer break
+            if consecutive_errors >= max_consecutive_errors:
+                logging.critical(
+                    f"Worker experienced {consecutive_errors} consecutive errors. Taking a longer break."
+                )
+                # Set worker as not alive to trigger restart by the monitor
+                _worker_alive = False
+                await asyncio.sleep(30)
+            else:
+                # Brief pause to avoid tight loops in case of persistent errors
+                await asyncio.sleep(3)
+
+
+# Function to watch the worker task and restart if needed
+async def _ensure_worker_running():
+    """Monitor the worker task and restart it if it fails."""
+    global _processing_task, _worker_alive, _last_task_failure_time
+    
+    while True:
+        try:
+            # Check if the worker task needs to be restarted
+            current_time = time.time()
+            min_restart_wait = 10  # Don't restart more than once every 10 seconds
+            
+            # If the worker is not running and enough time has passed since last failure
+            if (_processing_task is None or _processing_task.done() or not _worker_alive) and (current_time - _last_task_failure_time) > min_restart_wait:
+                logging.warning("Worker task needs restart, creating new worker task")
+                
+                # If there's an existing task, check its status and log any errors
+                if _processing_task and _processing_task.done():
+                    # Check for exceptions in the completed task
+                    try:
+                        error = _processing_task.exception()
+                        if error:
+                            logging.error(f"Previous worker task failed with: {error}")
+                            # Log full stack trace for better debugging
+                            import traceback
+                            tb = "".join(traceback.format_exception(type(error), error, error.__traceback__))
+                            logging.error(f"Worker task exception traceback:\n{tb}")
+                    except (asyncio.InvalidStateError, Exception) as e:
+                        logging.error(f"Error checking worker task exception: {e}")
+                
+                # Register the time we're restarting to avoid frequent restarts
+                _last_task_failure_time = time.time()
+                
+                # Reset the worker state flag
+                _worker_alive = True
+                
+                # Restart the worker
+                _processing_task = asyncio.create_task(_process_games_worker())
+                _processing_task.set_name(f"game_worker_{id(_processing_task)}")
+                
+                # Add a callback to detect when the task fails unexpectedly
+                def on_task_done(task):
+                    global _worker_alive, _last_task_failure_time
+                    if not task.cancelled():
+                        try:
+                            exc = task.exception()
+                            if exc:
+                                logging.error(f"Worker task failed with exception: {exc}")
+                                _worker_alive = False
+                                _last_task_failure_time = time.time()
+                        except (asyncio.CancelledError, asyncio.InvalidStateError):
+                            pass
+                
+                _processing_task.add_done_callback(on_task_done)
+                
+                logging.info(f"Created new worker task: {_processing_task.get_name()}")
+        except Exception as e:
+            logging.error(f"Error in worker watcher: {e}")
+            logging.exception("Stack trace for worker watcher error:")
+        
+        # Check every few seconds
+        await asyncio.sleep(5)
 
 
 # Function to add a game to the processing queue
@@ -555,15 +679,30 @@ async def process_game_async(game_id: str, user_id: str, supabase=None):
         user_id: User ID for authentication
         supabase: Supabase client (unused, kept for compatibility)
     """
-    global _processing_task
+    global _processing_task, _worker_alive
 
     logging.info(f"Received request to queue game {game_id} for user {user_id}")
 
     # Start the worker task if it's not running
-    if _processing_task is None or _processing_task.done():
+    if _processing_task is None or _processing_task.done() or not _worker_alive:
         logging.info("Starting new game processing worker task")
         _processing_task = asyncio.create_task(_process_games_worker())
         _processing_task.set_name(f"game_worker_{id(_processing_task)}")
+        
+        # Add a callback to detect when the task fails unexpectedly
+        def on_task_done(task):
+            global _worker_alive, _last_task_failure_time
+            if not task.cancelled():
+                try:
+                    exc = task.exception()
+                    if exc:
+                        logging.error(f"Worker task failed with exception: {exc}")
+                        _worker_alive = False
+                        _last_task_failure_time = time.time()
+                except (asyncio.CancelledError, asyncio.InvalidStateError):
+                    pass
+        
+        _processing_task.add_done_callback(on_task_done)
         logging.info(f"Created worker task: {_processing_task.get_name()}")
     else:
         logging.info(
@@ -599,8 +738,15 @@ async def process_unannotated_games(
         )
 
     supabase = get_supabase_client()
+    request_id = str(uuid.uuid4())[:8]  # Generate a short request ID for logging
 
     try:
+        logging.info(f"[{request_id}] Processing unannotated games request with limit={request.limit}")
+        
+        # Check the current processing queue size
+        queue_size = _processing_queue.qsize()
+        logging.info(f"[{request_id}] Current processing queue size: {queue_size}")
+        
         # First, query for games that need processing
         # We need to do this in two steps since limit() is not available on update operations
         query_response = (
@@ -611,52 +757,75 @@ async def process_unannotated_games(
             .limit(request.limit)
             .execute()
         )
+        
+        found_count = len(query_response.data) if query_response.data else 0
+        logging.info(f"[{request_id}] Found {found_count} unprocessed games")
 
         # Now mark these games as processing one by one
         games_to_process = []
         for game in query_response.data:
             game_id = game["id"]
-            # Mark this game as processing
-            update_response = (
-                supabase.table("games")
-                .update({"processing": True})
-                .eq("id", game_id)
-                .eq("enhanced_analyzed", False)
-                .eq(
-                    "processing", False
-                )  # Only update if it's still not being processed
-                .execute()
-            )
+            logging.info(f"[{request_id}] Attempting to lock game {game_id} for processing")
+            
+            try:
+                # Mark this game as processing with atomicity check
+                update_response = (
+                    supabase.table("games")
+                    .update({"processing": True})
+                    .eq("id", game_id)
+                    .eq("enhanced_analyzed", False)
+                    .eq("processing", False)  # Only update if it's still not being processed
+                    .execute()
+                )
 
-            # Check if the update worked (someone else might have started processing it)
-            if update_response.data and len(update_response.data) > 0:
-                games_to_process.append(update_response.data[0])
+                # Check if the update worked (someone else might have started processing it)
+                if update_response.data and len(update_response.data) > 0:
+                    games_to_process.append(update_response.data[0])
+                    logging.info(f"[{request_id}] Successfully locked game {game_id} for processing")
+                else:
+                    logging.warning(f"[{request_id}] Could not lock game {game_id} - already being processed or was processed")
+            except Exception as lock_error:
+                logging.error(f"[{request_id}] Error locking game {game_id}: {str(lock_error)}")
+                # Continue with the next game rather than failing the whole batch
 
         if len(games_to_process) == 0:
+            logging.info(f"[{request_id}] No games available for processing")
             return BatchAnnotationResponse(processed_games=0, game_ids=[])
 
-        logging.info(f"Locked {len(games_to_process)} games for processing")
+        logging.info(f"[{request_id}] Successfully locked {len(games_to_process)} games for processing")
 
         # Extract game IDs to return immediately
         game_ids_to_process = [game_data["id"] for game_data in games_to_process]
+
+        # Start or ensure the worker is running
+        global _processing_task
+        if _processing_task is None or _processing_task.done() or not _worker_alive:
+            logging.info(f"[{request_id}] Starting new worker task for processing")
+            _processing_task = asyncio.create_task(_process_games_worker())
+            _processing_task.set_name(f"game_worker_{id(_processing_task)}")
+        else:
+            logging.info(f"[{request_id}] Using existing worker task {_processing_task.get_name()}")
 
         # Instead of waiting, add games to the processing queue
         for game_data in games_to_process:
             game_id = game_data["id"]
             # Add to the processing queue
             await process_game_async(game_id, user_id)
-            logging.info(f"Added game {game_id} to processing queue")
+            logging.info(f"[{request_id}] Added game {game_id} to processing queue")
 
+        final_queue_size = _processing_queue.qsize()
         logging.info(
-            f"Queued {len(game_ids_to_process)} games for asynchronous processing"
+            f"[{request_id}] Queued {len(game_ids_to_process)} games for asynchronous processing. Queue size now: {final_queue_size}"
         )
 
         # Return immediately with the list of games being processed
         return BatchAnnotationResponse(
-            processed_games=len(game_ids_to_process), game_ids=game_ids_to_process
+            processed_games=len(game_ids_to_process), 
+            game_ids=game_ids_to_process
         )
     except Exception as e:
-        logging.error(f"Error in batch processing: {str(e)}")
+        logging.error(f"[{request_id}] Error in batch processing: {str(e)}")
+        logging.exception(f"[{request_id}] Stack trace:")
         raise HTTPException(
             status_code=500, detail=f"Error in batch processing: {str(e)}"
         )
